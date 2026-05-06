@@ -312,6 +312,14 @@ class CSDT_CSP {
                 </label>
             </div>
 
+            <?php
+            $sec_card   = 'margin-top:12px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;';
+            $sec_header = 'display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;cursor:pointer;user-select:none;min-height:44px;';
+            $sec_title  = 'font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#475569;flex:1;min-width:0;';
+            $sec_toggle = 'cs-details-toggle';
+            $sec_body   = 'padding:0;';
+            ?>
+
             <!-- ── Violation Log sub-panel ────────────────────────────── -->
             <div id="cs-csp-violation-wrap" style="<?php echo $csp_on && $reporting_on ? '' : 'display:none;'; ?><?php echo esc_attr( $sec_card ); ?>margin-bottom:14px;">
                 <div style="<?php echo esc_attr( $sec_header ); ?>" id="cs-csp-viol-header">
@@ -373,16 +381,6 @@ class CSDT_CSP {
                 <?php endif; ?>
             </div>
 
-            <?php
-            // ── Shared section-card style ────────────────────────────────
-            $sec_card   = 'margin-top:12px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;';
-            $sec_header = 'display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;cursor:pointer;user-select:none;min-height:44px;';
-            $sec_title  = 'font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#475569;flex:1;min-width:0;';
-            // "Show ▼" pill button — CSS flips to "Hide ▲" when details[open]
-            $sec_toggle = 'cs-details-toggle';  // CSS class, not inline style
-            $sec_body   = 'padding:0;';
-            ?>
-
             <?php if ( ! empty( $csp_history ) ) : ?>
             <!-- ── Change History ─────────────────────────────────────── -->
             <details id="cs-csp-history-wrap" style="<?php echo esc_attr( $sec_card ); ?>">
@@ -435,6 +433,41 @@ class CSDT_CSP {
         <?php
     }
 
+    private static function service_names(): array {
+        return [
+            'google_analytics'     => 'Google Analytics',
+            'google_adsense'       => 'Google AdSense',
+            'google_tag_manager'   => 'Google Tag Manager',
+            'google_fonts'         => 'Google Fonts',
+            'cloudflare_insights'  => 'Cloudflare Insights',
+            'facebook_pixel'       => 'Facebook Pixel',
+            'recaptcha'            => 'reCAPTCHA',
+            'youtube'              => 'YouTube',
+            'vimeo'                => 'Vimeo',
+            'stripe'               => 'Stripe',
+            'hotjar'               => 'Hotjar',
+            'intercom'             => 'Intercom',
+            'twitter_embeds'       => 'Twitter/X embeds',
+            'disqus'               => 'Disqus',
+            'woocommerce_payments' => 'WooCommerce Payments',
+        ];
+    }
+
+    private static function append_csp_history( array $entry ): array {
+        $history = json_decode( get_option( 'csdt_csp_history', '[]' ), true );
+        if ( ! is_array( $history ) ) { $history = []; }
+        array_unshift( $history, $entry );
+        update_option( 'csdt_csp_history', wp_json_encode( array_slice( $history, 0, 10 ) ) );
+        return $entry;
+    }
+
+    private static function append_fixes_log( array $entry ): void {
+        $fixes = json_decode( get_option( 'csdt_csp_fixes_log', '[]' ), true );
+        if ( ! is_array( $fixes ) ) { $fixes = []; }
+        array_unshift( $fixes, $entry );
+        update_option( 'csdt_csp_fixes_log', wp_json_encode( array_slice( $fixes, 0, 50 ) ) );
+    }
+
     public static function ajax_csp_save(): void {
         check_ajax_referer( CloudScale_DevTools::SECURITY_NONCE, 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Unauthorized', 403 ); }
@@ -446,8 +479,7 @@ class CSDT_CSP {
         $reporting_enabled = isset( $_POST['reporting_enabled'] ) ? sanitize_key( wp_unslash( $_POST['reporting_enabled'] ) )                : '0';
 
         if ( ! is_array( $services ) ) { $services = []; }
-        $allowed_services = [ 'google_analytics', 'google_adsense', 'google_tag_manager', 'google_fonts', 'cloudflare_insights', 'facebook_pixel', 'recaptcha', 'youtube', 'vimeo', 'stripe', 'hotjar', 'intercom', 'twitter_embeds', 'disqus', 'woocommerce_payments' ];
-        $services = array_values( array_intersect( $services, $allowed_services ) );
+        $services = array_values( array_intersect( $services, array_keys( self::service_names() ) ) );
 
         $old = [
             'enabled'           => get_option( 'csdt_devtools_csp_enabled', '0' ),
@@ -458,10 +490,7 @@ class CSDT_CSP {
         ];
         $new = [ 'enabled' => $enabled, 'mode' => $mode, 'services' => $services, 'custom' => $custom, 'reporting_enabled' => $reporting_enabled ];
 
-        // Push current state to rolling 10-entry history before overwriting.
-        $history = json_decode( get_option( 'csdt_csp_history', '[]' ), true );
-        if ( ! is_array( $history ) ) { $history = []; }
-        array_unshift( $history, [
+        $new_entry = self::append_csp_history( [
             'enabled'           => $old['enabled'],
             'mode'              => $old['mode'],
             'services'          => wp_json_encode( $old['services'] ),
@@ -470,7 +499,6 @@ class CSDT_CSP {
             'saved_at'          => time(),
             'label'             => self::csp_history_label( $old, $new ),
         ] );
-        update_option( 'csdt_csp_history', wp_json_encode( array_slice( $history, 0, 10 ) ) );
 
         // Single-step rollback backup (legacy).
         update_option( 'csdt_devtools_csp_backup', wp_json_encode( array_merge( $old, [
@@ -488,27 +516,15 @@ class CSDT_CSP {
         $old_svcs   = is_array( $old['services'] ) ? $old['services'] : (array) json_decode( $old['services'] ?? '[]', true );
         $added_svcs = array_values( array_diff( $services, $old_svcs ) );
         if ( $added_svcs ) {
-            $names = [
-                'google_analytics' => 'Google Analytics', 'google_adsense' => 'Google AdSense',
-                'google_tag_manager' => 'Google Tag Manager', 'google_fonts' => 'Google Fonts',
-                'cloudflare_insights' => 'Cloudflare Insights', 'facebook_pixel' => 'Facebook Pixel',
-                'recaptcha' => 'reCAPTCHA', 'youtube' => 'YouTube', 'vimeo' => 'Vimeo',
-                'stripe' => 'Stripe', 'hotjar' => 'Hotjar', 'intercom' => 'Intercom',
-                'twitter_embeds' => 'Twitter/X embeds', 'disqus' => 'Disqus',
-                'woocommerce_payments' => 'WooCommerce Payments',
-            ];
-            $added_labels = array_map( fn( $s ) => $names[ $s ] ?? $s, $added_svcs );
-            $fixes = json_decode( get_option( 'csdt_csp_fixes_log', '[]' ), true );
-            if ( ! is_array( $fixes ) ) { $fixes = []; }
-            array_unshift( $fixes, [
+            $svc_names    = self::service_names();
+            $added_labels = array_map( fn( $s ) => $svc_names[ $s ] ?? $s, $added_svcs );
+            self::append_fixes_log( [
                 'time'     => time(),
                 'label'    => 'Added ' . implode( ', ', $added_labels ),
                 'services' => $added_svcs,
             ] );
-            update_option( 'csdt_csp_fixes_log', wp_json_encode( array_slice( $fixes, 0, 50 ) ) );
         }
 
-        $new_entry = $history[0];
         wp_send_json_success( [
             'has_backup'    => true,
             'history_entry' => [
@@ -522,12 +538,7 @@ class CSDT_CSP {
         $labels   = [];
         $old_svcs = is_array( $old['services'] ) ? $old['services'] : (array) json_decode( $old['services'] ?? '[]', true );
         $new_svcs = is_array( $new['services'] ) ? $new['services'] : (array) json_decode( $new['services'] ?? '[]', true );
-        $names    = [
-            'google_analytics' => 'Google Analytics', 'google_adsense' => 'Google AdSense',
-            'google_tag_manager' => 'Google Tag Manager', 'google_fonts' => 'Google Fonts',
-            'cloudflare_insights' => 'Cloudflare Insights', 'facebook_pixel' => 'Facebook Pixel',
-            'recaptcha' => 'reCAPTCHA', 'youtube' => 'YouTube', 'vimeo' => 'Vimeo',
-        ];
+        $names    = self::service_names();
         if ( $old['enabled'] !== $new['enabled'] ) {
             $labels[] = $new['enabled'] === '1' ? 'CSP enabled' : 'CSP disabled';
         }
@@ -560,7 +571,7 @@ class CSDT_CSP {
 
         // Push current live state to the top of history before restoring.
         $current_services = json_decode( get_option( 'csdt_devtools_csp_services', '[]' ), true );
-        $current = [
+        self::append_csp_history( [
             'enabled'           => get_option( 'csdt_devtools_csp_enabled', '0' ),
             'mode'              => get_option( 'csdt_devtools_csp_mode', 'enforce' ),
             'services'          => wp_json_encode( is_array( $current_services ) ? $current_services : [] ),
@@ -568,9 +579,7 @@ class CSDT_CSP {
             'reporting_enabled' => get_option( 'csdt_csp_reporting_enabled', '0' ),
             'saved_at'          => time(),
             'label'             => 'Before restore to: ' . ( $entry['label'] ?? 'previous state' ),
-        ];
-        array_unshift( $history, $current );
-        update_option( 'csdt_csp_history', wp_json_encode( array_slice( $history, 0, 10 ) ) );
+        ] );
 
         $entry_services = json_decode( $entry['services'] ?? '[]', true );
         if ( ! is_array( $entry_services ) ) { $entry_services = []; }
@@ -699,22 +708,12 @@ class CSDT_CSP {
         $old_custom    = get_option( 'csdt_devtools_csp_custom', '' );
         $old_reporting = get_option( 'csdt_csp_reporting_enabled', '0' );
 
-        $names = [
-            'google_analytics' => 'Google Analytics', 'google_adsense' => 'Google AdSense',
-            'google_tag_manager' => 'Google Tag Manager', 'google_fonts' => 'Google Fonts',
-            'cloudflare_insights' => 'Cloudflare Insights', 'facebook_pixel' => 'Facebook Pixel',
-            'recaptcha' => 'reCAPTCHA', 'youtube' => 'YouTube', 'vimeo' => 'Vimeo',
-            'stripe' => 'Stripe', 'hotjar' => 'Hotjar', 'intercom' => 'Intercom',
-            'twitter_embeds' => 'Twitter/X embeds', 'disqus' => 'Disqus',
-            'woocommerce_payments' => 'WooCommerce Payments',
-        ];
-
+        $names        = self::service_names();
         $new_services = $old_services;
         $new_custom   = $old_custom;
 
         if ( $type === 'service' ) {
-            $allowed_services = array_keys( $names );
-            if ( ! in_array( $value, $allowed_services, true ) ) {
+            if ( ! isset( $names[ $value ] ) ) {
                 wp_send_json_error( 'Unknown service.' );
             }
             if ( in_array( $value, $old_services, true ) ) {
@@ -739,10 +738,7 @@ class CSDT_CSP {
             update_option( 'csdt_devtools_csp_custom', $new_custom );
         }
 
-        // Push old state to rolling 10-entry change history.
-        $history = json_decode( get_option( 'csdt_csp_history', '[]' ), true );
-        if ( ! is_array( $history ) ) { $history = []; }
-        array_unshift( $history, [
+        self::append_csp_history( [
             'enabled'           => $old_enabled,
             'mode'              => $old_mode,
             'services'          => wp_json_encode( $old_services ),
@@ -751,13 +747,7 @@ class CSDT_CSP {
             'saved_at'          => time(),
             'label'             => $fix_label,
         ] );
-        update_option( 'csdt_csp_history', wp_json_encode( array_slice( $history, 0, 10 ) ) );
-
-        // Append to fixes log (up to 50 entries).
-        $fixes = json_decode( get_option( 'csdt_csp_fixes_log', '[]' ), true );
-        if ( ! is_array( $fixes ) ) { $fixes = []; }
-        array_unshift( $fixes, [ 'time' => time(), 'label' => $fix_label ] );
-        update_option( 'csdt_csp_fixes_log', wp_json_encode( array_slice( $fixes, 0, 50 ) ) );
+        self::append_fixes_log( [ 'time' => time(), 'label' => $fix_label ] );
 
         wp_send_json_success( [
             'custom'   => $new_custom,

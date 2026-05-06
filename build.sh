@@ -169,6 +169,7 @@ rsync -a \
   --exclude='node_modules/' --exclude='svn-assets/' \
   --exclude='playwright-report/' --exclude='playwright.config.js' \
   --exclude='*.backup' --exclude='*.config.js' \
+  --exclude='memory/' \
   --exclude='migrate-prefix-csdt.php' \
   --exclude='generate-help-docs.js' \
   --exclude='update-help-page.php' \

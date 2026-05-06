@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.704
+ * Version: 1.9.710
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -54,7 +54,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.704';
+    const VERSION      = '1.9.710';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -530,8 +530,8 @@ class CloudScale_DevTools {
             wp_clear_scheduled_hook( 'csdt_threat_monitor' );
         }
 
-        add_action( 'csdt_devtools_run_vuln_scan', [ 'CSDT_Vuln_Scan', 'cron_vuln_scan' ] );
-        add_action( 'csdt_devtools_run_deep_scan', [ 'CSDT_Site_Audit', 'cron_deep_scan' ] );
+        self::cron_action( 'csdt_devtools_run_vuln_scan', [ 'CSDT_Vuln_Scan', 'cron_vuln_scan' ] );
+        self::cron_action( 'csdt_devtools_run_deep_scan', [ 'CSDT_Site_Audit', 'cron_deep_scan' ] );
 
         // Email log — always active so every wp_mail() call is tracked site-wide,
         // regardless of whether our SMTP is enabled.
@@ -1210,7 +1210,7 @@ class CloudScale_DevTools {
         $token  = sanitize_text_field( (string) $_GET['csdt_lscache_purge'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         $stored = get_option( 'csdt_opcache_token', '' );
         if ( ! $stored || ! $token || ! hash_equals( $stored, $token ) ) {
-            wp_die( 'Unauthorized', '', 403 );
+            wp_die( esc_html__( 'Unauthorized', 'cloudscale-devtools' ), '', 403 );
         }
         // Send the purge header directly so LSWS clears its full-page cache even
         // when exit fires before wp_headers (which is where LiteSpeed plugin normally injects it).
@@ -2306,7 +2306,7 @@ class CloudScale_DevTools {
                         <div>
                             <label style="display:block;font-size:.78em;color:#64748b;margin-bottom:4px;"><?php esc_html_e( 'Restart cooldown (seconds)', 'cloudscale-devtools' ); ?></label>
                             <input type="number" id="csdt-fpm-restart-cooldown" min="60" max="86400" value="<?php echo esc_attr( $fpm_restart_cooldown ); ?>" style="width:100px;background:#fff;color:#1e293b;border:1px solid #d1d5db;border-radius:4px;padding:3px 8px;font-size:.9em;">
-                            <span style="font-size:.75em;color:#475569;margin-left:6px;"><?php echo esc_html( sprintf( __( '%d min', 'cloudscale-devtools' ), (int) round( $fpm_restart_cooldown / 60 ) ) ); ?></span>
+                            <span style="font-size:.75em;color:#475569;margin-left:6px;"><?php /* translators: %d is the number of minutes */ echo esc_html( sprintf( __( '%d min', 'cloudscale-devtools' ), (int) round( $fpm_restart_cooldown / 60 ) ) ); ?></span>
                         </div>
                     </div>
 
@@ -2324,7 +2324,7 @@ class CloudScale_DevTools {
                     <?php if ( ! empty( $fpm_event_log ) ) : ?>
                     <div style="margin-top:4px;">
                         <div style="font-size:.78em;color:#64748b;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
-                            <span><?php printf( esc_html__( 'Last %d events (newest first)', 'cloudscale-devtools' ), count( $fpm_event_log ) ); ?></span>
+                            <span><?php /* translators: %d is the number of events */ printf( esc_html__( 'Last %d events (newest first)', 'cloudscale-devtools' ), count( $fpm_event_log ) ); ?></span>
                         </div>
                         <div style="max-height:240px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;">
                             <table style="width:100%;border-collapse:collapse;font-size:.78em;">
@@ -3296,6 +3296,7 @@ class CloudScale_DevTools {
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
+                            <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline sort handler; wp_add_inline_script not available at this render point ?>
                             <script>
                             (function(){
                                 var btnTs  = document.getElementById('cs-probe-sort-ts');
@@ -3379,6 +3380,7 @@ class CloudScale_DevTools {
                         </div>
                     </div>
 
+                    <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline nonce config; wp_add_inline_script not available at this render point ?>
                     <script>
                     (function(){
                         var nonce = <?php echo wp_json_encode( wp_create_nonce( CloudScale_DevTools::SECURITY_NONCE ) ); ?>;
@@ -3534,6 +3536,7 @@ class CloudScale_DevTools {
                         </div>
                     </details>
                 </div>
+                <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline SSH fix button handler; wp_add_inline_script not available at this render point ?>
                 <script>
                 (function(){
                     var btn = document.getElementById('cs-ssh-fix-btn');
@@ -3975,6 +3978,7 @@ class CloudScale_DevTools {
                             <span class="cs-hint" style="margin-top:4px;"><?php esc_html_e( 'Session-based test auth is unaffected. Roll back by unchecking and saving.', 'cloudscale-devtools' ); ?></span>
                         </div>
                     </div>
+                    <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline auth block button handler; wp_add_inline_script not available at this render point ?>
                     <script>
                     (function() {
                         var btn = document.getElementById('cs-block-basic-auth-save');
@@ -4029,7 +4033,9 @@ class CloudScale_DevTools {
                                     if ( ! empty( $u['last_login'] ) ) {
                                         $diff = time() - (int) $u['last_login'];
                                         if ( $diff < 60 )        { $last_login_str = __( 'just now', 'cloudscale-devtools' ); }
+                                        /* translators: %d is the number of minutes */
                                         elseif ( $diff < 3600 )  { $last_login_str = sprintf( __( '%dm ago', 'cloudscale-devtools' ), (int) floor( $diff / 60 ) ); }
+                                        /* translators: %d is the number of hours */
                                         elseif ( $diff < 86400 ) { $last_login_str = sprintf( __( '%dh ago', 'cloudscale-devtools' ), (int) floor( $diff / 3600 ) ); }
                                         else                     { $last_login_str = wp_date( 'M j', $u['last_login'] ); }
                                     }
@@ -4417,6 +4423,7 @@ class CloudScale_DevTools {
             // Card 1: AI Cyber Scan
             if ( $has_key ) :
                 $provider_label = $ai_provider === 'gemini' ? 'Google Gemini' : 'Anthropic Claude';
+                /* translators: %s is a human-readable time difference e.g. "5 minutes ago" */
                 $scan_detail    = $last_scan
                     ? sprintf( __( 'Last scan: %s', 'cloudscale-devtools' ), human_time_diff( (int) ( $last_scan['scanned_at'] ?? 0 ) ) . ' ' . __( 'ago', 'cloudscale-devtools' ) )
                     : $provider_label;
@@ -4444,7 +4451,7 @@ class CloudScale_DevTools {
                 </div>
                 <div style="font-size:11px;color:#6b7280;margin-top:2px;line-height:1.4;">
                     <?php if ( $tm_last_run ) : ?>
-                        <?php printf( esc_html__( 'Last check: %s ago', 'cloudscale-devtools' ), esc_html( human_time_diff( $tm_last_run ) ) ); ?>
+                        <?php /* translators: %s is a human-readable time difference e.g. "5 minutes" */ printf( esc_html__( 'Last check: %s ago', 'cloudscale-devtools' ), esc_html( human_time_diff( $tm_last_run ) ) ); ?>
                     <?php else : ?>
                         <?php esc_html_e( 'File integrity, new-admin and probe detection.', 'cloudscale-devtools' ); ?>
                     <?php endif; ?>
@@ -4498,7 +4505,7 @@ class CloudScale_DevTools {
                 <div style="font-size:13px;font-weight:700;color:#15803d;">&#x2705; <?php esc_html_e( 'Active', 'cloudscale-devtools' ); ?></div>
                 <div style="font-size:11px;color:#6b7280;margin-top:2px;line-height:1.4;">
                     <?php if ( $uptime_last_ping && isset( $uptime_last_ping['time'] ) ) : ?>
-                        <?php printf( esc_html__( 'Last ping: %s ago', 'cloudscale-devtools' ), esc_html( human_time_diff( (int) $uptime_last_ping['time'] ) ) ); ?>
+                        <?php /* translators: %s is a human-readable time difference e.g. "5 minutes" */ printf( esc_html__( 'Last ping: %s ago', 'cloudscale-devtools' ), esc_html( human_time_diff( (int) $uptime_last_ping['time'] ) ) ); ?>
                         <?php if ( isset( $uptime_last_ping['ms'] ) ) : ?>&nbsp;&middot;&nbsp;<?php echo esc_html( $uptime_last_ping['ms'] ); ?>ms<?php endif; ?>
                     <?php else : ?>
                         <?php esc_html_e( 'Cloudflare Worker heartbeat enabled.', 'cloudscale-devtools' ); ?>
@@ -4557,7 +4564,8 @@ class CloudScale_DevTools {
             <div style="background:<?php echo $missing_images ? '#fffbeb' : '#f0fdf4'; ?>;border:1px solid <?php echo $missing_images ? '#fcd34d' : '#86efac'; ?>;border-radius:6px;padding:12px 14px;">
                 <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;"><?php esc_html_e( 'AI Image Generator', 'cloudscale-devtools' ); ?></div>
                 <div style="font-size:13px;font-weight:700;color:<?php echo $missing_images ? '#92400e' : '#15803d'; ?>;">
-                    <?php echo $missing_images
+                    <?php /* translators: %d is the number of posts missing featured images */
+                    echo $missing_images
                         ? '&#x26A0;&#xFE0F; ' . sprintf( esc_html__( '%d posts need images', 'cloudscale-devtools' ), $missing_images )
                         : '&#x2705; ' . esc_html__( 'All posts have images', 'cloudscale-devtools' ); ?>
                 </div>
@@ -4883,7 +4891,7 @@ class CloudScale_DevTools {
                                         <?php echo (int) $tm_last_file['count']; ?> file<?php echo $tm_last_file['count'] === 1 ? '' : 's'; ?>
                                     </div>
                                     <?php elseif ( $tm_baseline ) : ?>
-                                    <div style="margin-top:8px;font-size:11px;color:#16a34a;">✓ <?php printf( esc_html__( 'Baseline: WP %s (%d files)', 'cloudscale-devtools' ), esc_html( $tm_baseline_ver ), count( $tm_baseline ) ); ?></div>
+                                    <div style="margin-top:8px;font-size:11px;color:#16a34a;">✓ <?php /* translators: 1: WordPress version string, 2: number of files in baseline */ printf( esc_html__( 'Baseline: WP %s (%d files)', 'cloudscale-devtools' ), esc_html( $tm_baseline_ver ), count( $tm_baseline ) ); ?></div>
                                     <?php else : ?>
                                     <div style="margin-top:8px;font-size:11px;color:#64748b;"><?php esc_html_e( 'Baseline will be created on first run.', 'cloudscale-devtools' ); ?></div>
                                     <?php endif; ?>
@@ -4938,10 +4946,6 @@ class CloudScale_DevTools {
 
                     </div>
                 </div>
-
-                <?php CSDT_Security_Headers::render_security_headers_panel(); ?>
-
-                <?php CSDT_CSP::render_csp_panel(); ?>
 
                 <!-- ── AI Settings ────────────────────────────────────────────── -->
                 <div class="cs-panel" id="cs-panel-ai-settings">
@@ -5053,7 +5057,7 @@ class CloudScale_DevTools {
                         <div class="cs-sec-control">
                             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
                                 <input type="checkbox" id="cs-notify-email-enabled" <?php checked( $notify_enabled ); ?>>
-                                <span><?php printf( esc_html__( 'Send to %s', 'cloudscale-devtools' ), '<strong>' . esc_html( get_option( 'admin_email' ) ) . '</strong>' ); ?></span>
+                                <span><?php /* translators: %s is the admin email address */ printf( esc_html__( 'Send to %s', 'cloudscale-devtools' ), '<strong>' . esc_html( get_option( 'admin_email' ) ) . '</strong>' ); ?></span>
                             </label>
                         </div>
                     </div>
@@ -5108,7 +5112,7 @@ class CloudScale_DevTools {
                                 <span><?php esc_html_e( 'Run automatically on a schedule', 'cloudscale-devtools' ); ?></span>
                             </label>
                             <?php if ( $next_run ) : ?>
-                            <span class="cs-hint"><?php printf( esc_html__( 'Next run: %s', 'cloudscale-devtools' ), esc_html( wp_date( 'D j M Y, g:ia', $next_run ) ) ); ?></span>
+                            <span class="cs-hint"><?php /* translators: %s is a formatted date/time string e.g. "Mon 5 May 2025, 3:00pm" */ printf( esc_html__( 'Next run: %s', 'cloudscale-devtools' ), esc_html( wp_date( 'D j M Y, g:ia', $next_run ) ) ); ?></span>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -5302,7 +5306,6 @@ class CloudScale_DevTools {
                 </div><!-- /cs-panel-body scan-history -->
                 </div><!-- /cs-panel-scan-history -->
 
-                <?php $adhoc_history = get_option( 'csdt_adhoc_scans', [] ); ?>
                 <div class="cs-panel" id="cs-panel-adhoc-audits">
                 <div class="cs-section-header" style="background:linear-gradient(90deg,#0c1a2e 0%,#1e3a5f 100%);border-left:3px solid #60a5fa;">
                     <span>🌐 <?php esc_html_e( 'Adhoc Cyber Audits', 'cloudscale-devtools' ); ?></span>
@@ -5317,44 +5320,11 @@ class CloudScale_DevTools {
                         </div>
                     </div>
                     <div id="cs-adhoc-list">
-                    <?php if ( empty( $adhoc_history ) ) : ?>
                         <div id="cs-adhoc-empty" style="text-align:center;padding:28px 20px;background:#f8fafc;border:2px dashed #e2e8f0;border-radius:8px;">
                             <div style="font-size:2rem;margin-bottom:8px;">🌐</div>
                             <div style="font-weight:700;font-size:14px;color:#0f172a;margin-bottom:5px;"><?php esc_html_e( 'No adhoc scans yet', 'cloudscale-devtools' ); ?></div>
                             <div style="font-size:13px;color:#6b7280;max-width:380px;margin:0 auto;"><?php esc_html_e( 'Enter a different site URL above, then run an AI Deep Dive Cyber Audit.', 'cloudscale-devtools' ); ?></div>
                         </div>
-                    <?php else : ?>
-                        <?php foreach ( $adhoc_history as $aidx => $ae ) :
-                            $as = (int) ( $ae['report']['score'] ?? 0 );
-                            $al = esc_html( $ae['report']['score_label'] ?? '' );
-                            $ad = $ae['scanned_at'] ? wp_date( 'D j M Y, g:ia', $ae['scanned_at'] ) : '';
-                            $ac = $as >= 90 ? '#22c55e' : ( $as >= 75 ? '#4ade80' : ( $as >= 55 ? '#fbbf24' : ( $as >= 35 ? '#f97316' : '#ef4444' ) ) );
-                        ?>
-                        <div data-adhoc-idx="<?php echo esc_attr( $aidx ); ?>" class="cs-adhoc-entry" style="background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:6px;overflow:hidden;">
-                            <div class="cs-adhoc-entry-header" style="display:flex;align-items:flex-start;gap:14px;padding:10px 12px;">
-                                <div style="flex-shrink:0;text-align:center;min-width:48px;">
-                                    <div style="font-size:1.4rem;font-weight:700;color:<?php echo esc_attr( $ac ); ?>;line-height:1;"><?php echo esc_html( $as ); ?></div>
-                                    <div style="font-size:10px;color:<?php echo esc_attr( $ac ); ?>;opacity:.8;"><?php echo esc_html( $al ); ?></div>
-                                </div>
-                                <div style="flex:1;min-width:0;">
-                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap;">
-                                        <a href="<?php echo esc_url( $ae['target_url'] ?? '' ); ?>" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#2563eb;text-decoration:none;word-break:break-all;"><?php echo esc_html( $ae['target_url'] ?? '' ); ?></a>
-                                        <span style="font-size:11px;color:#64748b;"><?php echo esc_html( $ad ); ?></span>
-                                        <button type="button" class="cs-adhoc-delete-btn"
-                                                data-idx="<?php echo esc_attr( $aidx ); ?>"
-                                                style="font-size:11px;font-weight:600;color:#ef4444;background:none;border:1px solid #fca5a5;border-radius:4px;padding:1px 8px;cursor:pointer;line-height:1.5;flex-shrink:0;">
-                                            &#x2715;
-                                        </button>
-                                    </div>
-                                    <div style="font-size:12px;color:#374151;line-height:1.5;">
-                                        <?php echo esc_html( $ae['report']['summary'] ?? '' ); ?>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="cs-adhoc-report-body" style="padding:12px 14px;border-top:1px solid #e2e8f0;background:#fff;"></div>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
                     </div>
                 </div>
                 </div><!-- /cs-panel-adhoc-audits -->

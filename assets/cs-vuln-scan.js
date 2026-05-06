@@ -50,6 +50,39 @@
         return 'cs-audit-score-critical';
     }
 
+    function scoreColor(s) {
+        if (s >= 90) return '#22c55e';
+        if (s >= 75) return '#4ade80';
+        if (s >= 55) return '#fbbf24';
+        if (s >= 35) return '#f97316';
+        return '#ef4444';
+    }
+
+    function saveWithFeedback(btn, msgEl, action, params, onSuccess) {
+        btn.disabled = true;
+        if (msgEl) msgEl.classList.remove('visible');
+        post(action, params)
+            .then(function (res) {
+                btn.disabled = false;
+                if (msgEl) {
+                    msgEl.textContent = res.success ? '✅ Saved' : '❌ Error';
+                    msgEl.style.color = res.success ? '#16a34a' : '#dc2626';
+                    msgEl.classList.add('visible');
+                    setTimeout(function () { msgEl.classList.remove('visible'); msgEl.style.color = ''; }, 10000);
+                }
+                if (res.success && onSuccess) onSuccess(res);
+            })
+            .catch(function () {
+                btn.disabled = false;
+                if (msgEl) {
+                    msgEl.textContent = '❌ Error';
+                    msgEl.style.color = '#dc2626';
+                    msgEl.classList.add('visible');
+                    setTimeout(function () { msgEl.classList.remove('visible'); msgEl.style.color = ''; }, 10000);
+                }
+            });
+    }
+
     // ── PDF export (print-to-PDF — no external dependencies) ────────
 
     function exportSecurityPDF(data, scanType) {
@@ -58,7 +91,7 @@
         var site  = window.location.hostname;
         var title = scanType === 'deep' ? 'AI Deep Dive Cyber Audit Report' : 'AI Cyber Audit Report';
         var sc    = r.score || 0;
-        var scoreColor = sc >= 90 ? '#16a34a' : sc >= 75 ? '#4ade80' : sc >= 55 ? '#d97706' : sc >= 35 ? '#f97316' : '#dc2626';
+        var clr   = scoreColor(sc);
 
         function secBg(key) {
             return key === 'critical' ? '#dc2626' : key === 'high' ? '#d97706' : key === 'medium' ? '#ca8a04' : key === 'low' ? '#2563eb' : '#16a34a';
@@ -86,9 +119,9 @@
             'h1{font-size:22px;font-weight:800;color:#0f172a;margin:0 0 4px;}' +
             '.meta{font-size:12px;color:#6b7280;margin-bottom:24px;}' +
             '.score-row{display:flex;align-items:center;gap:20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:24px;}' +
-            '.score-circle{width:60px;height:60px;border-radius:50%;border:3px solid ' + scoreColor + ';display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;}' +
-            '.score-num{font-size:20px;font-weight:800;color:' + scoreColor + ';line-height:1;}' +
-            '.score-lbl{font-size:9px;color:' + scoreColor + ';font-weight:600;text-transform:uppercase;}' +
+            '.score-circle{width:60px;height:60px;border-radius:50%;border:3px solid ' + clr + ';display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;}' +
+            '.score-num{font-size:20px;font-weight:800;color:' + clr + ';line-height:1;}' +
+            '.score-lbl{font-size:9px;color:' + clr + ';font-weight:600;text-transform:uppercase;}' +
             '.summary{font-size:13px;color:#374151;line-height:1.65;}' +
             '@media print{body{padding:0;} @page{margin:20mm 18mm;}}</style></head><body>' +
             '<h1>' + esc(title) + '</h1>' +
@@ -110,12 +143,17 @@
 
     function renderReport(data, container, scanType) {
         if (!container) return;
-        var r   = data.report;
-        var cls = scoreClass(r.score);
-        var age = data.from_cache ? ' · cached ' + timeSince(data.scanned_at) + ' ago' : '';
+        var r        = data.report;
+        var cls      = scoreClass(r.score);
+        var age      = data.from_cache ? ' · cached ' + timeSince(data.scanned_at) + ' ago' : '';
+        var isAdhoc  = scanType === 'adhoc';
         var html = '';
 
         html += '<div style="margin:0 0 14px"><button class="cs-audit-pdf-btn button button-secondary" data-scan-type="' + escHtml(scanType || 'standard') + '">&#8595; Download PDF Report</button></div>';
+        if (isAdhoc && data.target_url) {
+            html += '<div style="font-size:12px;font-weight:600;color:#374151;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:5px 10px;margin-bottom:10px;word-break:break-all;">'
+                  + '&#127760; <a href="' + escHtml(data.target_url) + '" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none;">' + escHtml(data.target_url) + '</a></div>';
+        }
         html += '<div class="cs-audit-header">';
         html += '<div class="cs-audit-score-circle ' + cls + '">';
         html += '<span class="cs-audit-score-num">' + escHtml(r.score) + '</span>';
@@ -161,7 +199,7 @@
                 items.forEach(function (issue) {
                     var haystack = (issue.title || '') + ' ' + (issue.detail || '');
                     var qf = null;
-                    QUICK_FIX_MAP.forEach(function (m) { if (!qf && m.pattern.test(haystack)) qf = m; });
+                    if (!isAdhoc) { QUICK_FIX_MAP.forEach(function (m) { if (!qf && m.pattern.test(haystack)) qf = m; }); }
                     html += '<div class="cs-audit-issue">';
                     html += '<div class="cs-audit-issue-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
                     html += '<span>' + escHtml(issue.title) + '</span>';
@@ -260,7 +298,8 @@
 
     // ── Polling ───────────────────────────────────────────────────────
 
-    function startPolling(type, scanBtn, cancelBtn, statusEl, resultsEl, progressEl) {
+    // onComplete(data) — optional; when provided, replaces the default renderReport + status clear on success
+    function startPolling(type, scanBtn, cancelBtn, statusEl, resultsEl, progressEl, onComplete) {
         var bar = new ProgressBar(progressEl);
         bar.tick();
         if (cancelBtn) cancelBtn.style.display = '';
@@ -283,10 +322,14 @@
 
                     if (d.status === 'complete') {
                         bar.complete();
-                        if (statusEl) { statusEl.textContent = ''; statusEl.className = 'cs-vuln-inline-msg'; }
-                        if (resultsEl && d.data) {
-                            renderReport(d.data, resultsEl, type);
-                            resultsEl.style.display = 'block';
+                        if (onComplete) {
+                            onComplete(d.data);
+                        } else {
+                            if (statusEl) { statusEl.textContent = ''; statusEl.className = 'cs-vuln-inline-msg'; }
+                            if (resultsEl && d.data) {
+                                renderReport(d.data, resultsEl, type);
+                                resultsEl.style.display = 'block';
+                            }
                         }
                     } else if (d.status === 'error') {
                         bar.reset();
@@ -310,19 +353,43 @@
         }
     }
 
-    // ── Standard scan ────────────────────────────────────────────────
+    // ── Scan runner (standard + deep) ────────────────────────────────
 
-    function runScan(cacheOnly) {
-        var scanBtn    = document.getElementById('cs-vuln-scan-btn');
-        var statusEl   = document.getElementById('cs-vuln-scan-status');
-        var resultsEl  = document.getElementById('cs-vuln-results');
-        var progressEl = document.getElementById('cs-vuln-progress');
+    var SCAN_CFG = {
+        standard: {
+            action:     'csdt_devtools_vuln_scan',
+            btnId:      'cs-vuln-scan-btn',
+            cancelId:   'cs-vuln-cancel-btn',
+            statusId:   'cs-vuln-scan-status',
+            resultsId:  'cs-vuln-results',
+            progressId: 'cs-vuln-progress',
+            startMsg:   '⏳ Running AI cyber audit…',
+            errMsg:     'Failed to start scan.',
+        },
+        deep: {
+            action:     'csdt_devtools_deep_scan',
+            btnId:      'cs-deep-scan-btn',
+            cancelId:   'cs-deep-cancel-btn',
+            statusId:   'cs-deep-scan-status',
+            resultsId:  'cs-deep-results',
+            progressId: 'cs-deep-progress',
+            startMsg:   '⏳ Running AI Deep Dive Cyber Audit… this may take 60–90s.',
+            errMsg:     'Failed to start deep scan.',
+        },
+    };
+
+    function runScanType(type, cacheOnly) {
+        var c          = SCAN_CFG[type];
+        var scanBtn    = document.getElementById(c.btnId);
+        var statusEl   = document.getElementById(c.statusId);
+        var resultsEl  = document.getElementById(c.resultsId);
+        var progressEl = document.getElementById(c.progressId);
 
         if (cacheOnly) {
-            post('csdt_devtools_vuln_scan', { cache_only: '1' })
+            post(c.action, { cache_only: '1' })
                 .then(function (res) {
                     if (!res.success || res.data.no_cache) return;
-                    if (resultsEl) { renderReport(res.data, resultsEl, 'standard'); resultsEl.style.display = 'block'; }
+                    if (resultsEl) { renderReport(res.data, resultsEl, type); resultsEl.style.display = 'block'; }
                     if (statusEl) { statusEl.textContent = ''; statusEl.className = 'cs-vuln-inline-msg'; }
                 })
                 .catch(function () {});
@@ -330,57 +397,18 @@
         }
 
         if (scanBtn)   scanBtn.disabled = true;
-        if (statusEl)  { statusEl.textContent = '⏳ Running AI cyber audit…'; statusEl.className = 'cs-vuln-inline-msg'; }
+        if (statusEl)  { statusEl.textContent = c.startMsg; statusEl.className = 'cs-vuln-inline-msg'; }
         if (resultsEl) resultsEl.style.display = 'none';
 
-        post('csdt_devtools_vuln_scan', {})
+        post(c.action, {})
             .then(function (res) {
                 if (!res.success) {
                     if (scanBtn) scanBtn.disabled = false;
-                    var err = res.data && res.data.message ? res.data.message : 'Failed to start scan.';
+                    var err = res.data && res.data.message ? res.data.message : c.errMsg;
                     if (statusEl) { statusEl.textContent = '❌ ' + err; statusEl.className = 'cs-vuln-inline-msg cs-vuln-msg-err'; }
                     return;
                 }
-                startPolling('standard', scanBtn, document.getElementById('cs-vuln-cancel-btn'), statusEl, resultsEl, progressEl);
-            })
-            .catch(function (e) {
-                if (scanBtn) scanBtn.disabled = false;
-                if (statusEl) { statusEl.textContent = '❌ ' + e.message; statusEl.className = 'cs-vuln-inline-msg cs-vuln-msg-err'; }
-            });
-    }
-
-    // ── Deep dive scan ───────────────────────────────────────────────
-
-    function runDeepScan(cacheOnly) {
-        var scanBtn    = document.getElementById('cs-deep-scan-btn');
-        var statusEl   = document.getElementById('cs-deep-scan-status');
-        var resultsEl  = document.getElementById('cs-deep-results');
-        var progressEl = document.getElementById('cs-deep-progress');
-
-        if (cacheOnly) {
-            post('csdt_devtools_deep_scan', { cache_only: '1' })
-                .then(function (res) {
-                    if (!res.success || res.data.no_cache) return;
-                    if (resultsEl) { renderReport(res.data, resultsEl, 'deep'); resultsEl.style.display = 'block'; }
-                    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'cs-vuln-inline-msg'; }
-                })
-                .catch(function () {});
-            return;
-        }
-
-        if (scanBtn)   scanBtn.disabled = true;
-        if (statusEl)  { statusEl.textContent = '⏳ Running AI Deep Dive Cyber Audit… this may take 60–90s.'; statusEl.className = 'cs-vuln-inline-msg'; }
-        if (resultsEl) resultsEl.style.display = 'none';
-
-        post('csdt_devtools_deep_scan', {})
-            .then(function (res) {
-                if (!res.success) {
-                    if (scanBtn) scanBtn.disabled = false;
-                    var err = res.data && res.data.message ? res.data.message : 'Failed to start deep scan.';
-                    if (statusEl) { statusEl.textContent = '❌ ' + err; statusEl.className = 'cs-vuln-inline-msg cs-vuln-msg-err'; }
-                    return;
-                }
-                startPolling('deep', scanBtn, document.getElementById('cs-deep-cancel-btn'), statusEl, resultsEl, progressEl);
+                startPolling(type, scanBtn, document.getElementById(c.cancelId), statusEl, resultsEl, progressEl);
             })
             .catch(function (e) {
                 if (scanBtn) scanBtn.disabled = false;
@@ -542,9 +570,6 @@
 
         if (saveBtn) {
             saveBtn.addEventListener('click', function () {
-                saveBtn.disabled = true;
-                if (savedMsg) savedMsg.style.opacity = '0';
-
                 var provider = providerSel ? providerSel.value : 'anthropic';
                 var params = {
                     provider:   provider,
@@ -557,33 +582,14 @@
                 if (rawAnt) params.api_key    = rawAnt;
                 if (rawGem) params.gemini_key = rawGem;
 
-                post('csdt_devtools_vuln_save_key', params)
-                    .then(function (res) {
-                        saveBtn.disabled = false;
-                        if (savedMsg) {
-                            savedMsg.textContent = res.success ? '✅ Saved' : '❌ Error';
-                            savedMsg.style.color = res.success ? '#16a34a' : '#dc2626';
-                            savedMsg.style.opacity = '1';
-                            setTimeout(function () { savedMsg.style.opacity = '0'; savedMsg.style.color = ''; }, 10000);
-                        }
-                        if (res.success) {
-                            if (scanBtn) scanBtn.disabled = !res.data.has_key;
-                            if (deepBtn) deepBtn.disabled = !res.data.has_key;
-                            if (keyInput       && res.data.masked)       { keyInput.value = '';       keyInput.placeholder       = res.data.masked; }
-                            if (geminiKeyInput && res.data.maskedGemini) { geminiKeyInput.value = ''; geminiKeyInput.placeholder = res.data.maskedGemini; }
-                            if (keyStatus)      { keyStatus.textContent      = ''; keyStatus.className      = 'cs-sec-key-status'; }
-                            if (geminiKeyStatus){ geminiKeyStatus.textContent = ''; geminiKeyStatus.className = 'cs-sec-key-status'; }
-                        }
-                    })
-                    .catch(function () {
-                        saveBtn.disabled = false;
-                        if (savedMsg) {
-                            savedMsg.textContent = '❌ Error';
-                            savedMsg.style.color = '#dc2626';
-                            savedMsg.style.opacity = '1';
-                            setTimeout(function () { savedMsg.style.opacity = '0'; savedMsg.style.color = ''; }, 10000);
-                        }
-                    });
+                saveWithFeedback(saveBtn, savedMsg, 'csdt_devtools_vuln_save_key', params, function (res) {
+                    if (scanBtn) scanBtn.disabled = !res.data.has_key;
+                    if (deepBtn) deepBtn.disabled = !res.data.has_key;
+                    if (keyInput       && res.data.masked)       { keyInput.value = '';       keyInput.placeholder       = res.data.masked; }
+                    if (geminiKeyInput && res.data.maskedGemini) { geminiKeyInput.value = ''; geminiKeyInput.placeholder = res.data.maskedGemini; }
+                    if (keyStatus)       { keyStatus.textContent       = ''; keyStatus.className       = 'cs-sec-key-status'; }
+                    if (geminiKeyStatus) { geminiKeyStatus.textContent = ''; geminiKeyStatus.className = 'cs-sec-key-status'; }
+                });
             });
         }
 
@@ -610,31 +616,11 @@
 
         if (schedSaveBtn) {
             schedSaveBtn.addEventListener('click', function () {
-                schedSaveBtn.disabled = true;
-                var params = {
+                saveWithFeedback(schedSaveBtn, schedSavedMsg, 'csdt_devtools_save_schedule', {
                     enabled: schedEnabled && schedEnabled.checked ? '1' : '0',
                     freq:    schedFreq    ? schedFreq.value    : 'weekly',
                     type:    schedType    ? schedType.value    : 'deep',
-                };
-                post('csdt_devtools_save_schedule', params)
-                    .then(function (res) {
-                        schedSaveBtn.disabled = false;
-                        if (schedSavedMsg) {
-                            schedSavedMsg.textContent = res.success ? '✅ Saved' : '❌ Error';
-                            schedSavedMsg.style.color = res.success ? '#16a34a' : '#dc2626';
-                            schedSavedMsg.classList.add('visible');
-                            setTimeout(function () { schedSavedMsg.classList.remove('visible'); schedSavedMsg.style.color = ''; }, 10000);
-                        }
-                    })
-                    .catch(function () {
-                        schedSaveBtn.disabled = false;
-                        if (schedSavedMsg) {
-                            schedSavedMsg.textContent = '❌ Error';
-                            schedSavedMsg.style.color = '#dc2626';
-                            schedSavedMsg.classList.add('visible');
-                            setTimeout(function () { schedSavedMsg.classList.remove('visible'); schedSavedMsg.style.color = ''; }, 10000);
-                        }
-                    });
+                });
             });
         }
 
@@ -645,33 +631,14 @@
 
         if (notifySaveBtn) {
             notifySaveBtn.addEventListener('click', function () {
-                notifySaveBtn.disabled = true;
-                var params = {
+                saveWithFeedback(notifySaveBtn, notifySavedMsg, 'csdt_devtools_save_notify', {
                     email_enabled: document.getElementById('cs-notify-email-enabled')?.checked ? '1' : '0',
                     email_to:      (document.getElementById('cs-notify-email')?.value || '').trim(),
                     ntfy_url:      (document.getElementById('cs-notify-ntfy-url')?.value || '').trim(),
                     ntfy_token:    (notifyNtfyTok?.value || '').trim(),
-                };
-                post('csdt_devtools_save_notify', params)
-                    .then(function (res) {
-                        notifySaveBtn.disabled = false;
-                        if (notifySavedMsg) {
-                            notifySavedMsg.textContent = res.success ? '✅ Saved' : '❌ Error';
-                            notifySavedMsg.style.color = res.success ? '#16a34a' : '#dc2626';
-                            notifySavedMsg.classList.add('visible');
-                            setTimeout(function () { notifySavedMsg.classList.remove('visible'); notifySavedMsg.style.color = ''; }, 10000);
-                        }
-                        if (res.success && notifyNtfyTok) { notifyNtfyTok.value = ''; notifyNtfyTok.placeholder = '••••••••'; }
-                    })
-                    .catch(function () {
-                        notifySaveBtn.disabled = false;
-                        if (notifySavedMsg) {
-                            notifySavedMsg.textContent = '❌ Error';
-                            notifySavedMsg.style.color = '#dc2626';
-                            notifySavedMsg.classList.add('visible');
-                            setTimeout(function () { notifySavedMsg.classList.remove('visible'); notifySavedMsg.style.color = ''; }, 10000);
-                        }
-                    });
+                }, function () {
+                    if (notifyNtfyTok) { notifyNtfyTok.value = ''; notifyNtfyTok.placeholder = '••••••••'; }
+                });
             });
         }
 
@@ -712,19 +679,19 @@
 
         // ── Scan buttons ──────────────────────────────────────────────
 
-        if (scanBtn) scanBtn.addEventListener('click', function () { runScan(false); });
+        if (scanBtn) scanBtn.addEventListener('click', function () { runScanType('standard', false); });
         if (deepBtn) deepBtn.addEventListener('click', function () {
             if (isExternalUrl()) {
                 runAdhocScan(targetUrlInput ? targetUrlInput.value.trim() : '');
             } else {
-                runDeepScan(false);
+                runScanType('deep', false);
             }
         });
 
         // Silently pre-fill cached results on page load
         if (cfg.hasKey) {
-            runScan(true);
-            runDeepScan(true);
+            runScanType('standard', true);
+            runScanType('deep', true);
         }
 
         // ── Quick fix buttons (PHP-rendered initial state) ────────────
@@ -743,16 +710,27 @@
                 renderScanHistoryChart(cfg.scanHistory || []);
             }, 150);
         });
+
+        // ── Adhoc history — JS-driven initial render ──────────────────
+        var adhocList  = document.getElementById('cs-adhoc-list');
+        var adhocEmpty = document.getElementById('cs-adhoc-empty');
+        if (adhocList && cfg.adhocHistory && cfg.adhocHistory.length) {
+            if (adhocEmpty) adhocEmpty.style.display = 'none';
+            cfg.adhocHistory.forEach(function (entry, idx) {
+                adhocList.appendChild(buildAdhocCard(entry, idx));
+            });
+            wireAdhocButtons();
+        }
     }
 
     // ── Adhoc scan (external URL) ────────────────────────────────────────
 
     function runAdhocScan(targetUrl) {
-        var scanArea  = document.getElementById('cs-adhoc-scan-area');
-        var statusEl  = document.getElementById('cs-adhoc-scan-status');
+        var scanArea   = document.getElementById('cs-adhoc-scan-area');
+        var statusEl   = document.getElementById('cs-adhoc-scan-status');
         var progressEl = document.getElementById('cs-adhoc-progress');
-        var targetLbl = document.getElementById('cs-adhoc-scan-target');
-        var deepBtn   = document.getElementById('cs-deep-scan-btn');
+        var targetLbl  = document.getElementById('cs-adhoc-scan-target');
+        var deepBtn    = document.getElementById('cs-deep-scan-btn');
 
         if (!targetUrl) { return; }
 
@@ -761,71 +739,40 @@
         if (statusEl)  { statusEl.textContent = '⏳ Running external AI security probe…'; statusEl.className = 'cs-vuln-inline-msg'; }
         if (deepBtn)   { deepBtn.disabled = true; }
 
-        // Scroll the Adhoc panel into view
         var adhocPanel = document.getElementById('cs-panel-adhoc-audits');
         if (adhocPanel) { adhocPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-
-        var bar = new ProgressBar(progressEl);
-        bar.tick();
 
         post('csdt_devtools_adhoc_scan', { target_url: targetUrl })
             .then(function (res) {
                 if (!res.success) {
-                    bar.reset();
                     if (deepBtn) deepBtn.disabled = false;
                     var err = res.data && res.data.message ? res.data.message : 'Failed to start scan.';
                     if (statusEl) { statusEl.textContent = '❌ ' + err; statusEl.className = 'cs-vuln-inline-msg cs-vuln-msg-err'; }
                     return;
                 }
-
-                var timer = setInterval(function () {
-                    bar.tick();
-                    post('csdt_devtools_scan_status', { type: 'adhoc' })
-                        .then(function (res2) {
-                            if (!res2.success) return;
-                            var d = res2.data;
-                            if (d.status === 'running') return;
-
-                            clearInterval(timer);
-                            bar.complete();
-                            if (deepBtn) deepBtn.disabled = false;
-
-                            if (d.status === 'complete' && d.data) {
-                                if (statusEl) { statusEl.textContent = '✔ Scan complete — result saved below.'; statusEl.className = 'cs-vuln-inline-msg'; }
-                                prependAdhocEntry(d.data);
-                            } else if (d.status === 'error') {
-                                bar.reset();
-                                if (statusEl) { statusEl.textContent = '❌ ' + (d.message || 'Scan failed.'); statusEl.className = 'cs-vuln-inline-msg cs-vuln-msg-err'; }
-                            }
-                        })
-                        .catch(function () {});
-                }, 3000);
+                startPolling('adhoc', deepBtn, null, statusEl, null, progressEl, function (data) {
+                    if (statusEl) { statusEl.textContent = '✔ Scan complete — result saved below.'; statusEl.className = 'cs-vuln-inline-msg'; }
+                    if (data) prependAdhocEntry(data);
+                });
             })
             .catch(function (e) {
-                bar.reset();
                 if (deepBtn) deepBtn.disabled = false;
                 if (statusEl) { statusEl.textContent = '❌ ' + (e.message || 'Network error.'); statusEl.className = 'cs-vuln-inline-msg cs-vuln-msg-err'; }
             });
     }
 
-    function prependAdhocEntry(data) {
-        var list     = document.getElementById('cs-adhoc-list');
-        var emptyEl  = document.getElementById('cs-adhoc-empty');
-        if (!list) return;
-
-        if (emptyEl) emptyEl.style.display = 'none';
-
+    function buildAdhocCard(data, idx) {
         var r   = data.report || {};
         var sc  = r.score || 0;
         var lbl = r.score_label || '';
-        var col = sc >= 90 ? '#22c55e' : sc >= 75 ? '#4ade80' : sc >= 55 ? '#fbbf24' : sc >= 35 ? '#f97316' : '#ef4444';
+        var col = scoreColor(sc);
         var url = data.target_url || '';
         var ts  = data.scanned_at ? new Date(data.scanned_at * 1000).toLocaleString() : '';
+        var sidx = String(idx);
 
-        var idx = (list.querySelectorAll('.cs-adhoc-entry').length); // will be index 0 after prepend
         var div = document.createElement('div');
         div.className = 'cs-adhoc-entry';
-        div.setAttribute('data-adhoc-idx', '0');
+        div.setAttribute('data-adhoc-idx', sidx);
         div.style.cssText = 'background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:6px;overflow:hidden;';
         div.innerHTML =
             '<div class="cs-adhoc-entry-header" style="display:flex;align-items:flex-start;gap:14px;padding:10px 12px;">' +
@@ -837,14 +784,24 @@
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;flex-wrap:wrap;">' +
             '<a href="' + escHtml(url) + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#2563eb;text-decoration:none;word-break:break-all;">' + escHtml(url) + '</a>' +
             '<span style="font-size:11px;color:#64748b;">' + escHtml(ts) + '</span>' +
-            '<button type="button" class="cs-adhoc-delete-btn" data-idx="0" style="font-size:11px;font-weight:600;color:#ef4444;background:none;border:1px solid #fca5a5;border-radius:4px;padding:1px 8px;cursor:pointer;line-height:1.5;flex-shrink:0;">&#x2715;</button>' +
+            '<button type="button" class="cs-adhoc-delete-btn" data-idx="' + sidx + '" title="Delete this audit result" style="font-size:13px;color:#ef4444;background:none;border:1px solid #fca5a5;border-radius:4px;padding:2px 7px;cursor:pointer;line-height:1.4;flex-shrink:0;">&#x1F5D1;</button>' +
             '</div>' +
             '<div style="font-size:12px;color:#374151;line-height:1.5;">' + escHtml(r.summary || '') + '</div>' +
             '</div>' +
             '</div>' +
             '<div class="cs-adhoc-report-body" style="padding:12px 14px;border-top:1px solid #e2e8f0;background:#fff;"></div>';
+        div._adhocData = data;
+        return div;
+    }
 
-        // Re-index existing entries
+    function prependAdhocEntry(data) {
+        var list    = document.getElementById('cs-adhoc-list');
+        var emptyEl = document.getElementById('cs-adhoc-empty');
+        if (!list) return;
+
+        if (emptyEl) emptyEl.style.display = 'none';
+
+        // Re-index existing entries before inserting at index 0
         list.querySelectorAll('.cs-adhoc-entry').forEach(function (el) {
             var oldIdx = parseInt(el.getAttribute('data-adhoc-idx'), 10);
             el.setAttribute('data-adhoc-idx', String(oldIdx + 1));
@@ -853,9 +810,7 @@
             });
         });
 
-        list.insertBefore(div, list.firstChild);
-
-        div._adhocData = data;
+        list.insertBefore(buildAdhocCard(data, 0), list.firstChild);
         wireAdhocButtons();
     }
 
@@ -866,13 +821,16 @@
             if (!body || body._rendered) return;
             var idx  = parseInt(entry.getAttribute('data-adhoc-idx'), 10);
             var data = entry._adhocData || (cfg.adhocHistory || [])[idx] || null;
-            if (data) { renderReport(data, body, 'deep'); body._rendered = true; }
+            if (data) { renderReport(data, body, 'adhoc'); body._rendered = true; }
         });
 
         document.querySelectorAll('.cs-adhoc-delete-btn').forEach(function (btn) {
             btn.onclick = function () {
                 var idx     = parseInt(btn.getAttribute('data-idx'), 10);
                 var entryEl = btn.closest('.cs-adhoc-entry');
+                var urlEl   = entryEl ? entryEl.querySelector('a[href]') : null;
+                var label   = urlEl ? urlEl.textContent.trim() : 'this audit result';
+                if (!confirm('Delete "' + label + '"?\n\nThis cannot be undone.')) { return; }
                 post('csdt_devtools_adhoc_delete', { idx: String(idx) })
                     .then(function (res) {
                         if (res.success && entryEl) {
@@ -900,13 +858,6 @@
         document.addEventListener( 'DOMContentLoaded', csdtVulnInit );
     } else {
         csdtVulnInit();
-    }
-
-    // Wire up any PHP-rendered adhoc buttons on page load
-    if ( document.readyState === 'loading' ) {
-        document.addEventListener( 'DOMContentLoaded', wireAdhocButtons );
-    } else {
-        wireAdhocButtons();
     }
 
     // ── Quick Fixes ──────────────────────────────────────────────────────
@@ -1444,10 +1395,6 @@
 
         document.getElementById('csdt-hrm-close').addEventListener('click', function () { modal.style.display = 'none'; });
         modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
-
-        function scoreColor(s) {
-            return s >= 90 ? '#16a34a' : s >= 75 ? '#22c55e' : s >= 55 ? '#f59e0b' : s >= 35 ? '#f97316' : '#dc2626';
-        }
 
         function renderHistoryFindings(findings) {
             var secs = [

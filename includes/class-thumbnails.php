@@ -403,6 +403,7 @@ The text rule is passed separately in the user message — follow it exactly.
             </div>
             <div class="cs-panel-body">
 
+                <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline config vars for image generator; wp_add_inline_script not available at this render point ?>
                 <script>
                 var csdtImgKeys = <?php echo $keys_json; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON-encoded ?>;
                 var csdtImgVendor = <?php echo wp_json_encode( $saved_vendor ); ?>;
@@ -2015,7 +2016,7 @@ The text rule is passed separately in the user message — follow it exactly.
                 'has_thumb'      => (bool) $thumb_id,
                 'thumb_url'      => $thumb_url ?: null,
                 'thumb_date_raw' => $thumb_date_raw,
-                'thumb_date'     => $thumb_date_raw ? date( 'j M Y', $thumb_date_raw ) : null,
+                'thumb_date'     => $thumb_date_raw ? gmdate( 'j M Y', $thumb_date_raw ) : null,
             ];
         }
 

@@ -19,10 +19,10 @@ class CSDT_Monitor {
 
         // Add www-data to adm group (try with sudo first, then direct for root-in-container).
         $out = []; $rc = 1;
-        exec( 'sudo usermod -a -G adm www-data 2>&1', $out, $rc );
+        exec( 'sudo usermod -a -G adm www-data 2>&1', $out, $rc ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- hardcoded OS group management; no WP Filesystem equivalent
         if ( $rc !== 0 ) {
             $out = []; $rc = 1;
-            exec( 'usermod -a -G adm www-data 2>&1', $out, $rc );
+            exec( 'usermod -a -G adm www-data 2>&1', $out, $rc ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- hardcoded OS group management; no WP Filesystem equivalent
         }
         if ( $rc !== 0 ) {
             wp_send_json_error( 'usermod failed: ' . implode( ' ', $out ) );
@@ -32,14 +32,14 @@ class CSDT_Monitor {
         // Try several service names used across distros / Docker setups.
         foreach ( [ 'php-fpm', 'php8.2-fpm', 'php8.1-fpm', 'php8.3-fpm' ] as $svc ) {
             $tmp = []; $src = 0;
-            exec( 'sudo systemctl restart ' . $svc . ' 2>&1', $tmp, $src );
+            exec( 'sudo systemctl restart ' . $svc . ' 2>&1', $tmp, $src ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- hardcoded service list; no WP Filesystem equivalent for systemctl
             if ( $src === 0 ) { break; }
         }
         if ( $src !== 0 ) {
             // Inside Docker, systemctl won't work — send SIGUSR2 to php-fpm master.
             $pid_files = glob( '/var/run/php/php*-fpm.pid' );
             if ( $pid_files ) {
-                $pid = (int) file_get_contents( $pid_files[0] );
+                $pid = (int) file_get_contents( $pid_files[0] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading local OS PID file
                 if ( $pid > 0 ) { posix_kill( $pid, SIGUSR2 ); }
             }
         }
@@ -559,7 +559,7 @@ class CSDT_Monitor {
             if ( file_exists( $p ) && is_readable( $p ) ) {
                 $www_conf          = $p;
                 $www_conf_writable = is_writable( $p );
-                $content           = (string) file_get_contents( $p );
+                $content           = (string) file_get_contents( $p ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading local PHP-FPM config file
                 $status_path_set   = (bool) preg_match( '/^\s*pm\.status_path\s*=/m', $content );
                 break;
             }
@@ -597,7 +597,7 @@ class CSDT_Monitor {
         foreach ( [ '/etc/nginx/sites-enabled', '/etc/nginx/conf.d', '/etc/nginx' ] as $dir ) {
             if ( ! is_dir( $dir ) ) continue;
             foreach ( (array) glob( $dir . '/*.conf' ) as $cf ) {
-                $nc = is_readable( $cf ) ? (string) file_get_contents( $cf ) : '';
+                $nc = is_readable( $cf ) ? (string) file_get_contents( $cf ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading local nginx config file
                 if ( preg_match( '/fastcgi_pass\s+([^\s;]+)/i', $nc, $m ) ) {
                     $fastcgi_pass = $m[1];
                     break 2;
@@ -641,7 +641,7 @@ class CSDT_Monitor {
             wp_send_json_error( [ 'message' => 'www.conf not writable: ' . $www_conf ] );
         }
 
-        $content = (string) file_get_contents( $www_conf );
+        $content = (string) file_get_contents( $www_conf ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading local PHP-FPM www.conf (path validated against allowlist)
         $patched = false;
         if ( ! preg_match( '/^\s*pm\.status_path\s*=/m', $content ) ) {
             // Insert after pm.max_spare_servers if present, else append
@@ -655,7 +655,7 @@ class CSDT_Monitor {
             } else {
                 $content .= "\npm.status_path = /fpm-status\n";
             }
-            if ( file_put_contents( $www_conf, $content ) === false ) {
+            if ( file_put_contents( $www_conf, $content ) === false ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- writing PHP-FPM www.conf (path validated against allowlist)
                 wp_send_json_error( [ 'message' => 'Could not write to ' . $www_conf ] );
             }
             $patched = true;
@@ -672,7 +672,7 @@ class CSDT_Monitor {
 
         foreach ( [ '/var/run/php-fpm.pid', '/run/php-fpm.pid', '/run/php/php-fpm.pid' ] as $pid_file ) {
             if ( file_exists( $pid_file ) ) {
-                $pid = (int) trim( (string) file_get_contents( $pid_file ) );
+                $pid = (int) trim( (string) file_get_contents( $pid_file ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading local OS PID file
                 if ( $pid > 1 && function_exists( 'posix_kill' ) && posix_kill( $pid, SIGUSR2 ) ) {
                     $reloaded   = true;
                     $reload_msg = 'Sent SIGUSR2 to php-fpm master (PID ' . $pid . ')';
@@ -684,7 +684,7 @@ class CSDT_Monitor {
         if ( ! $reloaded && is_dir( '/proc' ) && function_exists( 'posix_kill' ) ) {
             $fpm_pids = [];
             foreach ( (array) glob( '/proc/[0-9]*', GLOB_ONLYDIR ) as $d ) {
-                $comm = is_readable( $d . '/comm' ) ? (string) file_get_contents( $d . '/comm' ) : '';
+                $comm = is_readable( $d . '/comm' ) ? (string) file_get_contents( $d . '/comm' ) : ''; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading /proc process name
                 if ( str_contains( trim( $comm ), 'php-fpm' ) ) {
                     $fpm_pids[] = (int) basename( $d );
                 }

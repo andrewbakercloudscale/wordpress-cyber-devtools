@@ -684,6 +684,7 @@ class CSDT_Security_Headers {
             </div>
         </div>
 
+        <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline config block for header history; wp_add_inline_script not available at this render point ?>
         <script>
         (function(){
             var csHdrHistory = <?php echo wp_json_encode( $history ); ?>;
