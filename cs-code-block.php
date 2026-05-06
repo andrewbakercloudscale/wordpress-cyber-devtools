@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.710
+ * Version: 1.9.712
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -54,7 +54,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.710';
+    const VERSION      = '1.9.712';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4954,8 +4954,7 @@ class CloudScale_DevTools {
                     <span class="cs-header-hint"><?php esc_html_e( 'Select a provider and paste your API key to enable AI-powered security scans', 'cloudscale-devtools' ); ?></span>
                     <?php self::render_explain_btn( 'cyber-audit', 'AI Cyber Audit', [
                         [ 'name' => 'AI Providers',    'rec' => 'Info',        'html' => '<p>Two AI providers are supported. You supply your own API key — stored only in your WordPress database (<code>wp_options</code>) and sent only to the provider&#39;s own API endpoint.</p><p><strong>Anthropic Claude</strong> — recommended for best results.<br>Get your key: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com/settings/keys</a><br>Models: <code>claude-sonnet-4-6</code> (fast) · <code>claude-opus-4-7</code> (most capable)</p><p><strong>Google Gemini</strong> — free tier available.<br>Get your key: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a><br>Models: <code>gemini-2.0-flash</code> (fast, free tier) · <code>gemini-2.5-pro</code> (most capable)</p>' ],
-                        [ 'name' => 'Standard Scan',   'rec' => 'Recommended', 'html' => 'Checks your WordPress core settings, active plugins and themes, user accounts, file permissions, and wp-config.php for common misconfigurations. Results are scored as Critical / High / Medium / Low with specific fix steps. Takes a few seconds.' ],
-                        [ 'name' => 'Deep Dive Scan',  'rec' => 'Recommended', 'html' => 'Extends the Standard scan with live HTTP probes, DNS checks (SPF, DMARC, DKIM), weak TLS detection, PHP end-of-life status, static PHP code analysis across your plugins, and AI-powered triage of suspicious code patterns.' ],
+                        [ 'name' => 'Deep Dive Scan',  'rec' => 'Recommended', 'html' => 'Checks your WordPress core settings, active plugins and themes, user accounts, file permissions, and wp-config.php — then adds live HTTP probes (SSL/TLS, login page, XML-RPC, REST user enumeration, directory listing), DNS checks (SPF, DMARC, DKIM), PHP end-of-life detection, and static AI-powered triage of plugin PHP files for suspicious patterns.' ],
                         [ 'name' => 'Scheduled Scans', 'rec' => 'Optional',    'html' => 'Run a scan automatically on a daily or weekly schedule. Results are stored in scan history. Enable email and ntfy.sh alerts to receive the AI summary when a scan completes.' ],
                     ] ); ?>
                 </div>
@@ -5009,16 +5008,7 @@ class CloudScale_DevTools {
                     </div>
 
                     <div class="cs-sec-row">
-                        <span class="cs-sec-label"><?php esc_html_e( 'Audit model:', 'cloudscale-devtools' ); ?></span>
-                        <div class="cs-sec-control">
-                            <select id="cs-sec-model" class="cs-sec-select">
-                                <option value="_auto">&#x2728; Auto</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="cs-sec-row">
-                        <span class="cs-sec-label"><?php esc_html_e( 'Deep dive model:', 'cloudscale-devtools' ); ?></span>
+                        <span class="cs-sec-label"><?php esc_html_e( 'AI model:', 'cloudscale-devtools' ); ?></span>
                         <div class="cs-sec-control">
                             <select id="cs-sec-deep-model" class="cs-sec-select">
                                 <option value="_auto_deep">&#x2728; Auto</option>
@@ -5127,15 +5117,6 @@ class CloudScale_DevTools {
                             </div>
                         </div>
                         <div class="cs-sec-row">
-                            <span class="cs-sec-label"><?php esc_html_e( 'Scan type:', 'cloudscale-devtools' ); ?></span>
-                            <div class="cs-sec-control">
-                                <select id="cs-sched-type" class="cs-sec-select" style="width:auto;max-width:280px;">
-                                    <option value="standard" <?php selected( $sched_type, 'standard' ); ?>><?php esc_html_e( 'AI Cyber Audit (fast)', 'cloudscale-devtools' ); ?></option>
-                                    <option value="deep"     <?php selected( $sched_type, 'deep' ); ?>><?php esc_html_e( 'AI Deep Dive Cyber Audit (comprehensive)', 'cloudscale-devtools' ); ?></option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="cs-sec-row">
                             <span class="cs-sec-label"></span>
                             <div class="cs-sec-control">
                                 <div style="display:flex;align-items:center;gap:8px;">
@@ -5152,7 +5133,7 @@ class CloudScale_DevTools {
                 <div class="cs-panel" id="cs-panel-ai-cyber-audit">
                 <div class="cs-section-header" style="background:linear-gradient(90deg,#022c22 0%,#065f46 100%);border-left:3px solid #34d399;">
                     <span>🕵️ <?php esc_html_e( 'AI Cyber Audit', 'cloudscale-devtools' ); ?></span>
-                    <span class="cs-header-hint"><?php esc_html_e( 'AI-powered WordPress security scanning — standard or deep dive', 'cloudscale-devtools' ); ?></span>
+                    <span class="cs-header-hint"><?php esc_html_e( 'AI-powered deep dive security scanning — internal config, plugin code analysis, and external exposure checks', 'cloudscale-devtools' ); ?></span>
                 </div>
                 <div class="cs-panel-body">
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;">
@@ -5165,61 +5146,28 @@ class CloudScale_DevTools {
                            style="flex:1;min-width:200px;max-width:420px;font-size:13px;padding:5px 10px;border:1px solid #86efac;border-radius:6px;color:#0f172a;background:#fff;" />
                     <span id="cs-audit-url-status" style="font-size:12px;font-weight:600;color:#15803d;">&#x2714; <?php esc_html_e( 'This site', 'cloudscale-devtools' ); ?></span>
                 </div>
-                <div class="cs-scan-row">
-                    <div class="cs-scan-col">
-                        <div class="cs-scan-col-header">
-                            <span class="cs-scan-col-title"><?php esc_html_e( 'Internal Config Audit', 'cloudscale-devtools' ); ?></span>
-                            <span class="cs-scan-col-hint"><?php esc_html_e( 'WordPress settings, plugins, users, debug flags — fast', 'cloudscale-devtools' ); ?></span>
-                            <?php self::render_explain_btn( 'standard-scan', 'AI Cyber Audit', [
-                                [ 'name' => 'What it checks',  'rec' => 'Overview',     'html' => 'Collects your WordPress environment — PHP version, WP version, all active plugins, file permissions on key files, exposed debug flags (<code>WP_DEBUG</code>, <code>WP_DEBUG_LOG</code>), user account and role counts, 2FA coverage, brute-force protection state, and key <code>wp-config.php</code> security constants — then sends this to the AI for analysis.' ],
-                                [ 'name' => 'AI analysis',     'rec' => 'How it works', 'html' => 'The AI model receives a structured JSON snapshot and returns findings scored <strong>Critical / High / Medium / Low / Good</strong>. Each finding includes a plain-English explanation of the risk and a specific remediation step. The AI cross-references findings — for example, flagging when an outdated plugin is combined with exposed debug output.' ],
-                                [ 'name' => 'Speed',           'rec' => 'Fast (15–30s)', 'html' => 'The standard scan collects only server-side data — no outbound HTTP probes. Typical completion time is 15–30 seconds depending on the AI provider and number of plugins installed.' ],
-                                [ 'name' => 'No timeout risk', 'rec' => 'Technical',    'html' => 'The scan uses <code>fastcgi_finish_request()</code> to close the browser connection immediately, then continues in the background. A progress bar polls every 3 seconds. This does not depend on WP-Cron.' ],
-                            ] ); ?>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                            <button id="cs-vuln-scan-btn" class="cs-btn-primary" disabled>
-                                🔍 <?php esc_html_e( 'Run AI Cyber Audit', 'cloudscale-devtools' ); ?>
-                            </button>
-                            <button id="cs-vuln-cancel-btn" class="cs-btn-secondary" style="display:none">
-                                ✕ <?php esc_html_e( 'Cancel', 'cloudscale-devtools' ); ?>
-                            </button>
-                            <span id="cs-vuln-model-badge" class="cs-scan-model-badge"></span>
-                        </div>
-                        <span id="cs-vuln-scan-status" class="cs-vuln-inline-msg"></span>
-                        <div id="cs-vuln-progress" class="cs-scan-progress">
-                            <div class="cs-scan-progress-fill"></div>
-                        </div>
-                        <div id="cs-vuln-results" class="cs-vuln-results" style="display:none;margin-top:6px"></div>
-                    </div>
-
-                    <div class="cs-scan-col cs-scan-col-deep">
-                        <div class="cs-scan-col-header">
-                            <span class="cs-scan-col-title"><?php esc_html_e( 'AI Deep Dive Cyber Audit', 'cloudscale-devtools' ); ?></span>
-                            <span class="cs-scan-col-hint"><?php esc_html_e( 'Internal config + plugin code scan + external exposure: SSL cert, login/xmlrpc, REST user enum, author enum, directory listing — 30–60s', 'cloudscale-devtools' ); ?></span>
-                            <?php self::render_explain_btn( 'deep-scan', 'AI Deep Dive Cyber Audit', [
-                                [ 'name' => 'What it adds',       'rec' => 'Overview',       'html' => 'Runs everything the standard scan checks, then adds <strong>live HTTP probes</strong> of your own site: SSL/TLS certificate validity and strength, login page exposure, XML-RPC state, REST API user enumeration, author enumeration, directory listing, and server version headers. It also performs <strong>DNS checks</strong> (SPF, DMARC, DKIM) and static analysis of plugin PHP files.' ],
-                                [ 'name' => 'Plugin code triage', 'rec' => 'AI static scan',  'html' => 'The AI pre-screens plugin PHP files for suspicious patterns (eval, base64_decode, remote code execution sinks) and classifies each finding as <strong>Confirmed / False Positive / Needs Context</strong> before the main analysis. This reduces noise and focuses the main report on real risks.' ],
-                                [ 'name' => 'Speed',              'rec' => '30–90s',          'html' => 'The deep dive makes outbound HTTP and DNS requests, so duration depends on your network and the number of plugins. Typical completion is 30–90 seconds. The browser connection is closed immediately via <code>fastcgi_finish_request()</code>; a progress bar polls every 3 seconds.' ],
-                                [ 'name' => 'DNS checks',         'rec' => 'Email security',  'html' => 'SPF, DMARC, and DKIM records are checked only when your domain has an MX record. If you have no email configured, these checks are skipped and the report notes &ldquo;no email configured&rdquo; as a good finding — no false positives.' ],
-                            ] ); ?>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                            <button id="cs-deep-scan-btn" class="cs-btn-primary cs-btn-deep" disabled>
-                                🕵️ <?php esc_html_e( 'Run AI Deep Dive Cyber Audit', 'cloudscale-devtools' ); ?>
-                            </button>
-                            <button id="cs-deep-cancel-btn" class="cs-btn-secondary" style="display:none">
-                                ✕ <?php esc_html_e( 'Cancel', 'cloudscale-devtools' ); ?>
-                            </button>
-                            <span id="cs-deep-model-badge" class="cs-scan-model-badge"></span>
-                        </div>
-                        <span id="cs-deep-scan-status" class="cs-vuln-inline-msg"></span>
-                        <div id="cs-deep-progress" class="cs-scan-progress">
-                            <div class="cs-scan-progress-fill deep"></div>
-                        </div>
-                        <div id="cs-deep-results" class="cs-vuln-results" style="display:none;margin-top:6px"></div>
-                    </div>
+                <div class="cs-scan-col-header">
+                    <?php self::render_explain_btn( 'deep-scan', 'AI Deep Dive Cyber Audit', [
+                        [ 'name' => 'What it checks',     'rec' => 'Overview',       'html' => 'Checks your WordPress core settings, active plugins and themes, user accounts, file permissions, and wp-config.php, then adds <strong>live HTTP probes</strong> of your site: SSL/TLS validity and strength, login page exposure, XML-RPC state, REST API user enumeration, author enumeration, directory listing, and server version headers.' ],
+                        [ 'name' => 'Plugin code triage', 'rec' => 'AI static scan',  'html' => 'The AI pre-screens plugin PHP files for suspicious patterns (eval, base64_decode, remote code execution sinks) and classifies each finding as <strong>Confirmed / False Positive / Needs Context</strong> before the main analysis. This reduces noise and focuses the report on real risks.' ],
+                        [ 'name' => 'DNS checks',         'rec' => 'Email security',  'html' => 'SPF, DMARC, and DKIM records are checked only when your domain has an MX record. If you have no email configured, these checks are skipped — no false positives.' ],
+                        [ 'name' => 'Speed',              'rec' => '30–90s',          'html' => 'The deep dive makes outbound HTTP and DNS requests so duration depends on your network. Typical completion is 30–90 seconds. The browser connection is closed immediately via <code>fastcgi_finish_request()</code>; a progress bar polls every 3 seconds.' ],
+                    ] ); ?>
                 </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <button id="cs-deep-scan-btn" class="cs-btn-primary cs-btn-deep" disabled>
+                        🕵️ <?php esc_html_e( 'Run AI Deep Dive Cyber Audit', 'cloudscale-devtools' ); ?>
+                    </button>
+                    <button id="cs-deep-cancel-btn" class="cs-btn-secondary" style="display:none">
+                        ✕ <?php esc_html_e( 'Cancel', 'cloudscale-devtools' ); ?>
+                    </button>
+                    <span id="cs-deep-model-badge" class="cs-scan-model-badge"></span>
+                </div>
+                <span id="cs-deep-scan-status" class="cs-vuln-inline-msg"></span>
+                <div id="cs-deep-progress" class="cs-scan-progress">
+                    <div class="cs-scan-progress-fill deep"></div>
+                </div>
+                <div id="cs-deep-results" class="cs-vuln-results" style="display:none;margin-top:6px"></div>
                 </div>
                 </div><!-- /cs-panel-body -->
                 </div><!-- /cs-panel-ai-cyber-audit -->
@@ -5230,7 +5178,7 @@ class CloudScale_DevTools {
                     <span>📈 <?php esc_html_e( 'Scan History', 'cloudscale-devtools' ); ?></span>
                     <span class="cs-header-hint"><?php esc_html_e( 'Last 50 scans — track your security score over time', 'cloudscale-devtools' ); ?></span>
                     <?php self::render_explain_btn( 'scan-history', 'Scan History', [
-                        [ 'name' => 'What is tracked',   'rec' => 'Overview',    'html' => 'Every Standard Cyber Scan and AI Deep Dive saves a summary entry: scan date, model used, severity counts (critical / high / medium / low), and the full findings list. The last 50 scans are retained.' ],
+                        [ 'name' => 'What is tracked',   'rec' => 'Overview',    'html' => 'Every AI Deep Dive Cyber Audit saves a summary entry: scan date, model used, severity counts (critical / high / medium / low), and the full findings list. The last 50 scans are retained.' ],
                         [ 'name' => 'Score trend chart', 'rec' => 'Info',        'html' => 'The chart plots your critical + high finding count over time. A downward trend means your security posture is improving. Spikes after a plugin update or site change are worth investigating.' ],
                         [ 'name' => 'Reload a scan',     'rec' => 'Info',        'html' => 'Click any row in the history table to reload that scan\'s full findings report. Useful for comparing before-and-after states when remediating issues, without needing to re-run the scan.' ],
                     ] ); ?>

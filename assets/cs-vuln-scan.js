@@ -353,19 +353,9 @@
         }
     }
 
-    // ── Scan runner (standard + deep) ────────────────────────────────
+    // ── Scan runner ───────────────────────────────────────────────────
 
     var SCAN_CFG = {
-        standard: {
-            action:     'csdt_devtools_vuln_scan',
-            btnId:      'cs-vuln-scan-btn',
-            cancelId:   'cs-vuln-cancel-btn',
-            statusId:   'cs-vuln-scan-status',
-            resultsId:  'cs-vuln-results',
-            progressId: 'cs-vuln-progress',
-            startMsg:   '⏳ Running AI cyber audit…',
-            errMsg:     'Failed to start scan.',
-        },
         deep: {
             action:     'csdt_devtools_deep_scan',
             btnId:      'cs-deep-scan-btn',
@@ -419,34 +409,18 @@
     // ── Init ──────────────────────────────────────────────────────────
 
     var MODEL_OPTS = {
-        anthropic: {
-            standard: [
-                { v: '_auto',                    l: '✨ Auto — Sonnet 4.6 (quality + speed)' },
-                { v: 'claude-opus-4-7',          l: 'Claude Opus 4.7 (best quality)' },
-                { v: 'claude-sonnet-4-6',        l: 'Claude Sonnet 4.6' },
-                { v: 'claude-haiku-4-5-20251001', l: 'Claude Haiku 4.5 (fastest)' },
-            ],
-            deep: [
-                { v: '_auto_deep',               l: '✨ Auto — Opus 4.7 (best quality)' },
-                { v: 'claude-opus-4-7',          l: 'Claude Opus 4.7' },
-                { v: 'claude-sonnet-4-6',        l: 'Claude Sonnet 4.6 (faster)' },
-                { v: 'claude-haiku-4-5-20251001', l: 'Claude Haiku 4.5 (fastest)' },
-            ],
-        },
-        gemini: {
-            standard: [
-                { v: '_auto',              l: '✨ Auto — Gemini 2.0 Flash' },
-                { v: 'gemini-2.0-flash',   l: 'Gemini 2.0 Flash' },
-                { v: 'gemini-2.0-flash-lite', l: 'Gemini 2.0 Flash Lite (cheapest)' },
-                { v: 'gemini-1.5-pro',     l: 'Gemini 1.5 Pro' },
-            ],
-            deep: [
-                { v: '_auto_deep',         l: '✨ Auto — Gemini 2.0 Flash' },
-                { v: 'gemini-2.0-flash',   l: 'Gemini 2.0 Flash' },
-                { v: 'gemini-1.5-pro',     l: 'Gemini 1.5 Pro (highest capability)' },
-                { v: 'gemini-2.0-flash-lite', l: 'Gemini 2.0 Flash Lite (cheapest)' },
-            ],
-        },
+        anthropic: [
+            { v: '_auto_deep',               l: '✨ Auto — Opus 4.7 (best quality)' },
+            { v: 'claude-opus-4-7',          l: 'Claude Opus 4.7' },
+            { v: 'claude-sonnet-4-6',        l: 'Claude Sonnet 4.6 (faster)' },
+            { v: 'claude-haiku-4-5-20251001', l: 'Claude Haiku 4.5 (fastest)' },
+        ],
+        gemini: [
+            { v: '_auto_deep',         l: '✨ Auto — Gemini 2.0 Flash' },
+            { v: 'gemini-2.0-flash',   l: 'Gemini 2.0 Flash' },
+            { v: 'gemini-1.5-pro',     l: 'Gemini 1.5 Pro (highest capability)' },
+            { v: 'gemini-2.0-flash-lite', l: 'Gemini 2.0 Flash Lite (cheapest)' },
+        ],
     };
 
     function csdtVulnInit() {
@@ -459,20 +433,16 @@
         var geminiKeyInput    = document.getElementById('cs-sec-gemini-key');
         var geminiKeyStatus   = document.getElementById('cs-sec-gemini-key-status');
         var testGeminiKeyBtn  = document.getElementById('cs-sec-test-gemini-key');
-        var modelSel          = document.getElementById('cs-sec-model');
         var deepModelSel      = document.getElementById('cs-sec-deep-model');
         var deepModelBadge    = document.getElementById('cs-deep-model-badge');
-        var vulnModelBadge    = document.getElementById('cs-vuln-model-badge');
         var promptArea        = document.getElementById('cs-sec-prompt');
         var copyBtn           = document.getElementById('cs-sec-copy-prompt');
         var resetBtn          = document.getElementById('cs-sec-reset-prompt');
         var saveBtn           = document.getElementById('cs-sec-save');
         var savedMsg          = document.getElementById('cs-sec-saved');
-        var scanBtn           = document.getElementById('cs-vuln-scan-btn');
         var deepBtn           = document.getElementById('cs-deep-scan-btn');
 
         if (promptArea) promptArea.value = cfg.savedPrompt || cfg.defaultPrompt || '';
-        if (scanBtn)  scanBtn.disabled  = !cfg.hasKey;
         if (deepBtn)  deepBtn.disabled  = !cfg.hasKey;
 
         // ── Provider / model helpers ──────────────────────────────────
@@ -494,8 +464,7 @@
             if (rowAnthropicKey) rowAnthropicKey.style.display = isGemini ? 'none' : '';
             if (rowGeminiKey)    rowGeminiKey.style.display    = isGemini ? ''     : 'none';
             var opts = MODEL_OPTS[provider] || MODEL_OPTS.anthropic;
-            populateSelect(modelSel,     opts.standard, isGemini ? '_auto'      : cfg.savedModel);
-            populateSelect(deepModelSel, opts.deep,     isGemini ? '_auto_deep' : cfg.savedDeepModel);
+            populateSelect(deepModelSel, opts, isGemini ? '_auto_deep' : cfg.savedDeepModel);
             updateModelBadges();
         }
 
@@ -508,7 +477,6 @@
         };
 
         function updateModelBadges() {
-            if (vulnModelBadge && modelSel)     vulnModelBadge.textContent = 'Using ' + (MODEL_NAMES[modelSel.value]     || modelSel.value);
             if (deepModelBadge && deepModelSel) deepModelBadge.textContent = 'Using ' + (MODEL_NAMES[deepModelSel.value] || deepModelSel.value);
         }
 
@@ -521,7 +489,6 @@
         if (providerSel) {
             providerSel.addEventListener('change', function () { applyProvider(this.value); });
         }
-        if (modelSel)     modelSel.addEventListener('change',     updateModelBadges);
         if (deepModelSel) deepModelSel.addEventListener('change', updateModelBadges);
 
         // ── Test key buttons ──────────────────────────────────────────
@@ -583,7 +550,6 @@
                 if (rawGem) params.gemini_key = rawGem;
 
                 saveWithFeedback(saveBtn, savedMsg, 'csdt_devtools_vuln_save_key', params, function (res) {
-                    if (scanBtn) scanBtn.disabled = !res.data.has_key;
                     if (deepBtn) deepBtn.disabled = !res.data.has_key;
                     if (keyInput       && res.data.masked)       { keyInput.value = '';       keyInput.placeholder       = res.data.masked; }
                     if (geminiKeyInput && res.data.maskedGemini) { geminiKeyInput.value = ''; geminiKeyInput.placeholder = res.data.maskedGemini; }
@@ -598,7 +564,6 @@
         var schedEnabled  = document.getElementById('cs-sched-enabled');
         var schedOptions  = document.getElementById('cs-sched-options');
         var schedFreq     = document.getElementById('cs-sched-freq');
-        var schedType     = document.getElementById('cs-sched-type');
         var schedSaveBtn  = document.getElementById('cs-sched-save');
         var schedSavedMsg = document.getElementById('cs-sched-saved');
 
@@ -619,7 +584,7 @@
                 saveWithFeedback(schedSaveBtn, schedSavedMsg, 'csdt_devtools_save_schedule', {
                     enabled: schedEnabled && schedEnabled.checked ? '1' : '0',
                     freq:    schedFreq    ? schedFreq.value    : 'weekly',
-                    type:    schedType    ? schedType.value    : 'deep',
+                    type:    'deep',
                 });
             });
         }
@@ -661,12 +626,10 @@
             if (external) {
                 urlStatusEl.textContent = '🌐 External site — results saved to Adhoc Cyber Audits';
                 urlStatusEl.style.color = '#2563eb';
-                if (scanBtn) { scanBtn.disabled = true; scanBtn.title = 'Internal Config Audit is only available for this site.'; }
                 if (deepBtn && cfg.hasKey) { deepBtn.disabled = false; deepBtn.title = ''; deepBtn.textContent = '🌐 Run External Audit'; }
             } else {
                 urlStatusEl.textContent = '✔ This site';
                 urlStatusEl.style.color = '#15803d';
-                if (scanBtn && cfg.hasKey) { scanBtn.disabled = false; scanBtn.title = ''; }
                 if (deepBtn && cfg.hasKey) { deepBtn.disabled = false; deepBtn.title = ''; deepBtn.textContent = '🕵️ Run AI Deep Dive Cyber Audit'; }
             }
         }
@@ -679,7 +642,6 @@
 
         // ── Scan buttons ──────────────────────────────────────────────
 
-        if (scanBtn) scanBtn.addEventListener('click', function () { runScanType('standard', false); });
         if (deepBtn) deepBtn.addEventListener('click', function () {
             if (isExternalUrl()) {
                 runAdhocScan(targetUrlInput ? targetUrlInput.value.trim() : '');
@@ -690,7 +652,6 @@
 
         // Silently pre-fill cached results on page load
         if (cfg.hasKey) {
-            runScanType('standard', true);
             runScanType('deep', true);
         }
 
