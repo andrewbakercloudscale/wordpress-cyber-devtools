@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.733
+ * Version: 1.9.754
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.733';
+    const VERSION      = '1.9.754';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -711,22 +711,17 @@ class CloudScale_DevTools {
      * @return void
      */
     public static function register_block() {
-        $cdn = self::HLJS_CDN . self::HLJS_VERSION;
+        // Serve hljs and its theme CSS from the plugin's own /assets/ directory so
+        // they are not blocked by a strict CSP that does not allow cdnjs.cloudflare.com.
+        $assets = plugins_url( 'assets/', __FILE__ );
 
         wp_register_script(
             'hljs-core',
-            $cdn . '/highlight.min.js',
+            $assets . 'highlight.min.js',
             [],
             self::HLJS_VERSION,
             true
         );
-        // crossorigin="anonymous" lets window.onerror see full details from this CDN script.
-        add_filter( 'script_loader_tag', function( $tag, $handle ) {
-            if ( $handle === 'hljs-core' ) {
-                $tag = str_replace( '<script ', '<script crossorigin="anonymous" ', $tag );
-            }
-            return $tag;
-        }, 10, 2 );
 
         // Register both theme stylesheets from the selected pair
         $pair_slug = get_option( 'csdt_devtools_code_theme_pair', 'atom-one' );
@@ -735,13 +730,13 @@ class CloudScale_DevTools {
 
         wp_register_style(
             'hljs-theme-dark',
-            $cdn . '/styles/' . $pair['dark_css'] . '.min.css',
+            $assets . 'hljs-' . $pair['dark_css'] . '.min.css',
             [],
             self::HLJS_VERSION
         );
         wp_register_style(
             'hljs-theme-light',
-            $cdn . '/styles/' . $pair['light_css'] . '.min.css',
+            $assets . 'hljs-' . $pair['light_css'] . '.min.css',
             [],
             self::HLJS_VERSION
         );
@@ -831,8 +826,16 @@ class CloudScale_DevTools {
 
     private static function get_dashboard_widget_css(): string {
         return
-            /* Top accent bar */
-            '#csdt_security_summary .cs-dw-bar{height:4px;background:linear-gradient(90deg,#1e3a8a 0%,#06b6d4 50%,#f97316 100%);margin:-12px -12px 16px;border-radius:0}' .
+            /* Dark header band — rendered as HTML inside the widget body */
+            '#csdt_security_summary .cs-dw-header{background:linear-gradient(135deg,#0f1f2e 0%,#0d3349 60%,#0f1f2e 100%);margin:-1px -12px 14px;padding:12px 14px 10px;border-bottom:1px solid rgba(15,184,224,0.25);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}' .
+            '#csdt_security_summary .cs-dw-header-left{display:flex;align-items:center;gap:8px}' .
+            '#csdt_security_summary .cs-dw-header-title{color:#e2e8f0;font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;line-height:1.2}' .
+            '#csdt_security_summary .cs-dw-header-sub{color:#94a3b8;font-size:10px;margin-top:2px;line-height:1.3}' .
+            '#csdt_security_summary .cs-dw-header-right{display:flex;gap:6px;align-items:center;flex-shrink:0}' .
+            '#csdt_security_summary .cs-dw-hpill{display:inline-flex;flex-direction:column;align-items:center;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:4px 10px;min-width:44px;text-align:center}' .
+            '#csdt_security_summary .cs-dw-hpill-num{font-size:16px;font-weight:800;line-height:1.1}' .
+            '#csdt_security_summary .cs-dw-hpill-lbl{font-size:8px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-top:1px;opacity:.75}' .
+            '#csdt_security_summary .cs-dw-bar{display:none}' .
 
             /* Hero score block */
             '#csdt_security_summary .cs-dw-hero{display:flex;align-items:center;gap:14px;padding:4px 0 16px;border-bottom:1px solid #e2e8f0}' .
@@ -1667,15 +1670,16 @@ class CloudScale_DevTools {
 
             <!-- Banner -->
             <div id="cs-banner">
-                <div>
-                    <div id="cs-banner-title"><span style="flex-shrink:0">🔐</span><span>CloudScale Cyber and Devtools</span></div>
-                    <div id="cs-banner-sub"><?php esc_html_e( 'AI security scanner, 2FA, SMTP mailer, SQL tools &amp; developer toolkit', 'cloudscale-devtools' ); ?> &middot; v<?php echo esc_html( self::VERSION ); ?></div>
+                <div id="cs-banner-top">
+                    <div id="cs-banner-title"><span style="flex-shrink:0;font-size:18px;line-height:1">🔐</span><span><?php esc_html_e( 'Cyber Devtools', 'cloudscale-devtools' ); ?></span></div>
+                    <div id="cs-banner-right">
+                        <span class="cs-badge cs-badge-version">v<?php echo esc_html( self::VERSION ); ?></span>
+                        <span class="cs-badge cs-badge-green">✅ <?php esc_html_e( 'Totally Free', 'cloudscale-devtools' ); ?></span>
+                        <a href="https://andrewbaker.ninja" target="_blank" rel="noopener noreferrer" class="cs-badge cs-badge-orange" style="text-decoration:none">andrewbaker.ninja</a>
+                        <a href="https://andrewbaker.ninja/wordpress-plugin-help/cloudscale-cyber-devtools-help/" target="_blank" rel="noopener noreferrer" class="cs-badge cs-badge-help" style="text-decoration:none">❓ <?php esc_html_e( 'Help', 'cloudscale-devtools' ); ?></a>
+                    </div>
                 </div>
-                <div id="cs-banner-right">
-                    <span class="cs-badge cs-badge-green">✅ <?php esc_html_e( 'Totally Free', 'cloudscale-devtools' ); ?></span>
-                    <a href="https://andrewbaker.ninja" target="_blank" rel="noopener noreferrer" class="cs-badge cs-badge-orange" style="text-decoration:none">andrewbaker.ninja</a>
-                    <a href="https://andrewbaker.ninja/wordpress-plugin-help/cloudscale-cyber-devtools-help/" target="_blank" rel="noopener noreferrer" class="cs-badge cs-badge-help" style="text-decoration:none">❓ <?php esc_html_e( 'Help', 'cloudscale-devtools' ); ?></a>
-                </div>
+                <div id="cs-banner-sub"><?php esc_html_e( 'AI security scanner · 2FA · SMTP mailer · SQL tools · developer toolkit', 'cloudscale-devtools' ); ?></div>
             </div>
 
             <!-- Tab bar -->
@@ -4415,7 +4419,7 @@ class CloudScale_DevTools {
         if ( ! current_user_can( 'manage_options' ) ) { return; }
         wp_add_dashboard_widget(
             'csdt_security_summary',
-            '🤖 CloudScale Cyber and Devtools <span style="font-size:10px;font-weight:400;color:#94a3b8;margin-left:6px;">v' . esc_html( self::VERSION ) . '</span>',
+            '🔐 Cyber Devtools',
             [ __CLASS__, 'render_dashboard_widget' ]
         );
     }
@@ -4455,6 +4459,23 @@ class CloudScale_DevTools {
             }
         }
 
+        // Extra login security stats.
+        $bf_log          = get_option( 'csdt_devtools_bf_log', [] );
+        $today_str       = gmdate( 'Y-m-d' );
+        $failed_today    = 0;
+        $failed_7d       = 0;
+        $cutoff_7d       = time() - 7 * DAY_IN_SECONDS;
+        foreach ( $bf_log as $entry ) {
+            $ts = (int) ( $entry['time'] ?? 0 );
+            if ( gmdate( 'Y-m-d', $ts ) === $today_str ) { $failed_today++; }
+            if ( $ts >= $cutoff_7d )                      { $failed_7d++; }
+        }
+        $blocklist      = get_option( 'csdt_ip_blocklist', [] );
+        $blocked_count  = is_array( $blocklist ) ? count( $blocklist ) : 0;
+        $probe_stats    = get_option( 'csdt_wplogin_blocked_stats', [] );
+        $probes_today   = (int) ( $probe_stats[ $today_str ]['count'] ?? 0 );
+        $session_dur    = get_option( 'csdt_devtools_session_duration', 'default' );
+
         $base_url = admin_url( 'tools.php?page=cloudscale-devtools' );
         ?>
 
@@ -4483,9 +4504,39 @@ class CloudScale_DevTools {
         $tfa_dot  = $tfa_all ? '#16a34a' : ( $tfa_some ? '#d97706' : '#dc2626' );
         ?>
 
-        <div class="cs-dw-bar"></div>
+        <!-- ── Dark header band ───────────────────────────────────────── -->
+        <div class="cs-dw-header">
+            <div class="cs-dw-header-left">
+                <span style="font-size:17px;line-height:1;flex-shrink:0">🔐</span>
+                <div>
+                    <div class="cs-dw-header-title"><?php esc_html_e( 'Cyber Devtools', 'cloudscale-devtools' ); ?></div>
+                    <div class="cs-dw-header-sub"><?php esc_html_e( 'AI security · 2FA · Login protection', 'cloudscale-devtools' ); ?></div>
+                </div>
+            </div>
+            <div class="cs-dw-header-right">
+                <?php if ( $either_run ) : ?>
+                <div class="cs-dw-hpill" style="color:<?php echo $combined_critical > 0 ? '#fca5a5' : '#86efac'; ?>">
+                    <span class="cs-dw-hpill-num"><?php echo esc_html( $combined_critical ); ?></span>
+                    <span class="cs-dw-hpill-lbl"><?php esc_html_e( 'Critical', 'cloudscale-devtools' ); ?></span>
+                </div>
+                <div class="cs-dw-hpill" style="color:<?php echo $combined_high > 0 ? '#fcd34d' : '#86efac'; ?>">
+                    <span class="cs-dw-hpill-num"><?php echo esc_html( $combined_high ); ?></span>
+                    <span class="cs-dw-hpill-lbl"><?php esc_html_e( 'High', 'cloudscale-devtools' ); ?></span>
+                </div>
+                <?php endif; ?>
+                <div class="cs-dw-hpill" style="color:<?php echo $failed_today > 0 ? '#fca5a5' : '#86efac'; ?>">
+                    <span class="cs-dw-hpill-num"><?php echo esc_html( $failed_today ); ?></span>
+                    <span class="cs-dw-hpill-lbl"><?php esc_html_e( 'Failed', 'cloudscale-devtools' ); ?></span>
+                </div>
+                <div class="cs-dw-hpill" style="color:<?php echo $blocked_count > 0 ? '#fcd34d' : '#86efac'; ?>">
+                    <span class="cs-dw-hpill-num"><?php echo esc_html( $blocked_count ); ?></span>
+                    <span class="cs-dw-hpill-lbl"><?php esc_html_e( 'Blocked', 'cloudscale-devtools' ); ?></span>
+                </div>
+                <span style="background:rgba(15,184,224,0.15);border:1px solid rgba(15,184,224,0.4);color:#67e8f9;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.04em">v<?php echo esc_html( self::VERSION ); ?></span>
+            </div>
+        </div>
 
-        <!-- ── Hero: score + alert pills ──────────────────────────────── -->
+        <!-- ── Hero: score + scan times ──────────────────────────────── -->
         <div class="cs-dw-hero">
             <div class="cs-dw-score-ring" style="color:<?php echo esc_attr( $ring_color ); ?>;background:<?php echo esc_attr( $ring_bg ); ?>;">
                 <?php echo $either_run ? esc_html( $last_scan['score'] ?? '—' ) : '—'; ?>
@@ -4519,20 +4570,8 @@ class CloudScale_DevTools {
                     }
                     ?>
                 </div>
-                <?php if ( $either_run ) : ?>
-                <div class="cs-dw-hero-pills">
-                    <div class="cs-dw-pill" style="background:<?php echo $combined_critical > 0 ? '#fef2f2' : '#f0fdf4'; ?>;color:<?php echo $combined_critical > 0 ? '#dc2626' : '#16a34a'; ?>;">
-                        <span class="cs-dw-pill-num"><?php echo esc_html( $combined_critical ); ?></span>
-                        <span class="cs-dw-pill-lbl"><?php esc_html_e( 'Critical', 'cloudscale-devtools' ); ?></span>
-                    </div>
-                    <div class="cs-dw-pill" style="background:<?php echo $combined_high > 0 ? '#fffbeb' : '#f0fdf4'; ?>;color:<?php echo $combined_high > 0 ? '#d97706' : '#16a34a'; ?>;">
-                        <span class="cs-dw-pill-num"><?php echo esc_html( $combined_high ); ?></span>
-                        <span class="cs-dw-pill-lbl"><?php esc_html_e( 'High', 'cloudscale-devtools' ); ?></span>
-                    </div>
-                    <?php if ( $last_scan ) : ?>
-                    <a href="<?php echo esc_url( $base_url . '&tab=security' ); ?>" style="display:flex;align-items:center;margin-left:auto;font-size:11px;font-weight:600;color:#0369a1;text-decoration:none;white-space:nowrap;"><?php esc_html_e( 'Details →', 'cloudscale-devtools' ); ?></a>
-                    <?php endif; ?>
-                </div>
+                <?php if ( $last_scan ) : ?>
+                <div style="margin-top:6px"><a href="<?php echo esc_url( $base_url . '&tab=security' ); ?>" style="font-size:11px;font-weight:600;color:#0369a1;text-decoration:none"><?php esc_html_e( 'View full report →', 'cloudscale-devtools' ); ?></a></div>
                 <?php endif; ?>
             </div>
         </div>
@@ -4566,6 +4605,49 @@ class CloudScale_DevTools {
                 <span>
                     <span class="cs-dw-chip-label"><?php esc_html_e( 'Force 2FA', 'cloudscale-devtools' ); ?></span><br>
                     <?php echo $force_2fa ? esc_html__( 'On', 'cloudscale-devtools' ) : esc_html__( 'Off', 'cloudscale-devtools' ); ?>
+                </span>
+            </div>
+            <div class="cs-dw-chip">
+                <span class="cs-dw-dot" style="background:<?php echo $failed_today > 0 ? '#dc2626' : '#16a34a'; ?>;"></span>
+                <span>
+                    <span class="cs-dw-chip-label"><?php esc_html_e( 'Failed Logins Today', 'cloudscale-devtools' ); ?></span><br>
+                    <?php echo esc_html( $failed_today ); ?>
+                    <?php if ( $failed_7d > $failed_today ) : ?>
+                        <span style="font-size:10px;color:#94a3b8">&nbsp;(<?php echo esc_html( $failed_7d ); ?> / 7d)</span>
+                    <?php endif; ?>
+                </span>
+            </div>
+            <div class="cs-dw-chip">
+                <span class="cs-dw-dot" style="background:<?php echo $probes_today > 0 ? '#d97706' : '#16a34a'; ?>;"></span>
+                <span>
+                    <span class="cs-dw-chip-label"><?php esc_html_e( 'wp-login Probes Today', 'cloudscale-devtools' ); ?></span><br>
+                    <?php echo esc_html( $probes_today ); ?>
+                </span>
+            </div>
+            <div class="cs-dw-chip">
+                <span class="cs-dw-dot" style="background:<?php echo $blocked_count > 0 ? '#d97706' : '#16a34a'; ?>;"></span>
+                <span>
+                    <span class="cs-dw-chip-label"><?php esc_html_e( 'Blocked IPs', 'cloudscale-devtools' ); ?></span><br>
+                    <?php echo esc_html( $blocked_count ); ?>
+                </span>
+            </div>
+            <div class="cs-dw-chip">
+                <span class="cs-dw-dot" style="background:#16a34a;"></span>
+                <span>
+                    <span class="cs-dw-chip-label"><?php esc_html_e( 'Session Length', 'cloudscale-devtools' ); ?></span><br>
+                    <?php
+                    $dur_labels = [
+                        'default' => __( 'WP default', 'cloudscale-devtools' ),
+                        '1h'      => '1 hour',
+                        '4h'      => '4 hours',
+                        '8h'      => '8 hours',
+                        '24h'     => '24 hours',
+                        '48h'     => '2 days',
+                        '7d'      => '7 days',
+                        '30d'     => '30 days',
+                    ];
+                    echo esc_html( $dur_labels[ $session_dur ] ?? $session_dur );
+                    ?>
                 </span>
             </div>
         </div>
