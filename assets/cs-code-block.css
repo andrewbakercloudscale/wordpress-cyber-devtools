@@ -315,14 +315,81 @@
     line-height: 1.6;
 }
 
-/* Comment tokens — boosted for legibility on the dark background (~7:1 contrast) */
-.cs-code-wrapper .hljs-comment,
-.cs-code-wrapper .hljs-quote {
-    color: #a0c690 !important;
-    font-style: italic;
-}
+/* ── Token colour overrides ──────────────────────────────────────────────────
+   WordPress themes often carry high-specificity rules like
+   `.entry-content span { color: inherit }` that silently beat the CDN hljs
+   stylesheet rules (which carry no !important).  Scoping every token class
+   to .cs-code-wrapper gives us two class selectors (0,2,0), beating any
+   reasonable theme element+class rule (0,1,1), without touching the CDN CSS.
+   Colours match the default atom-one-dark / atom-one-light pair; other pairs
+   still load correctly via the JS stylesheet swap.
+   ─────────────────────────────────────────────────────────────────────────── */
 
+/* Dark mode tokens (atom-one-dark) */
+.cs-code-wrapper .hljs-comment,
+.cs-code-wrapper .hljs-quote                                            { color: #a0c690 !important; font-style: italic; }
+.cs-code-wrapper .hljs-doctag,
+.cs-code-wrapper .hljs-keyword,
+.cs-code-wrapper .hljs-formula                                          { color: #c678dd !important; }
+.cs-code-wrapper .hljs-section,
+.cs-code-wrapper .hljs-name,
+.cs-code-wrapper .hljs-selector-tag,
+.cs-code-wrapper .hljs-deletion,
+.cs-code-wrapper .hljs-subst                                            { color: #e06c75 !important; }
+.cs-code-wrapper .hljs-literal                                          { color: #56b6c2 !important; }
+.cs-code-wrapper .hljs-string,
+.cs-code-wrapper .hljs-regexp,
+.cs-code-wrapper .hljs-addition,
+.cs-code-wrapper .hljs-attribute                                        { color: #98c379 !important; }
+.cs-code-wrapper .hljs-attr,
+.cs-code-wrapper .hljs-variable,
+.cs-code-wrapper .hljs-template-variable,
+.cs-code-wrapper .hljs-type,
+.cs-code-wrapper .hljs-selector-class,
+.cs-code-wrapper .hljs-selector-attr,
+.cs-code-wrapper .hljs-selector-pseudo,
+.cs-code-wrapper .hljs-number                                           { color: #d19a66 !important; }
+.cs-code-wrapper .hljs-symbol,
+.cs-code-wrapper .hljs-bullet,
+.cs-code-wrapper .hljs-link,
+.cs-code-wrapper .hljs-meta,
+.cs-code-wrapper .hljs-selector-id,
+.cs-code-wrapper .hljs-title                                            { color: #61aeee !important; }
+.cs-code-wrapper .hljs-built_in,
+.cs-code-wrapper .hljs-title.class_                                     { color: #e6c07b !important; }
+.cs-code-wrapper .hljs-emphasis                                         { font-style: italic; }
+.cs-code-wrapper .hljs-strong                                           { font-weight: 700; }
+.cs-code-wrapper .hljs-link                                             { text-decoration: underline; }
+
+/* Light mode token overrides (atom-one-light) */
 .cs-code-wrapper[data-active-theme="light"] .hljs-comment,
-.cs-code-wrapper[data-active-theme="light"] .hljs-quote {
-    color: #4a7a34 !important;
-}
+.cs-code-wrapper[data-active-theme="light"] .hljs-quote                 { color: #a0a1a7 !important; font-style: italic; }
+.cs-code-wrapper[data-active-theme="light"] .hljs-doctag,
+.cs-code-wrapper[data-active-theme="light"] .hljs-keyword,
+.cs-code-wrapper[data-active-theme="light"] .hljs-formula               { color: #a626a4 !important; }
+.cs-code-wrapper[data-active-theme="light"] .hljs-section,
+.cs-code-wrapper[data-active-theme="light"] .hljs-name,
+.cs-code-wrapper[data-active-theme="light"] .hljs-selector-tag,
+.cs-code-wrapper[data-active-theme="light"] .hljs-deletion,
+.cs-code-wrapper[data-active-theme="light"] .hljs-subst                 { color: #e45649 !important; }
+.cs-code-wrapper[data-active-theme="light"] .hljs-literal               { color: #0184bb !important; }
+.cs-code-wrapper[data-active-theme="light"] .hljs-string,
+.cs-code-wrapper[data-active-theme="light"] .hljs-regexp,
+.cs-code-wrapper[data-active-theme="light"] .hljs-addition,
+.cs-code-wrapper[data-active-theme="light"] .hljs-attribute             { color: #50a14f !important; }
+.cs-code-wrapper[data-active-theme="light"] .hljs-attr,
+.cs-code-wrapper[data-active-theme="light"] .hljs-variable,
+.cs-code-wrapper[data-active-theme="light"] .hljs-template-variable,
+.cs-code-wrapper[data-active-theme="light"] .hljs-type,
+.cs-code-wrapper[data-active-theme="light"] .hljs-selector-class,
+.cs-code-wrapper[data-active-theme="light"] .hljs-selector-attr,
+.cs-code-wrapper[data-active-theme="light"] .hljs-selector-pseudo,
+.cs-code-wrapper[data-active-theme="light"] .hljs-number                { color: #986801 !important; }
+.cs-code-wrapper[data-active-theme="light"] .hljs-symbol,
+.cs-code-wrapper[data-active-theme="light"] .hljs-bullet,
+.cs-code-wrapper[data-active-theme="light"] .hljs-link,
+.cs-code-wrapper[data-active-theme="light"] .hljs-meta,
+.cs-code-wrapper[data-active-theme="light"] .hljs-selector-id,
+.cs-code-wrapper[data-active-theme="light"] .hljs-title                 { color: #4078f2 !important; }
+.cs-code-wrapper[data-active-theme="light"] .hljs-built_in,
+.cs-code-wrapper[data-active-theme="light"] .hljs-title.class_          { color: #c18401 !important; }

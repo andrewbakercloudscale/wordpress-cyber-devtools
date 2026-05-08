@@ -1011,6 +1011,39 @@ The text rule is passed separately in the user message — follow it exactly.
         return $results;
     }
 
+    // ─── Hook: auto-generate when _thumbnail_id meta is set/changed ─────
+    // Gutenberg and the classic editor both call set_post_thumbnail() AFTER
+    // save_post fires, so on_post_saved() sees no thumbnail on the first
+    // "publish then add image" workflow. This hook catches the meta write.
+
+    public static function on_thumbnail_meta_updated( $meta_id_or_action, int $post_id, string $meta_key, $meta_value ): void {
+        if ( $meta_key !== '_thumbnail_id' ) return;
+        $post = get_post( $post_id );
+        if ( ! $post || $post->post_type !== 'post' || $post->post_status !== 'publish' ) return;
+        if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) return;
+
+        // Both added_post_meta and updated_post_meta pass the NEW value as the 4th arg.
+        $thumb_id = (int) $meta_value;
+        if ( ! $thumb_id ) return;
+
+        $last_thumb = (int) get_post_meta( $post_id, '_csdt_social_formats_thumb_id', true );
+        if ( $last_thumb === $thumb_id ) return; // already generated for this thumb
+
+        $results = self::generate_social_formats_for_post( $post_id );
+        if ( $results === null ) return;
+
+        update_post_meta( $post_id, '_csdt_social_formats_thumb_id', $thumb_id );
+        update_post_meta( $post_id, '_csdt_social_formats_gen_time', time() );
+
+        $post_url = get_permalink( $post_id );
+        if ( $post_url ) {
+            self::cf_purge_urls( [ $post_url ] );
+        }
+
+        $user_id = get_current_user_id();
+        set_transient( "cs_sfmt_{$user_id}_{$post_id}", $results, 120 );
+    }
+
     // ─── Hook: auto-generate on post publish / update ────────────────────
 
     public static function on_post_saved( int $post_id, \WP_Post $post, bool $update ): void {

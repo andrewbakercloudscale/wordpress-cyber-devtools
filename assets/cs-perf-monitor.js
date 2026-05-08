@@ -56,6 +56,7 @@
     var editorLogs     = [];   // {ts, type:'ok'|'fail'|'jserr', method, url, status, dur, detail}
     var editorFailCount = 0;
     var editorBadgeEl   = null;
+    var pendingFlash    = false; // errors before toggleBtn exists defer the flash here
 
     (function initEditorDebug() {
         var origFetch = window.fetch;
@@ -112,6 +113,15 @@
             if (editorBadgeEl) { editorBadgeEl.textContent = editorFailCount; }
             computeIssues();
             renderIssues();
+            // Flash the toolbar button so the error is visible even when panel is closed.
+            // toggleBtn is null until csdtPerfInit runs on DOMContentLoaded — defer if not ready.
+            if (toggleBtn) {
+                toggleBtn.classList.remove('cs-monitor-flash');
+                void toggleBtn.offsetWidth; // reflow to restart animation
+                toggleBtn.classList.add('cs-monitor-flash');
+            } else {
+                pendingFlash = true;
+            }
         }
         if (activeTab === 'editor') { renderEditor(); }
     }
@@ -160,6 +170,12 @@
         transTbody   = document.getElementById('cs-trans-rows');
         transCount   = document.getElementById('cs-ptc-trans');
         editorBadgeEl = document.getElementById('cs-ptc-editor');
+
+        // Fire any flash that was queued before DOMContentLoaded
+        if (pendingFlash && toggleBtn) {
+            pendingFlash = false;
+            toggleBtn.classList.add('cs-monitor-flash');
+        }
 
         if (!panel) return;
 
@@ -268,9 +284,16 @@
         }
 
         // Clear any old padding-bottom.
-        document.body.style.paddingBottom = '';
         var wpbody = document.getElementById('wpbody-content');
         if (wpbody) wpbody.style.paddingBottom = '';
+
+        // Front-end pages have no #wpcontent — pad the body directly so content
+        // isn't obscured by the fixed panel.
+        if (!wpcontent) {
+            document.body.style.paddingBottom = px + 'px';
+        } else {
+            document.body.style.paddingBottom = '';
+        }
     }
 
     function openPanel(h, animate) {
@@ -2620,7 +2643,7 @@
             var color  = isFail ? '#f87171' : '#a6e3a1';
 
             if (e.type === 'jserr') {
-                var fileHtml = e.file ? '<br><span style="font-size:10px;opacity:.65;font-family:monospace;">' + esc(e.file) + '</span>' : '';
+                var fileHtml = e.file ? '<br><span style="font-size:12px;opacity:.9;font-family:monospace;">' + esc(e.file) + '</span>' : '';
                 html += '<tr' + rowCls + '>'
                     + '<td class="c-t"><span class="cs-badge cs-badge-c">JS</span></td>'
                     + '<td>ERR</td>'
@@ -2629,11 +2652,15 @@
                     + '</tr>';
             } else {
                 var path = (e.url||'').replace(window.location.origin,'').split('?')[0];
+                var statusText = (isFail && (!e.status || e.status === 'ERR'))
+                    ? '<span class="cs-status-err" style="font-size:10px;white-space:nowrap;">Timed out!</span>'
+                    : esc(String(e.status||''));
+                var methodCls  = 'cs-method cs-method-' + (e.method||'get').toLowerCase();
                 html += '<tr' + rowCls + '>'
                     + '<td class="c-t">' + esc(e.ts) + '</td>'
-                    + '<td>' + esc(e.method||'GET') + '</td>'
+                    + '<td><span class="' + methodCls + '">' + esc(e.method||'GET') + '</span></td>'
                     + '<td style="color:' + color + '" title="' + esc(e.url||'') + '">' + esc(path) + '</td>'
-                    + '<td style="color:' + color + '">' + esc(String(e.status||'')) + '</td>'
+                    + '<td style="color:' + color + '">' + statusText + '</td>'
                     + '<td>' + (e.dur !== undefined ? e.dur + 'ms' : '—') + '</td>'
                     + '</tr>';
                 if (isFail && e.detail) {

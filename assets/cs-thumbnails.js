@@ -226,6 +226,17 @@
     if ( auditBtn )    auditBtn.addEventListener(    'click', () => runScan( 'recent' ) );
     if ( auditTopBtn ) auditTopBtn.addEventListener( 'click', () => runScan( 'top' ) );
 
+    // Collapse / expand scan results.
+    document.addEventListener( 'click', ( e ) => {
+        const btn = e.target.closest( '.cs-scan-collapse-btn' );
+        if ( ! btn ) return;
+        const rows = btn.closest( '#cs-thumb-audit-results' )?.querySelector( '.cs-scan-rows' );
+        if ( ! rows ) return;
+        const collapsed = rows.style.display === 'none';
+        rows.style.display = collapsed ? '' : 'none';
+        btn.textContent = collapsed ? '▲ Collapse' : '▼ Expand';
+    } );
+
     // Fix all posts in one go.
     if ( fixAllBtn ) {
         fixAllBtn.addEventListener( 'click', () => {
@@ -233,15 +244,15 @@
             if ( ! fixable.length ) return;
             fixAllBtn.disabled = true;
             let done = 0;
-            fixAllBtn.textContent = `Fixing 0 / ${fixable.length}…`;
+            if ( auditProgress ) auditProgress.textContent = `Generating 0 / ${fixable.length}…`;
             const next = () => {
                 if ( done >= fixable.length ) {
                     fixAllBtn.disabled = false;
-                    fixAllBtn.textContent = `✔ Fixed ${done} posts`;
+                    if ( auditProgress ) auditProgress.textContent = `✔ Done — ${done} posts fixed`;
                     return;
                 }
                 const p = fixable[ done ];
-                fixAllBtn.textContent = `Fixing ${done + 1} / ${fixable.length}…`;
+                if ( auditProgress ) auditProgress.textContent = `Generating ${done + 1} / ${fixable.length}…`;
                 post( 'csdt_devtools_social_generate_formats', { post_id: p.post_id } ).then( () => {
                     const fixRow = document.getElementById( `cs-scan-fix-row-${p.post_id}` );
                     if ( fixRow ) fixRow.innerHTML = '<span style="color:#276227;font-size:11px">✔ Formats generated</span>';
@@ -257,7 +268,6 @@
     if ( refreshStaleBtn && staleLog ) {
         refreshStaleBtn.addEventListener( 'click', () => {
             refreshStaleBtn.disabled = true;
-            refreshStaleBtn.textContent = 'Scanning…';
             staleLog.style.display = 'block';
             staleLog.innerHTML = '<strong>Scanning for stale thumbnails…</strong>';
 
@@ -301,7 +311,6 @@
                         fixedPosts.push( p );
                     } );
 
-                    refreshStaleBtn.textContent = `Scanning ${checked} / ${totalPosts}…`;
                     renderLog();
 
                     if ( d.has_more ) {
@@ -342,8 +351,7 @@
             function runBatch( offset ) {
                 post( 'csdt_devtools_social_fix_all_batch', { offset } ).then( res => {
                     if ( ! res.success ) {
-                        fixSiteBtn.disabled    = false;
-                        fixSiteBtn.textContent = '🌐 Fix All Posts on Site';
+                        fixSiteBtn.disabled = false;
                         if ( auditProgress ) auditProgress.textContent = '✗ Batch error — see console.';
                         console.error( 'csdt_devtools_social_fix_all_batch error', res );
                         return;
@@ -358,19 +366,16 @@
                     } );
 
                     const done = processed + skipped + errored;
-                    fixSiteBtn.textContent = `Fixing ${done} / ${totalPosts}…`;
-                    if ( auditProgress ) auditProgress.textContent = `${processed} fixed, ${skipped} skipped, ${errored} errors`;
+                    if ( auditProgress ) auditProgress.textContent = `Processing ${done} / ${totalPosts} — ${processed} fixed, ${skipped} skipped${errored ? ', ' + errored + ' errors' : ''}`;
 
                     if ( d.has_more ) {
                         runBatch( d.next_offset );
                     } else {
-                        fixSiteBtn.disabled    = false;
-                        fixSiteBtn.textContent = `✔ Done — ${processed} fixed, ${skipped} skipped`;
-                        if ( auditProgress ) auditProgress.textContent = '';
+                        fixSiteBtn.disabled = false;
+                        if ( auditProgress ) auditProgress.textContent = `✔ Done — ${processed} fixed, ${skipped} skipped${errored ? ', ' + errored + ' errors' : ''}`;
                     }
                 } ).catch( err => {
-                    fixSiteBtn.disabled    = false;
-                    fixSiteBtn.textContent = '🌐 Fix All Posts on Site';
+                    fixSiteBtn.disabled = false;
                     if ( auditProgress ) auditProgress.textContent = '✗ Network error.';
                     console.error( 'fix_all_batch network error', err );
                 } );
@@ -477,12 +482,14 @@
         const modeLabel = mode === 'top' ? 'top' : 'most recent';
         const sortHint  = sort_note ? ` <span style="color:#888;font-size:11px">(${esc( sort_note )})</span>` : '';
 
-        let html = `<div style="margin-bottom:12px;font-size:13px">
-            Checked <strong>${esc( String( total_scanned ) )}</strong> ${esc( modeLabel )} posts${sortHint} —
+        let html = `<div style="margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span>Checked <strong>${esc( String( total_scanned ) )}</strong> ${esc( modeLabel )} posts${sortHint} —
             <span style="color:#276227">✔ ${esc( String( pass ) )} all platforms OK</span> &nbsp;
             <span style="color:#7a5a00">⚠ ${esc( String( warn ) )} warnings</span> &nbsp;
-            <span style="color:#8c2020">✘ ${esc( String( fail ) )} issues</span>
-        </div>`;
+            <span style="color:#8c2020">✘ ${esc( String( fail ) )} issues</span></span>
+            <button type="button" class="cs-scan-collapse-btn button button-small" style="font-size:11px;flex-shrink:0">▲ Collapse</button>
+        </div>
+        <div class="cs-scan-rows">`;
 
         const problem = posts.filter( p => p.status !== 'pass' );
 
@@ -498,11 +505,28 @@
             const overallCol = p.status === 'fail' ? '#8c2020' : '#7a5a00';
             const overallIcon = p.status === 'fail' ? '✘' : '⚠';
 
+            // Pick the single worst platform message to show inline.
+            let worstMsg = '';
+            if ( p.platforms ) {
+                const failEntry = Object.values( p.platforms ).find( pl => pl.status === 'fail' );
+                const warnEntry = Object.values( p.platforms ).find( pl => pl.status === 'warn' );
+                const worst = failEntry || warnEntry;
+                if ( worst ) worstMsg = worst.msg;
+            }
+
+            const pid = esc( String( p.post_id ) );
+
+            // Fix = generate social-format crops from existing featured image.
             const fixBtn = p.can_fix
-                ? `<button class="button button-small cs-scan-fix-btn" data-post-id="${esc( String( p.post_id ) )}" style="font-size:11px">🔧 Fix</button>`
+                ? `<button class="button button-small cs-scan-fix-btn" data-post-id="${pid}" style="font-size:11px" title="Generate Facebook/WhatsApp/Twitter crops from the existing featured image">🔧 Generate social crops</button>`
                 : '';
 
-            const diagBtn = `<button class="button button-small cs-scan-diag-btn" data-post-id="${esc( String( p.post_id ) )}" style="font-size:11px">🔍 Diagnose</button>`;
+            // AI generate = post has no featured image at all — use DALL-E.
+            const aiGenBtn = p.no_image
+                ? `<button type="button" class="button button-small cs-scan-ai-gen-btn cs-btn-primary" data-post-id="${pid}" style="font-size:11px;background:#0d7377;color:#fff;border-color:#0d7377">✨ AI Generate Image</button>`
+                : '';
+
+            const diagBtn = `<button class="button button-small cs-scan-diag-btn" data-post-id="${pid}" style="font-size:11px">🔍 Diagnose</button>`;
 
             html += `<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f0f0f0">
                 ${imgPreview}
@@ -512,15 +536,21 @@
                         <a href="${esc( p.post_url )}" target="_blank" rel="noopener" style="font-size:13px;font-weight:600;color:#1a3a8f;text-decoration:none;word-break:break-word">${esc( p.title )}</a>
                     </div>
                     ${meta ? `<div style="font-size:11px;color:#888;margin-top:2px">${esc( meta )}</div>` : ''}
-                    ${p.no_image ? '<div style="font-size:12px;color:#8c2020;margin-top:3px">No featured image set</div>' : renderPlatformChips( p.platforms, p.post_id, p.title )}
+                    ${worstMsg ? `<div style="font-size:11px;color:${overallCol};margin-top:3px;font-weight:600">${overallIcon} ${esc( worstMsg )}</div>` : ''}
+                    ${p.no_image
+                        ? `<div style="font-size:12px;color:#8c2020;margin-top:3px;font-weight:600">✘ No featured image — use AI Generate to create one</div>`
+                        : renderPlatformChips( p.platforms, p.post_id, p.title )}
                     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
                         <button class="button button-small cs-thumb-recheck-btn" data-url="${esc( p.post_url )}" style="font-size:11px">Re-check</button>
                         <a href="${esc( p.post_url )}" target="_blank" rel="noopener" class="button button-small" style="font-size:11px">View Post</a>
+                        ${aiGenBtn}
                         ${fixBtn}
                         ${diagBtn}
                     </div>
-                    <div id="cs-scan-fix-row-${esc( String( p.post_id ) )}" style="margin-top:4px"></div>
-                    <div id="cs-scan-diag-row-${esc( String( p.post_id ) )}" style="margin-top:4px"></div>
+                    <div id="cs-scan-fix-row-${pid}" style="margin-top:4px"></div>
+                    <div id="cs-scan-diag-row-${pid}" style="margin-top:4px"></div>
+                    <div id="cs-ai-thumb-${pid}" style="margin-top:4px"></div>
+                    <span id="cs-ai-status-${pid}" style="display:block;font-size:11px;color:#555;word-break:break-word;margin-top:2px"></span>
                 </div>
             </div>`;
         }
@@ -531,6 +561,8 @@
             const okCount = total_scanned - problem.length;
             html += `<p style="color:#276227;font-size:12px;margin-top:10px">✔ ${esc( String( okCount ) )} post${okCount === 1 ? '' : 's'} already ready for all platforms — not shown above.</p>`;
         }
+
+        html += '</div>'; // close cs-scan-rows
 
         return html;
     }
@@ -572,16 +604,28 @@
             if ( ! res.success ) {
                 if ( fixRow ) fixRow.innerHTML = `<span style="color:#8c2020;font-size:11px">✘ ${esc( res.data?.message || 'Failed' )}</span>`;
                 btn.disabled = false;
-                btn.textContent = '🔧 Fix';
+                btn.textContent = '🔧 Generate social crops';
                 btn.style.display = '';
                 return;
             }
             if ( fixRow ) fixRow.innerHTML = renderFixResult( res.data );
         } ).catch( () => {
             btn.disabled = false;
-            btn.textContent = '🔧 Fix';
+            btn.textContent = '🔧 Generate social crops';
             if ( fixRow ) fixRow.innerHTML = '<span style="color:#8c2020;font-size:11px">✘ Request failed</span>';
         } );
+    } );
+
+    // AI Generate button in scan rows — delegates to triggerGenerate from the AI IIFE.
+    document.addEventListener( 'click', ( e ) => {
+        const btn = e.target.closest( '.cs-scan-ai-gen-btn' );
+        if ( ! btn ) return;
+        const tg = window.csdtDevtoolsThumbs?.triggerGenerate;
+        if ( ! tg ) {
+            alert( 'AI image generator not ready — please scroll down to the Featured Image Generator panel and save your API key first.' );
+            return;
+        }
+        tg( btn );
     } );
 
     function renderFixResult( platforms ) {
@@ -1559,7 +1603,9 @@
 
             // Attach click handlers to generate buttons.
             results.querySelectorAll( '.cs-ai-gen-btn' ).forEach( btn => {
-                btn.addEventListener( 'click', () => triggerGenerate( btn ) );
+                btn.addEventListener( 'click', () => {
+                    if ( typeof triggerGenerate === 'function' ) triggerGenerate( btn );
+                } );
             } );
         }
 
@@ -1785,9 +1831,18 @@
         }
     }
 
-    if ( document.readyState === 'loading' ) {
-        document.addEventListener( 'DOMContentLoaded', init );
-    } else {
+    function initAndExpose() {
         init();
+        // Expose triggerGenerate so the Post Social Preview Scan panel can reuse it
+        // for no-image rows without duplicating the entire generate flow.
+        if ( window.csdtDevtoolsThumbs && typeof triggerGenerate === 'function' ) {
+            window.csdtDevtoolsThumbs.triggerGenerate = triggerGenerate;
+        }
+    }
+
+    if ( document.readyState === 'loading' ) {
+        document.addEventListener( 'DOMContentLoaded', initAndExpose );
+    } else {
+        initAndExpose();
     }
 } )();

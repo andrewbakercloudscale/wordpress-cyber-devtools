@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.712
+ * Version: 1.9.733
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -26,6 +26,7 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/class-csp.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-sec-headers.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-site-audit.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-vuln-scan.php';
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-geo.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-login.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-smtp.php';
 require_once plugin_dir_path( __FILE__ ) . 'includes/class-perf-monitor.php';
@@ -54,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.712';
+    const VERSION      = '1.9.733';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -332,6 +333,12 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_devtools_bf_log_fetch',        [ 'CSDT_Login', 'ajax_bf_log_fetch' ] );
         add_action( 'wp_ajax_csdt_ip_block',                     [ 'CSDT_Login', 'ajax_ip_block' ] );
         add_action( 'wp_ajax_csdt_ip_unblock',                   [ 'CSDT_Login', 'ajax_ip_unblock' ] );
+        add_action( 'wp_ajax_csdt_download_dbip',                [ 'CSDT_Geo', 'ajax_download_dbip' ] );
+        add_action( 'wp_ajax_csdt_save_dbip_settings',           [ 'CSDT_Geo', 'ajax_save_dbip_settings' ] );
+        self::cron_action( 'csdt_dbip_auto_update',              [ 'CSDT_Geo', 'auto_update_run' ] );
+        if ( ! wp_next_scheduled( 'csdt_dbip_auto_update' ) ) {
+            wp_schedule_event( time(), 'daily', 'csdt_dbip_auto_update' );
+        }
         add_action( 'parse_request',                             [ 'CSDT_Login', 'enforce_ip_blocklist' ], 1 );
         add_action( 'wp_ajax_csdt_ssh_monitor_save',             [ 'CSDT_Monitor', 'ajax_ssh_monitor_save' ] );
         add_action( 'wp_ajax_csdt_ssh_log_clear',               [ 'CSDT_Monitor', 'ajax_ssh_log_clear' ] );
@@ -371,6 +378,10 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_devtools_regen_thumb_scan',  [ 'CSDT_Thumbnails', 'ajax_regen_thumb_scan' ] );
         add_action( 'wp_ajax_csdt_devtools_regen_thumb_batch', [ 'CSDT_Thumbnails', 'ajax_regen_thumb_batch' ] );
         add_action( 'save_post_post',  [ 'CSDT_Thumbnails', 'on_post_saved' ], 100, 3 );
+        // Catches the "publish first, add image later" workflow where set_post_thumbnail()
+        // fires after save_post and on_post_saved() misses the new thumbnail ID.
+        add_action( 'added_post_meta',   [ 'CSDT_Thumbnails', 'on_thumbnail_meta_updated' ], 10, 4 );
+        add_action( 'updated_post_meta', [ 'CSDT_Thumbnails', 'on_thumbnail_meta_updated' ], 10, 4 );
         add_action( 'transition_post_status', [ 'CSDT_Thumbnails', 'on_post_status_change' ], 10, 3 );
         add_action( 'admin_notices',   [ 'CSDT_Thumbnails', 'social_format_admin_notice' ] );
         // Serve platform-specific og:image based on crawler User-Agent.
@@ -819,12 +830,43 @@ class CloudScale_DevTools {
     }
 
     private static function get_dashboard_widget_css(): string {
-        return '#csdt_security_summary .cs-dw-accent{height:3px;background:linear-gradient(90deg,#1e3a8a 0%,#f97316 100%);margin:-12px -12px 14px;border-radius:0}' .
-               '#csdt_security_summary .cs-dw-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9;font-size:13px}' .
-               '#csdt_security_summary .cs-dw-row:last-child{border-bottom:none}' .
-               '#csdt_security_summary .cs-dw-lbl{color:#94a3b8;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}' .
-               '#csdt_security_summary .cs-dw-section{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#1e3a8a;padding:7px 8px 6px;border-bottom:1px solid #dbeafe;border-left:3px solid #f97316;background:#f0f4ff;border-radius:0 4px 0 0;margin-bottom:4px}' .
-               '#csdt_security_summary .cs-dw-actions{margin-top:14px;display:flex}';
+        return
+            /* Top accent bar */
+            '#csdt_security_summary .cs-dw-bar{height:4px;background:linear-gradient(90deg,#1e3a8a 0%,#06b6d4 50%,#f97316 100%);margin:-12px -12px 16px;border-radius:0}' .
+
+            /* Hero score block */
+            '#csdt_security_summary .cs-dw-hero{display:flex;align-items:center;gap:14px;padding:4px 0 16px;border-bottom:1px solid #e2e8f0}' .
+            '#csdt_security_summary .cs-dw-score-ring{width:62px;height:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:800;flex-shrink:0;border:3px solid currentColor}' .
+            '#csdt_security_summary .cs-dw-hero-meta{flex:1;min-width:0}' .
+            '#csdt_security_summary .cs-dw-hero-title{font-size:13px;font-weight:700;color:#1e293b;line-height:1.2}' .
+            '#csdt_security_summary .cs-dw-hero-sub{font-size:11px;color:#94a3b8;margin-top:2px}' .
+            '#csdt_security_summary .cs-dw-hero-pills{display:flex;gap:6px;margin-top:8px}' .
+            '#csdt_security_summary .cs-dw-pill{display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:8px;padding:5px 10px;font-weight:700;line-height:1}' .
+            '#csdt_security_summary .cs-dw-pill-num{font-size:18px}' .
+            '#csdt_security_summary .cs-dw-pill-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;opacity:.8}' .
+
+            /* Section header */
+            '#csdt_security_summary .cs-dw-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#64748b;padding:12px 0 6px;display:flex;align-items:center;gap:6px}' .
+            '#csdt_security_summary .cs-dw-section::after{content:"";flex:1;height:1px;background:#e2e8f0}' .
+
+            /* Status grid */
+            '#csdt_security_summary .cs-dw-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px}' .
+            '#csdt_security_summary .cs-dw-chip{display:flex;align-items:center;gap:7px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px;font-size:12px;font-weight:600;color:#334155}' .
+            '#csdt_security_summary .cs-dw-chip .cs-dw-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}' .
+            '#csdt_security_summary .cs-dw-chip-label{font-size:10px;color:#94a3b8;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' .
+
+            /* Timestamps row */
+            '#csdt_security_summary .cs-dw-times{display:flex;gap:10px;margin-top:4px}' .
+            '#csdt_security_summary .cs-dw-time{flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:5px 8px;font-size:10px;color:#94a3b8;text-align:center}' .
+            '#csdt_security_summary .cs-dw-time strong{display:block;font-size:11px;color:#475569;font-weight:600}' .
+
+            /* CTA button */
+            '#csdt_security_summary .cs-dw-cta{margin-top:14px}' .
+            '#csdt_security_summary .cs-dw-cta a{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;box-sizing:border-box;' .
+            'background:linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%);color:#fff;font-weight:700;font-size:13px;' .
+            'padding:11px 16px;border-radius:8px;text-decoration:none;' .
+            'box-shadow:0 2px 8px rgba(14,165,233,.35);letter-spacing:.03em;transition:filter .15s,box-shadow .15s}' .
+            '#csdt_security_summary .cs-dw-cta a:hover{filter:brightness(1.1);box-shadow:0 6px 20px rgba(3,105,161,.45)}';
     }
 
     private static function get_convert_toast_css(): string {
@@ -1328,6 +1370,19 @@ class CloudScale_DevTools {
         // Login security JS (only loaded on the login tab)
         $active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'home'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         if ( $active_tab === 'login' ) {
+            wp_enqueue_style(
+                'csdt-leaflet-css',
+                plugins_url( 'assets/leaflet.min.css', __FILE__ ),
+                [],
+                self::VERSION
+            );
+            wp_enqueue_script(
+                'csdt-leaflet-js',
+                plugins_url( 'assets/leaflet.min.js', __FILE__ ),
+                [],
+                self::VERSION,
+                true
+            );
             wp_enqueue_script(
                 'csdt-qrcode',
                 plugins_url( 'assets/qrcode.min.js', __FILE__ ),
@@ -1338,15 +1393,28 @@ class CloudScale_DevTools {
             wp_enqueue_script(
                 'csdt-login',
                 plugins_url( 'assets/cs-login.js', __FILE__ ),
-                [ 'csdt-qrcode' ],
+                [ 'csdt-qrcode', 'csdt-leaflet-js' ],
                 self::VERSION,
                 true
             );
+            // Build per-country blocked counts (7-day sum) for the map.
+            $wplogin_map_stats = get_option( 'csdt_wplogin_blocked_stats', [] );
+            $countries_blocked = [];
+            if ( isset( $wplogin_map_stats['country_stats'] ) && is_array( $wplogin_map_stats['country_stats'] ) ) {
+                foreach ( $wplogin_map_stats['country_stats'] as $cc => $days ) {
+                    if ( is_array( $days ) ) {
+                        $countries_blocked[ $cc ] = array_sum( $days );
+                    }
+                }
+            }
             wp_localize_script( 'csdt-login', 'csdtDevtoolsLogin', [
-                'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
-                'nonce'       => wp_create_nonce( 'csdt_devtools_login_nonce' ),
-                'currentUser' => get_current_user_id(),
-                'mailTabUrl'  => admin_url( 'tools.php?page=' . self::TOOLS_SLUG . '&tab=mail' ),
+                'ajaxUrl'          => admin_url( 'admin-ajax.php' ),
+                'nonce'            => wp_create_nonce( 'csdt_devtools_login_nonce' ),
+                'secNonce'         => wp_create_nonce( CloudScale_DevTools::SECURITY_NONCE ),
+                'currentUser'      => get_current_user_id(),
+                'mailTabUrl'       => admin_url( 'tools.php?page=' . self::TOOLS_SLUG . '&tab=mail' ),
+                'countriesBlocked' => $countries_blocked,
+                'hideLoginEnabled' => get_option( 'csdt_devtools_login_hide_enabled', '0' ),
             ] );
             wp_enqueue_script(
                 'csdt-passkey',
@@ -2107,10 +2175,10 @@ class CloudScale_DevTools {
                         <span>🔔 <?php esc_html_e( 'PHP Error Alerting', 'cloudscale-devtools' ); ?></span>
                         <span class="cs-header-hint"><?php esc_html_e( 'Polls PHP + WP debug logs every 5 min — alerts via email and ntfy.sh when new fatals appear', 'cloudscale-devtools' ); ?></span>
                         <?php self::render_explain_btn( 'php-error-alerting', 'PHP Error Alerting', [
-                            [ 'name' => 'How it works',     'rec' => 'Info',        'html' => 'A WP-Cron job runs every 5 minutes. It records the last byte-offset read for each log file and only reads <em>new</em> lines since the previous check — so you only get alerted about errors that just appeared, not the entire log history.' ],
-                            [ 'name' => 'Alert channels',   'rec' => 'Recommended', 'html' => '<strong>Email</strong> — sent to the WordPress admin email address. <strong>ntfy.sh</strong> — instant push notification to any device running the ntfy app. Set your ntfy URL under <strong>Security Scan → Settings → Notification URL</strong>. Both channels fire independently if configured.' ],
-                            [ 'name' => 'Threshold',        'rec' => 'Info',        'html' => 'The <em>threshold</em> is the minimum number of new errors per check before an alert fires. Set it to 1 to be notified about every single error. Fatal errors (PHP Fatal, WordPress die) always trigger an alert regardless of the threshold.' ],
-                            [ 'name' => 'Log paths',        'rec' => 'Recommended', 'html' => 'The monitor watches the same log sources configured in the Server Logs panel. If no PHP error log path is set, enable the mu-plugin under Server Logs → PHP Error Log to redirect errors to <code>wp-content/php-error.log</code>.' ],
+                            [ 'name' => 'How it works',     'rec' => 'Info',        'html' => 'A WP-Cron job runs every 5 minutes. It tracks the last byte-offset read for each log file and only reads <em>new</em> lines since the previous check — you are only alerted about errors that just appeared, not the full log history.' ],
+                            [ 'name' => 'Alert channels',   'rec' => 'Recommended', 'html' => '<strong>Email</strong> — sent to the WordPress admin email address. <strong>ntfy.sh</strong> — instant push notification to any device with the ntfy app. Configure your ntfy topic URL under <strong>Security Scan → Scheduled Scans → Notification URL</strong>. Both channels fire independently.' ],
+                            [ 'name' => 'Threshold',        'rec' => 'Info',        'html' => 'Minimum new errors per 5-minute check before an alert fires. Set to <code>1</code> to be notified about every error. <strong>PHP Fatal</strong> and <strong>WordPress die()</strong> always trigger an alert regardless of threshold.' ],
+                            [ 'name' => 'Log paths',        'rec' => 'Recommended', 'html' => 'Watches the same log sources configured in the Server Logs panel. If PHP is logging to <code>/dev/stderr</code> (default in many Docker setups), errors are not readable here. Enable the mu-plugin under <strong>Server Logs → PHP Error Log</strong> to redirect errors to <code>wp-content/php-error.log</code>.' ],
                         ] ); ?>
                         <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
                             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
@@ -3033,8 +3101,8 @@ class CloudScale_DevTools {
                 <span>🔒 HIDE LOGIN URL</span>
                 <span class="cs-header-hint"><?php esc_html_e( 'Move wp-login.php to a secret address', 'cloudscale-devtools' ); ?></span>
                 <?php self::render_explain_btn( 'hide-login', 'Hide Login URL', [
-                    [ 'name' => 'Enable Hide Login',  'rec' => 'Recommended', 'html' => 'Moves your login page to a secret URL. Direct requests to <code>/wp-login.php</code> return a <code>404</code>, stopping bots and credential-stuffing scripts from even finding the login form.' ],
-                    [ 'name' => 'Custom Login Path',  'rec' => 'Recommended', 'html' => 'The URL slug that serves your login page, e.g. <code>/my-secret-login</code>. Use letters, numbers, and hyphens only.<br><br><strong>Save the full login URL somewhere safe</strong> — you will need it to log in after enabling this feature.' ],
+                    [ 'name' => 'Enable Hide Login',  'rec' => 'Critical',    'html' => 'Moves your login page to a secret URL. Direct requests to <code>/wp-login.php</code> immediately return a 404 and the hit is recorded in the Blocked Probes chart. This stops the vast majority of automated credential-stuffing bots — they probe the default path and give up when they get a 404.<br><br>If your Failed Login Attempts chart shows active events, enabling this is the single most effective first step.' ],
+                    [ 'name' => 'Custom Login Path',  'rec' => 'Recommended', 'html' => 'The URL slug that serves your login page, e.g. <code>/my-secret-login</code>. Use letters, numbers, and hyphens only. The Randomise button generates a cryptographically random 16-character slug.<br><br><strong>⚠️ Save the full login URL somewhere safe before saving</strong> — if you forget it you will need SSH access to recover.' ],
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
@@ -3130,10 +3198,11 @@ class CloudScale_DevTools {
                 <span>🔒 BRUTE-FORCE PROTECTION</span>
                 <span class="cs-header-hint"><?php esc_html_e( 'Temporarily lock accounts after repeated failed logins', 'cloudscale-devtools' ); ?></span>
                 <?php self::render_explain_btn( 'brute-force', 'Brute-Force Protection', [
-                    [ 'name' => 'How it works',        'rec' => 'Info',        'html' => 'After <em>N</em> consecutive failed login attempts for the same username, the account is locked for the configured duration. The lock is <strong>per-username, not per-IP</strong> — it also stops distributed attacks spread across many IPs. The counter resets automatically after the lockout period expires.' ],
-                    [ 'name' => 'Failed attempts',     'rec' => 'Recommended', 'html' => '<ul><li><code>3</code> — tighter security, but risks locking out users who mistype their password</li><li><code>5</code> — default, good balance</li><li><code>10</code> — more forgiving for sites with non-technical users</li></ul><strong>Unlock one account via SSH:</strong><br><code>wp transient delete csdt_devtools_bf_lock_$(php -r "echo md5(strtolower(\'USERNAME\'));") --path=/var/www/html</code><br><br><strong>Unlock all accounts:</strong><br><code>wp eval \'global $wpdb; $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE \"%csdt_devtools_bf_lock%\"");\' --path=/var/www/html</code>' ],
-                    [ 'name' => 'Lockout period',      'rec' => 'Recommended', 'html' => 'Default is <code>10</code> minutes. The lock lifts automatically — no admin action needed.<br><br><ul><li><strong>10 min</strong> — default, enough to stop most automated attacks</li><li><strong>30–60 min</strong> — slows targeted attacks further, slight UX delay for legitimate forgotten-password users</li></ul>' ],
-                    [ 'name' => 'Account enumeration', 'rec' => 'Critical',    'html' => '<p>By default, WordPress gives away whether a username exists. Try logging in with a made-up username and you see <em>"The username xyz is not registered on this site."</em> — try a real one and you see <em>"The password you entered is incorrect."</em> An attacker can automate this to build a full list of your site\'s usernames in minutes, then target those accounts with focused password attacks.</p><p>When this option is enabled, <strong>both errors return the same message: "Invalid username or password."</strong> The attacker learns nothing — a wrong username looks exactly like a wrong password. This is the same pattern used by banks and any serious web application.</p><p>There is no downside to enabling this. Legitimate users who forget their username can use the <em>Lost your password?</em> link to recover via their email address.</p>' ],
+                    [ 'name' => 'How it works',        'rec' => 'Info',        'html' => 'After <em>N</em> consecutive failed login attempts for the same username, the account is locked for the configured duration. The lock is <strong>per-username, not per-IP</strong> — distributed attacks hitting the same account from thousands of IPs are still caught. The counter resets automatically when the lockout expires.' ],
+                    [ 'name' => 'Failed attempts',     'rec' => 'Recommended', 'html' => '<ul><li><code>3</code> — tightest, but may lock out users who mistype their password twice</li><li><code>5</code> — default, good balance for most sites</li><li><code>10</code> — more forgiving for sites with non-technical users</li></ul><br><strong>Unlock one account via SSH:</strong><br><code>wp transient delete csdt_devtools_bf_lock_$(php -r "echo md5(strtolower(\'USERNAME\'));") --path=/var/www/html</code><br><br><strong>Unlock all locked accounts:</strong><br><code>wp eval \'global $wpdb; $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE \"%csdt_devtools_bf_lock%\"");\' --path=/var/www/html</code>' ],
+                    [ 'name' => 'Lockout period',      'rec' => 'Recommended', 'html' => 'Default is <code>10</code> minutes. The lock lifts automatically — no admin action needed.<br><br><ul><li><strong>10 min</strong> — default, stops automated attacks cold</li><li><strong>30–60 min</strong> — better for targeted attacks, small UX cost for forgotten-password users</li></ul>' ],
+                    [ 'name' => 'Account enumeration', 'rec' => 'Critical',    'html' => '<p>WordPress by default reveals whether a username exists: wrong username → <em>"The username xyz is not registered."</em>, right username wrong password → <em>"The password is incorrect."</em> An attacker can automate this to map every account on your site in minutes.</p><p>Enable this to make both failures return the same generic message. The <strong>✓ Active</strong> badge appears next to the checkbox when it is on. Legitimate users who forget their username can still recover via <em>Lost your password?</em> using their email.</p>' ],
+                    [ 'name' => 'Attack Origins map',  'rec' => 'Info',        'html' => 'A world map shows the country of origin for failed logins (amber circles) and wp-login.php blocked probes (red circles). Each type uses its own independent scale so low-volume countries still appear.<br><br>Country is resolved from the Cloudflare CF-IPCountry header first (zero overhead). If CF is absent, the DB-IP Lite database (~30 MB local file) is used as a fallback — download it using the button below the map. Auto-update keeps it current monthly. Data accumulates from new events.' ],
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
@@ -3165,6 +3234,9 @@ class CloudScale_DevTools {
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;color:#334155;">
                             <input type="checkbox" id="cs-bf-enum-protect" <?php checked( $bf_enum_protect, '1' ); ?>>
                             <?php esc_html_e( 'Prevent account enumeration by using generic login error messages', 'cloudscale-devtools' ); ?>
+                            <?php if ( $bf_enum_protect === '1' ) : ?>
+                            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#dcfce7;color:#166534;border:1px solid #86efac;white-space:nowrap;">✓ Active</span>
+                            <?php endif; ?>
                         </label>
                         <span class="cs-hint" style="margin-top:4px;display:block;"><?php esc_html_e( 'Returns "Invalid username or password." for all credential failures — prevents attackers from discovering which usernames are registered on this site.', 'cloudscale-devtools' ); ?></span>
                     </div>
@@ -3172,18 +3244,12 @@ class CloudScale_DevTools {
                 <div style="margin-top:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                     <button type="button" class="cs-btn-primary" id="cs-bf-save">💾 <?php esc_html_e( 'Save Settings', 'cloudscale-devtools' ); ?></button>
                     <span class="cs-settings-saved" id="cs-bf-saved">✓ <?php esc_html_e( 'Saved', 'cloudscale-devtools' ); ?></span>
-                    <button type="button" id="cs-bf-test-btn" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;">🧪 <?php esc_html_e( 'Test BF Protection', 'cloudscale-devtools' ); ?></button>
+                    <button type="button" id="cs-bf-test-btn" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;">🧪 <?php esc_html_e( 'Test Brute-Force Protection', 'cloudscale-devtools' ); ?></button>
                     <span id="cs-bf-test-result" style="display:none;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;"></span>
                 </div>
 
-                <?php if ( $bf_enum_protect === '1' ) : ?>
-                <div style="margin-top:10px;font-size:12px;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:7px 12px;line-height:1.5;">
-                    🛡️ <strong><?php esc_html_e( 'Username enumeration protection: Active', 'cloudscale-devtools' ); ?></strong>
-                    — <?php esc_html_e( 'Login errors always say "Invalid username or password." so attackers cannot tell whether a username exists.', 'cloudscale-devtools' ); ?>
-                </div>
-                <?php endif; ?>
-                <div style="margin-top:8px;font-size:12px;color:#64748b;line-height:1.6;">
-                    <strong><?php esc_html_e( 'Account lock, not IP lock:', 'cloudscale-devtools' ); ?></strong>
+                <div style="margin-top:10px;font-size:12px;color:#374151;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;line-height:1.7;">
+                    🔒 <strong><?php esc_html_e( 'Account lock, not IP lock:', 'cloudscale-devtools' ); ?></strong>
                     <?php esc_html_e( 'Lockout is per-username. Distributed attacks using many IPs against the same account are still caught.', 'cloudscale-devtools' ); ?>
                 </div>
 
@@ -3267,7 +3333,7 @@ class CloudScale_DevTools {
                                 <thead>
                                     <tr>
                                         <th class="cs-bf-th"><?php esc_html_e( 'Last attempt', 'cloudscale-devtools' ); ?></th>
-                                        <th class="cs-bf-th"><?php esc_html_e( 'IP address', 'cloudscale-devtools' ); ?></th>
+                                        <th class="cs-bf-th"><?php esc_html_e( 'IP / Country', 'cloudscale-devtools' ); ?></th>
                                         <th class="cs-bf-th" style="text-align:right;"><?php esc_html_e( 'Attempts', 'cloudscale-devtools' ); ?></th>
                                         <th class="cs-bf-th"></th>
                                     </tr>
@@ -3278,8 +3344,26 @@ class CloudScale_DevTools {
                                     $is_blocked   = isset( $ip_blocklist[ $probe_ip ] );
                                 ?>
                                     <tr data-ts="<?php echo (int) $probe_data['last_ts']; ?>" data-cnt="<?php echo (int) $probe_count; ?>" data-ip="<?php echo esc_attr( $probe_ip ); ?>">
-                                        <td class="cs-bf-td cs-bf-td-time"><?php echo esc_html( human_time_diff( $probe_data['last_ts'] ) . ' ago' ); ?></td>
-                                        <td class="cs-bf-td cs-bf-td-ip"><?php echo esc_html( $probe_ip ); ?></td>
+                                        <td class="cs-bf-td cs-bf-td-time"><?php
+                                            $ts_diff = (int) ( time() - $probe_data['last_ts'] );
+                                            if ( $ts_diff < 60 ) {
+                                                echo esc_html( $ts_diff . ' secs ago' );
+                                            } elseif ( $ts_diff < 3600 ) {
+                                                echo esc_html( (int) floor( $ts_diff / 60 ) . ' min ago' );
+                                            } elseif ( $ts_diff < 86400 ) {
+                                                echo esc_html( (int) floor( $ts_diff / 3600 ) . 'h ago' );
+                                            } else {
+                                                echo esc_html( (int) floor( $ts_diff / 86400 ) . 'd ago' );
+                                            }
+                                        ?></td>
+                                        <td class="cs-bf-td cs-bf-td-ip"><?php echo esc_html( $probe_ip ); ?>
+                                            <?php if ( ! empty( $probe_data['country'] ) ) :
+                                                $probe_cc   = strtoupper( $probe_data['country'] );
+                                                $probe_flag = mb_chr( 0x1F1E6 + ord( $probe_cc[0] ) - 65 ) . mb_chr( 0x1F1E6 + ord( $probe_cc[1] ) - 65 );
+                                            ?>
+                                            <div style="font-size:10px;color:#64748b;margin-top:2px;"><?php echo esc_html( $probe_flag . ' ' . $probe_cc ); ?></div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="cs-bf-td" style="text-align:right;font-weight:700;color:#dc2626;"><?php echo number_format( (int) $probe_count ); ?></td>
                                         <td class="cs-bf-td" style="white-space:nowrap;text-align:right;">
                                             <a href="https://ipinfo.io/<?php echo esc_attr( $probe_ip ); ?>" target="_blank" rel="noopener"
@@ -3345,6 +3429,20 @@ class CloudScale_DevTools {
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
+
+                    <!-- Attack Origins map -->
+                    <div style="margin-top:22px;border-top:1px solid #e8edf5;padding-top:20px;">
+                        <div class="cs-bf-log-header">
+                            <span class="cs-bf-log-title">🌍 <?php esc_html_e( 'Attack Origins', 'cloudscale-devtools' ); ?></span>
+                            <span style="display:flex;align-items:center;gap:12px;font-size:11px;">
+                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;opacity:0.8;"></span><?php esc_html_e( 'Failed Logins', 'cloudscale-devtools' ); ?></span>
+                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;opacity:0.8;"></span><?php esc_html_e( 'Blocked Probes', 'cloudscale-devtools' ); ?></span>
+                            </span>
+                        </div>
+                        <div id="cs-bf-geo-map" style="height:280px;border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;background:#e8f4f4;margin-top:8px;"></div>
+                        <div style="margin-top:6px;font-size:11px;color:#94a3b8;"><?php esc_html_e( 'Each ring scales independently — circle size reflects volume within that category only. Country via Cloudflare CF-IPCountry or DB-IP Lite fallback.', 'cloudscale-devtools' ); ?></div>
+                        <?php CSDT_Geo::render_dbip_status(); ?>
+                    </div>
 
                     <div id="cs-ip-blocklist-wrap" class="cs-bf-log-wrap" style="margin-top:22px;<?php echo empty( $ip_blocklist ) ? 'display:none;' : ''; ?>">
                         <div class="cs-bf-log-header">
@@ -3484,6 +3582,64 @@ class CloudScale_DevTools {
 
                         document.querySelectorAll('.cs-ip-block-btn').forEach(wireBlock);
                         document.querySelectorAll('.cs-ip-unblock-btn').forEach(wireUnblock);
+
+                        // DB-IP download + auto-update toggle
+                        (function(){
+                            var dlBtn   = document.getElementById('csdt-dbip-download-btn');
+                            var autoChk = document.getElementById('csdt-dbip-auto-update');
+                            var msg     = document.getElementById('csdt-dbip-msg');
+                            function showMsg(text, ok) {
+                                if (!msg) return;
+                                msg.textContent = text;
+                                msg.style.color = ok ? '#15803d' : '#b91c1c';
+                                msg.style.display = 'inline';
+                            }
+                            if (autoChk) {
+                                autoChk.addEventListener('change', function() {
+                                    var fd = new FormData();
+                                    fd.append('action', 'csdt_save_dbip_settings');
+                                    fd.append('nonce', nonce);
+                                    fd.append('auto_update', autoChk.checked ? 'yes' : 'no');
+                                    fetch(ajaxurl, {method:'POST', body:fd})
+                                        .then(function(r){ return r.json(); })
+                                        .then(function(res){ showMsg(res.success ? '✓ Saved' : '⚠ Save failed', res.success); setTimeout(function(){ if(msg) msg.style.display='none'; }, 2000); })
+                                        .catch(function(){ showMsg('⚠ Error', false); });
+                                });
+                            }
+                            if (dlBtn) {
+                                dlBtn.addEventListener('click', function() {
+                                    dlBtn.disabled = true;
+                                    dlBtn.textContent = '⏳ Downloading…';
+                                    var fd = new FormData();
+                                    fd.append('action', 'csdt_download_dbip');
+                                    fd.append('nonce', nonce);
+                                    fetch(ajaxurl, {method:'POST', body:fd})
+                                        .then(function(r){ return r.json(); })
+                                        .then(function(res){
+                                            dlBtn.disabled = false;
+                                            if (res.success) {
+                                                dlBtn.textContent = '🔄 Update DB-IP Lite';
+                                                showMsg('✓ Installed — ' + (res.data.size || ''), true);
+                                                var row = document.getElementById('csdt-dbip-status-row');
+                                                if (row) {
+                                                    row.style.background = '#f0fdf4';
+                                                    row.style.borderColor = '#86efac';
+                                                    var s = row.querySelector('span');
+                                                    if (s) s.innerHTML = '<span style="color:#15803d;font-weight:600;">✓ DB-IP Lite installed</span>&nbsp;&mdash;&nbsp;' + (res.data.size || '') + '&nbsp;<span style="color:#64748b;">(country shown for all sites, not just Cloudflare)</span>';
+                                                }
+                                            } else {
+                                                dlBtn.textContent = '⬇️ Download DB-IP Lite';
+                                                showMsg('⚠ ' + (res.data || 'Download failed'), false);
+                                            }
+                                        })
+                                        .catch(function(){
+                                            dlBtn.disabled = false;
+                                            dlBtn.textContent = '⬇️ Download DB-IP Lite';
+                                            showMsg('⚠ Network error', false);
+                                        });
+                                });
+                            }
+                        })();
                     })();
                     </script>
                 </div>
@@ -3507,10 +3663,10 @@ class CloudScale_DevTools {
                 <span>🖥️ SSH BRUTE-FORCE MONITOR</span>
                 <span class="cs-header-hint"><?php esc_html_e( 'Real-time SSH attack detection via auth.log — alerts via email and ntfy.sh', 'cloudscale-devtools' ); ?></span>
                 <?php self::render_explain_btn( 'ssh-monitor', 'SSH Brute-Force Monitor', [
-                    [ 'name' => 'How it works',      'rec' => 'Overview',     'html' => 'The SSH monitor tails your server\'s <code>/var/log/auth.log</code> via an AJAX poll every 60 seconds. It counts failed login attempts in a rolling 60-second window and fires an alert when the count exceeds your threshold.' ],
-                    [ 'name' => 'Threshold',         'rec' => 'Recommended',  'html' => 'Set to <strong>10 failed attempts in 60 seconds</strong> for most servers. Lower values (e.g. 3–5) are appropriate for servers with a small number of known users but may produce false positives from legitimate mistyped passwords.' ],
-                    [ 'name' => 'Alert channels',    'rec' => 'Recommended',  'html' => '<strong>Email</strong> — sends via your configured SMTP settings (Mail tab).<br><strong>ntfy.sh</strong> — push notification to any phone with the ntfy app. Enter your ntfy topic URL in the field provided. Free and open-source.' ],
-                    [ 'name' => 'fail2ban',          'rec' => 'Critical',     'html' => 'This monitor <em>detects</em> attacks but does not block IPs. <strong>fail2ban</strong> must be installed and running to automatically ban attacking IPs. Without it, attacks will continue indefinitely. Install with: <code>sudo apt install fail2ban</code>.' ],
+                    [ 'name' => 'How it works',      'rec' => 'Overview',     'html' => 'A WP-Cron job runs every minute and reads new lines appended to <code>/var/log/auth.log</code> since the last check (byte-offset tracking — only new content is read, never the whole file). It counts <code>Failed password</code> lines in that window and fires an alert when the count exceeds your threshold.' ],
+                    [ 'name' => 'Threshold',         'rec' => 'Recommended',  'html' => 'Default is <strong>10 failed attempts per minute</strong>. Lower (3–5) is appropriate if your server has only known, trusted users. Higher (20–50) reduces noise on servers exposed to constant internet scanning.' ],
+                    [ 'name' => 'Alert channels',    'rec' => 'Recommended',  'html' => '<strong>Email</strong> — sent to the WordPress admin email address.<br><strong>ntfy.sh</strong> — instant push notification to any device with the ntfy app. Configure your ntfy topic URL under Security Scan → Scheduled Scans.' ],
+                    [ 'name' => 'fail2ban',          'rec' => 'Critical',     'html' => 'This monitor <em>detects</em> and alerts — it does not block IPs. <strong>fail2ban</strong> must be installed and configured to automatically ban offending IPs. Without it, SSH attacks continue unimpeded regardless of how many alerts you receive. Install: <code>sudo apt install fail2ban</code> — the default SSH jail is enabled automatically.' ],
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
@@ -4302,87 +4458,123 @@ class CloudScale_DevTools {
         $base_url = admin_url( 'tools.php?page=cloudscale-devtools' );
         ?>
 
-        <div class="cs-dw-accent"></div>
-        <div class="cs-dw-section">🤖 <?php esc_html_e( 'AI Security', 'cloudscale-devtools' ); ?></div>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'STATUS', 'cloudscale-devtools' ); ?></span>
-            <span style="color:<?php echo $has_key ? '#16a34a' : '#dc2626'; ?>;font-weight:600;">
-                <?php echo $has_key ? '✅ ' . esc_html( $provider_lbl ) : '⚠️ ' . esc_html__( 'API key not set', 'cloudscale-devtools' ); ?>
-            </span>
-        </div>
-
         <?php
         $combined_critical = (int) ( $last_scan['critical_count'] ?? 0 ) + ( $audit_critical ?? 0 );
         $combined_high     = (int) ( $last_scan['high_count'] ?? 0 ) + ( $audit_high ?? 0 );
         $either_run        = $last_scan || null !== $audit_critical;
+
+        // Score ring colours
+        if ( $last_scan ) {
+            $s = (int) ( $last_scan['score'] ?? 0 );
+            if ( $s >= 75 ) {
+                $ring_color = '#16a34a'; $ring_bg = '#f0fdf4';
+            } elseif ( $s >= 55 ) {
+                $ring_color = '#d97706'; $ring_bg = '#fffbeb';
+            } else {
+                $ring_color = '#dc2626'; $ring_bg = '#fef2f2';
+            }
+        } else {
+            $ring_color = '#94a3b8'; $ring_bg = '#f8fafc';
+        }
+
+        // 2FA chip colour
+        $tfa_all  = ( $adm_tot > 0 && $adm_2fa === $adm_tot );
+        $tfa_some = ( $adm_2fa > 0 && ! $tfa_all );
+        $tfa_dot  = $tfa_all ? '#16a34a' : ( $tfa_some ? '#d97706' : '#dc2626' );
         ?>
-        <div class="cs-dw-section" style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">
-            <span>🛡️ <?php esc_html_e( 'AI Scans', 'cloudscale-devtools' ); ?></span>
-            <span style="display:flex;gap:10px;">
-                <?php if ( $last_scan ) : ?><a href="<?php echo esc_url( $base_url . '&tab=security' ); ?>" style="font-size:11px;font-weight:600;color:#0e6b8f;text-decoration:none;"><?php esc_html_e( 'Security →', 'cloudscale-devtools' ); ?></a><?php endif; ?>
-                <?php if ( null !== $audit_critical ) : ?><a href="<?php echo esc_url( $base_url . '&tab=site-audit' ); ?>" style="font-size:11px;font-weight:600;color:#0e6b8f;text-decoration:none;"><?php esc_html_e( 'Audit →', 'cloudscale-devtools' ); ?></a><?php endif; ?>
-            </span>
-        </div>
-        <?php if ( $either_run ) : ?>
-        <?php if ( $last_scan ) : ?>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'SCORE', 'cloudscale-devtools' ); ?></span>
-            <span style="color:<?php echo esc_attr( $score_cls ); ?>;font-weight:600;"><?php echo esc_html( ( $last_scan['score_label'] ?? '' ) . ' · ' . ( $last_scan['score'] ?? '' ) ); ?></span>
-        </div>
-        <?php endif; ?>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'CRITICAL', 'cloudscale-devtools' ); ?></span>
-            <span style="color:<?php echo $combined_critical > 0 ? '#dc2626' : '#16a34a'; ?>;font-weight:600;"><?php echo esc_html( $combined_critical ); ?></span>
-        </div>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'HIGH', 'cloudscale-devtools' ); ?></span>
-            <span style="color:<?php echo $combined_high > 0 ? '#d97706' : '#16a34a'; ?>;font-weight:600;"><?php echo esc_html( $combined_high ); ?></span>
-        </div>
-        <?php if ( $last_scan ) : ?>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'SCANNED', 'cloudscale-devtools' ); ?></span>
-            <span style="color:#888;"><?php echo esc_html( human_time_diff( (int) ( $last_scan['scanned_at'] ?? 0 ) ) . ' ' . __( 'ago', 'cloudscale-devtools' ) ); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php if ( null !== $audit_critical ) : ?>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'AUDITED', 'cloudscale-devtools' ); ?></span>
-            <span style="color:#888;"><?php echo esc_html( human_time_diff( $audit_run_at ) . ' ' . __( 'ago', 'cloudscale-devtools' ) ); ?></span>
-        </div>
-        <?php endif; ?>
-        <?php else : ?>
-        <div class="cs-dw-row"><span style="color:#94a3b8;"><?php esc_html_e( 'No scans run yet', 'cloudscale-devtools' ); ?></span></div>
-        <?php endif; ?>
 
-        <div class="cs-dw-section" style="margin-top:10px;">🔒 <?php esc_html_e( 'Login Security', 'cloudscale-devtools' ); ?></div>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'BRUTE FORCE', 'cloudscale-devtools' ); ?></span>
-            <span style="color:<?php echo $bf_on ? '#16a34a' : '#dc2626'; ?>;font-weight:600;"><?php echo $bf_on ? esc_html__( 'Protected', 'cloudscale-devtools' ) : esc_html__( 'Disabled', 'cloudscale-devtools' ); ?></span>
-        </div>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( '2FA ADMINS', 'cloudscale-devtools' ); ?></span>
-            <span style="color:<?php echo ( $adm_tot > 0 && $adm_2fa === $adm_tot ) ? '#16a34a' : ( $adm_2fa > 0 ? '#d97706' : '#dc2626' ); ?>;font-weight:600;"><?php echo esc_html( $adm_2fa . ' / ' . $adm_tot ); ?></span>
-        </div>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'HIDE LOGIN', 'cloudscale-devtools' ); ?></span>
-            <span style="color:<?php echo ! empty( $login_slug ) ? '#16a34a' : '#dc2626'; ?>;font-weight:600;"><?php echo ! empty( $login_slug ) ? '✅ /' . esc_html( $login_slug ) : esc_html__( 'Disabled', 'cloudscale-devtools' ); ?></span>
-        </div>
-        <div class="cs-dw-row">
-            <span class="cs-dw-lbl"><?php esc_html_e( 'FORCE 2FA', 'cloudscale-devtools' ); ?></span>
-            <span style="color:<?php echo $force_2fa ? '#16a34a' : '#dc2626'; ?>;font-weight:600;"><?php echo $force_2fa ? esc_html__( 'On', 'cloudscale-devtools' ) : esc_html__( 'Off', 'cloudscale-devtools' ); ?></span>
+        <div class="cs-dw-bar"></div>
+
+        <!-- ── Hero: score + alert pills ──────────────────────────────── -->
+        <div class="cs-dw-hero">
+            <div class="cs-dw-score-ring" style="color:<?php echo esc_attr( $ring_color ); ?>;background:<?php echo esc_attr( $ring_bg ); ?>;">
+                <?php echo $either_run ? esc_html( $last_scan['score'] ?? '—' ) : '—'; ?>
+            </div>
+            <div class="cs-dw-hero-meta">
+                <div class="cs-dw-hero-title">
+                    <?php
+                    if ( $either_run && $last_scan ) {
+                        echo esc_html( $last_scan['score_label'] ?? __( 'Scan complete', 'cloudscale-devtools' ) );
+                    } elseif ( $has_key ) {
+                        esc_html_e( 'No scan yet', 'cloudscale-devtools' );
+                    } else {
+                        esc_html_e( 'AI key not configured', 'cloudscale-devtools' );
+                    }
+                    ?>
+                </div>
+                <div class="cs-dw-hero-sub">
+                    <?php
+                    if ( $either_run ) {
+                        if ( $last_scan ) {
+                            /* translators: %s time diff */
+                            printf( esc_html__( 'Scanned %s ago', 'cloudscale-devtools' ), esc_html( human_time_diff( (int) ( $last_scan['scanned_at'] ?? 0 ) ) ) );
+                        }
+                        if ( null !== $audit_critical ) {
+                            echo $last_scan ? ' &middot; ' : '';
+                            /* translators: %s time diff */
+                            printf( esc_html__( 'Audited %s ago', 'cloudscale-devtools' ), esc_html( human_time_diff( $audit_run_at ) ) );
+                        }
+                    } else {
+                        echo esc_html( $has_key ? $provider_lbl : __( 'Add a free Gemini key to start', 'cloudscale-devtools' ) );
+                    }
+                    ?>
+                </div>
+                <?php if ( $either_run ) : ?>
+                <div class="cs-dw-hero-pills">
+                    <div class="cs-dw-pill" style="background:<?php echo $combined_critical > 0 ? '#fef2f2' : '#f0fdf4'; ?>;color:<?php echo $combined_critical > 0 ? '#dc2626' : '#16a34a'; ?>;">
+                        <span class="cs-dw-pill-num"><?php echo esc_html( $combined_critical ); ?></span>
+                        <span class="cs-dw-pill-lbl"><?php esc_html_e( 'Critical', 'cloudscale-devtools' ); ?></span>
+                    </div>
+                    <div class="cs-dw-pill" style="background:<?php echo $combined_high > 0 ? '#fffbeb' : '#f0fdf4'; ?>;color:<?php echo $combined_high > 0 ? '#d97706' : '#16a34a'; ?>;">
+                        <span class="cs-dw-pill-num"><?php echo esc_html( $combined_high ); ?></span>
+                        <span class="cs-dw-pill-lbl"><?php esc_html_e( 'High', 'cloudscale-devtools' ); ?></span>
+                    </div>
+                    <?php if ( $last_scan ) : ?>
+                    <a href="<?php echo esc_url( $base_url . '&tab=security' ); ?>" style="display:flex;align-items:center;margin-left:auto;font-size:11px;font-weight:600;color:#0369a1;text-decoration:none;white-space:nowrap;"><?php esc_html_e( 'Details →', 'cloudscale-devtools' ); ?></a>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+            </div>
         </div>
 
-        <div class="cs-dw-actions">
-            <a href="<?php echo esc_url( $base_url ); ?>"
-               style="display:flex;align-items:center;justify-content:center;gap:8px;flex:1;
-                      background:linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%);
-                      color:#fff;font-weight:700;font-size:13px;padding:10px 16px;
-                      border-radius:8px;text-decoration:none;
-                      box-shadow:0 3px 10px rgba(14,165,233,0.35);letter-spacing:0.02em;
-                      transition:background .15s,box-shadow .15s,letter-spacing .15s;"
-               onmouseover="this.style.background='linear-gradient(135deg,#38bdf8 0%,#0284c7 100%)';this.style.boxShadow='0 8px 24px rgba(3,105,161,0.55)';this.style.letterSpacing='0.06em';"
-               onmouseout="this.style.background='linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%)';this.style.boxShadow='0 3px 10px rgba(14,165,233,0.35)';this.style.letterSpacing='0.02em';">
-                <span style="font-size:15px">🛡️</span> <?php esc_html_e( 'View Cyber and Devtools', 'cloudscale-devtools' ); ?>
+        <!-- ── Login Security ─────────────────────────────────────────── -->
+        <div class="cs-dw-section">🔒 <?php esc_html_e( 'Login Security', 'cloudscale-devtools' ); ?></div>
+        <div class="cs-dw-grid">
+            <div class="cs-dw-chip">
+                <span class="cs-dw-dot" style="background:<?php echo $bf_on ? '#16a34a' : '#dc2626'; ?>;"></span>
+                <span>
+                    <span class="cs-dw-chip-label"><?php esc_html_e( 'Brute Force', 'cloudscale-devtools' ); ?></span><br>
+                    <?php echo $bf_on ? esc_html__( 'Protected', 'cloudscale-devtools' ) : esc_html__( 'Off', 'cloudscale-devtools' ); ?>
+                </span>
+            </div>
+            <div class="cs-dw-chip">
+                <span class="cs-dw-dot" style="background:<?php echo esc_attr( $tfa_dot ); ?>;"></span>
+                <span>
+                    <span class="cs-dw-chip-label"><?php esc_html_e( '2FA Admins', 'cloudscale-devtools' ); ?></span><br>
+                    <?php echo esc_html( $adm_2fa . ' / ' . $adm_tot ); ?>
+                </span>
+            </div>
+            <div class="cs-dw-chip">
+                <span class="cs-dw-dot" style="background:<?php echo ! empty( $login_slug ) ? '#16a34a' : '#dc2626'; ?>;"></span>
+                <span>
+                    <span class="cs-dw-chip-label"><?php esc_html_e( 'Hide Login', 'cloudscale-devtools' ); ?></span><br>
+                    <?php echo ! empty( $login_slug ) ? '/' . esc_html( $login_slug ) : esc_html__( 'Off', 'cloudscale-devtools' ); ?>
+                </span>
+            </div>
+            <div class="cs-dw-chip">
+                <span class="cs-dw-dot" style="background:<?php echo $force_2fa ? '#16a34a' : '#dc2626'; ?>;"></span>
+                <span>
+                    <span class="cs-dw-chip-label"><?php esc_html_e( 'Force 2FA', 'cloudscale-devtools' ); ?></span><br>
+                    <?php echo $force_2fa ? esc_html__( 'On', 'cloudscale-devtools' ) : esc_html__( 'Off', 'cloudscale-devtools' ); ?>
+                </span>
+            </div>
+        </div>
+
+        <!-- ── CTA ────────────────────────────────────────────────────── -->
+        <div class="cs-dw-cta">
+            <a href="<?php echo esc_url( $base_url ); ?>">
+                <span style="font-size:15px;">🛡️</span>
+                <?php esc_html_e( 'Open Cyber and Devtools', 'cloudscale-devtools' ); ?>
             </a>
         </div>
         <?php
@@ -4858,10 +5050,10 @@ class CloudScale_DevTools {
                         <span>🔎 <?php esc_html_e( 'Threat Monitor', 'cloudscale-devtools' ); ?></span>
                         <span class="cs-header-hint"><?php esc_html_e( 'File integrity · New admin alert · Probe detection — alerts once per incident, not per event', 'cloudscale-devtools' ); ?></span>
                         <?php self::render_explain_btn( 'threat-monitor', 'Threat Monitor', [
-                            [ 'name' => 'File Integrity',   'rec' => 'Critical', 'html' => 'Scans <code>wp-includes/*.php</code> and <code>wp-admin/*.php</code> every 5 minutes and compares file modification times against a stored baseline. If any file changes — outside of a normal WordPress core update — you receive an email and push alert immediately.<br><br>Anti-spam: when WordPress is updated to a new version the baseline is rebuilt silently (all core files change legitimately during an update). The same mtime is never alerted twice, so you will not receive repeated alerts for the same modification. Use <strong>Reset File Baseline</strong> after a manual core update to clear false-positive alerts.' ],
-                            [ 'name' => 'New Admin Alert', 'rec' => 'Critical', 'html' => 'Hooks into WordPress\'s <code>user_register</code> and <code>set_user_role</code> events. The instant a new administrator account is created — or an existing user is promoted to admin — an alert fires.<br><br>Anti-spam: alerts fire exactly once per user ID. If the same account is flagged and you acknowledge it, no further alerts fire for that user. The alerted-user list is capped at 100 entries to prevent unbounded growth.' ],
-                            [ 'name' => 'Probe Detection', 'rec' => 'High',     'html' => 'Reads only the new bytes appended to the web server access log since the last check (byte-offset tracking). Counts requests to sensitive endpoints: <code>wp-login.php</code>, <code>xmlrpc.php</code>, <code>wp-config.php</code>, <code>.env</code>, <code>.git/</code>, <code>.sql</code>, <code>.bak</code>, and shell-injection patterns.<br><br>Anti-spam: an alert only fires when the count exceeds the configured threshold (default: 25 requests per 5-minute window) AND at most once per hour. You will never receive probe alerts more frequently than once per hour regardless of how many probes occur.' ],
-                            [ 'name' => 'Alert channels',  'rec' => 'Setup',    'html' => 'Alerts are sent via <strong>email</strong> (to the site administrator address) and <strong>ntfy.sh push notification</strong> if a topic URL is configured under Security Scan → Scheduled Scans. No additional configuration is needed — the Threat Monitor shares the same alert infrastructure as the SSH Monitor and PHP Error Alerting.' ],
+                            [ 'name' => 'File Integrity',   'rec' => 'Critical', 'html' => 'Every 5 minutes, scans <code>wp-includes/*.php</code> and <code>wp-admin/*.php</code> and compares modification times against a stored baseline. Any unexpected change triggers an immediate email and push alert.<br><br><strong>Smart baseline:</strong> When WordPress is updated, the baseline is rebuilt silently — core files legitimately change during updates. The same mtime is never alerted twice. Click <strong>Reset File Baseline</strong> after a manual core edit to clear outstanding alerts.' ],
+                            [ 'name' => 'New Admin Alert', 'rec' => 'Critical', 'html' => 'Hooks into <code>user_register</code> and <code>set_user_role</code>. The instant any account is created as — or promoted to — administrator, an alert fires with the username, email, and creation method (Admin UI / REST API / WP-CLI).<br><br>Accounts matching test/automation patterns (playwright, helpdocs, e2e_) are flagged as <code>[TEST]</code> and do not trigger false positives during CI runs.' ],
+                            [ 'name' => 'Probe Detection', 'rec' => 'High',     'html' => 'Reads only new bytes appended to the access log since the last check. Counts hits to sensitive paths: <code>wp-login.php</code>, <code>xmlrpc.php</code>, <code>wp-config.php</code>, <code>.env</code>, <code>.git/</code>, <code>.sql</code>, <code>.bak</code>, and shell-injection patterns (<code>eval(</code>, <code>base64_</code>, <code>cmd=</code>).<br><br>Alerts only when count exceeds threshold (default: 25/5 min) AND at most once per hour — no alert floods.' ],
+                            [ 'name' => 'Alert channels',  'rec' => 'Setup',    'html' => 'Alerts fire via <strong>email</strong> (WordPress admin address) and <strong>ntfy.sh</strong> if a topic URL is set under Security Scan → Scheduled Scans. The Threat Monitor shares the same notification infrastructure as the SSH Monitor and PHP Error Alerting — one place to configure, all monitors benefit.' ],
                         ] ); ?>
                     </div>
                     <div class="cs-panel-body">
@@ -4953,9 +5145,9 @@ class CloudScale_DevTools {
                     <span>&#x1F916; <?php esc_html_e( 'AI Settings', 'cloudscale-devtools' ); ?></span>
                     <span class="cs-header-hint"><?php esc_html_e( 'Select a provider and paste your API key to enable AI-powered security scans', 'cloudscale-devtools' ); ?></span>
                     <?php self::render_explain_btn( 'cyber-audit', 'AI Cyber Audit', [
-                        [ 'name' => 'AI Providers',    'rec' => 'Info',        'html' => '<p>Two AI providers are supported. You supply your own API key — stored only in your WordPress database (<code>wp_options</code>) and sent only to the provider&#39;s own API endpoint.</p><p><strong>Anthropic Claude</strong> — recommended for best results.<br>Get your key: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com/settings/keys</a><br>Models: <code>claude-sonnet-4-6</code> (fast) · <code>claude-opus-4-7</code> (most capable)</p><p><strong>Google Gemini</strong> — free tier available.<br>Get your key: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a><br>Models: <code>gemini-2.0-flash</code> (fast, free tier) · <code>gemini-2.5-pro</code> (most capable)</p>' ],
-                        [ 'name' => 'Deep Dive Scan',  'rec' => 'Recommended', 'html' => 'Checks your WordPress core settings, active plugins and themes, user accounts, file permissions, and wp-config.php — then adds live HTTP probes (SSL/TLS, login page, XML-RPC, REST user enumeration, directory listing), DNS checks (SPF, DMARC, DKIM), PHP end-of-life detection, and static AI-powered triage of plugin PHP files for suspicious patterns.' ],
-                        [ 'name' => 'Scheduled Scans', 'rec' => 'Optional',    'html' => 'Run a scan automatically on a daily or weekly schedule. Results are stored in scan history. Enable email and ntfy.sh alerts to receive the AI summary when a scan completes.' ],
+                        [ 'name' => 'AI Providers',    'rec' => 'Info',        'html' => '<p>Two providers supported. Your API key is stored only in <code>wp_options</code> and sent exclusively to that provider\'s API endpoint — never to any third party.</p><p><strong>Anthropic Claude</strong> — best results for security analysis.<br>Get a key: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com/settings/keys</a><br>Models: <code>claude-sonnet-4-6</code> (fast, recommended) · <code>claude-opus-4-7</code> (most capable)</p><p><strong>Google Gemini</strong> — free tier available.<br>Get a key: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a><br>Models: <code>gemini-2.0-flash</code> (fast, free tier) · <code>gemini-2.5-pro</code> (most capable)</p>' ],
+                        [ 'name' => 'Deep Dive Scan',  'rec' => 'Recommended', 'html' => 'Audits WordPress core settings, plugins, themes, user accounts, file permissions, and wp-config.php. Adds live HTTP probes (SSL/TLS strength, login page exposure, XML-RPC, REST user enumeration, directory listing, server headers), DNS email security checks (SPF, DMARC, DKIM), PHP end-of-life detection, and AI-powered static triage of plugin PHP files for suspicious code patterns.' ],
+                        [ 'name' => 'Scheduled Scans', 'rec' => 'Recommended', 'html' => 'Run automatically on a daily or weekly schedule. Results are stored in Scan History. Configure email and ntfy.sh alerts under Scheduled Scans → Notifications to receive the AI summary the moment each scan completes.' ],
                     ] ); ?>
                 </div>
                 <div class="cs-panel-body">

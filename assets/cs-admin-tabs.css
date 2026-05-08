@@ -1282,6 +1282,10 @@
     .cs-bf-chart   { flex: none; width: 100%; min-width: 0; }
 }
 .cs-bf-yaxis {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: #fff;
     align-self: flex-start;
     flex-shrink: 0;
     width: 28px;

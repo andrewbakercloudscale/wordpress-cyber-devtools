@@ -1178,7 +1178,7 @@ class CSDT_Perf_Monitor {
         $c24h = (int) get_transient( 'csdt_devtools_failed_logins_24h' );
         set_transient( 'csdt_devtools_failed_logins_24h', $c24h + 1, DAY_IN_SECONDS );
 
-        // Persistent 14-day rolling log [timestamp, username, ip] — capped at 500 entries.
+        // Persistent 14-day rolling log [timestamp, username, ip, country] — capped at 500 entries.
         $log    = get_option( 'csdt_devtools_bf_log', [] );
         if ( ! is_array( $log ) ) {
             $log = [];
@@ -1188,9 +1188,31 @@ class CSDT_Perf_Monitor {
         if ( count( $log ) >= 500 ) {
             array_shift( $log );
         }
-        $ip  = self::get_client_ip();
-        $log[] = [ time(), sanitize_user( $username, true ), $ip ];
+        $ip      = self::get_client_ip();
+        $country = CSDT_Geo::get_country( $ip );
+        $log[]   = [ time(), sanitize_user( $username, true ), $ip, $country ];
         update_option( 'csdt_devtools_bf_log', $log, false );
+
+        // Per-country 14-day rolling count for the map.
+        if ( $country ) {
+            $cc_stats = get_option( 'csdt_bf_country_stats', [] );
+            if ( ! is_array( $cc_stats ) ) {
+                $cc_stats = [];
+            }
+            $today = gmdate( 'Y-m-d' );
+            if ( ! isset( $cc_stats[ $country ] ) || ! is_array( $cc_stats[ $country ] ) ) {
+                $cc_stats[ $country ] = [];
+            }
+            $cc_stats[ $country ][ $today ] = ( $cc_stats[ $country ][ $today ] ?? 0 ) + 1;
+            $cutoff_day = gmdate( 'Y-m-d', strtotime( '-14 days' ) );
+            foreach ( $cc_stats as $cc => $days ) {
+                foreach ( array_keys( $days ) as $day_key ) {
+                    if ( $day_key < $cutoff_day ) unset( $cc_stats[ $cc ][ $day_key ] );
+                }
+                if ( empty( $cc_stats[ $cc ] ) ) unset( $cc_stats[ $cc ] );
+            }
+            update_option( 'csdt_bf_country_stats', $cc_stats, false );
+        }
 
         // Per-IP failed login index — keyed by IP for future dashboard use.
         if ( $ip ) {

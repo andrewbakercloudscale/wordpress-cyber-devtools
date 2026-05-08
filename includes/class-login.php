@@ -262,6 +262,24 @@ class CSDT_Login {
         foreach ( array_keys( $stats['daily'] ) as $k ) {
             if ( $k < $cutoff ) unset( $stats['daily'][ $k ] );
         }
+
+        // Per-country 7-day rolling count for the map.
+        $country = CSDT_Geo::get_country( $ip );
+        if ( $country ) {
+            if ( ! isset( $stats['country_stats'] ) || ! is_array( $stats['country_stats'] ) ) {
+                $stats['country_stats'] = [];
+            }
+            if ( ! isset( $stats['country_stats'][ $country ] ) || ! is_array( $stats['country_stats'][ $country ] ) ) {
+                $stats['country_stats'][ $country ] = [];
+            }
+            $stats['country_stats'][ $country ][ $today ] = ( $stats['country_stats'][ $country ][ $today ] ?? 0 ) + 1;
+            foreach ( $stats['country_stats'] as $cc => $days ) {
+                foreach ( array_keys( $days ) as $day_key ) {
+                    if ( $day_key < $cutoff ) unset( $stats['country_stats'][ $cc ][ $day_key ] );
+                }
+                if ( empty( $stats['country_stats'][ $cc ] ) ) unset( $stats['country_stats'][ $cc ] );
+            }
+        }
         $stats['last_ts'] = $now;
         $stats['last_ip'] = $ip;
         unset( $stats['hits'] ); // removed: replaced by ip_stats
@@ -273,6 +291,9 @@ class CSDT_Login {
         }
         $stats['ip_stats'][ $ip ]['last_ts']          = $now;
         $stats['ip_stats'][ $ip ]['days'][ $today ]   = ( $stats['ip_stats'][ $ip ]['days'][ $today ] ?? 0 ) + 1;
+        if ( $country ) {
+            $stats['ip_stats'][ $ip ]['country'] = $country;
+        }
         foreach ( $stats['ip_stats'] as $ip_key => &$ip_data ) {
             foreach ( array_keys( $ip_data['days'] ) as $day_key ) {
                 if ( $day_key < $cutoff ) unset( $ip_data['days'][ $day_key ] );
@@ -1175,7 +1196,21 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $log         = array_values( array_filter( $log, fn( $e ) => isset( $e[0] ) && $e[0] >= $cutoff ) );
         $today_start = mktime( 0, 0, 0 );
         $today_count = count( array_filter( $log, fn( $e ) => $e[0] >= $today_start ) );
-        wp_send_json_success( [ 'log' => $log, 'now' => time(), 'today_count' => $today_count ] );
+
+        // Aggregate per-country failed login counts for the map.
+        $cc_stats_raw = get_option( 'csdt_bf_country_stats', [] );
+        $countries_bf = [];
+        if ( is_array( $cc_stats_raw ) ) {
+            foreach ( $cc_stats_raw as $cc => $days ) {
+                if ( is_array( $days ) ) {
+                    $countries_bf[ $cc ] = array_sum( $days );
+                }
+            }
+        }
+
+        $blocklist   = get_option( 'csdt_ip_blocklist', [] );
+        $blocked_ips = is_array( $blocklist ) ? array_keys( $blocklist ) : [];
+        wp_send_json_success( [ 'log' => $log, 'now' => time(), 'today_count' => $today_count, 'countries_bf' => $countries_bf, 'blocked_ips' => $blocked_ips ] );
     }
 
     /**
