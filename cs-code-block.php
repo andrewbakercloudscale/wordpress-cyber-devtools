@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.754
+ * Version: 1.9.755
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.754';
+    const VERSION      = '1.9.755';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -827,7 +827,7 @@ class CloudScale_DevTools {
     private static function get_dashboard_widget_css(): string {
         return
             /* Dark header band — rendered as HTML inside the widget body */
-            '#csdt_security_summary .cs-dw-header{background:linear-gradient(135deg,#0f1f2e 0%,#0d3349 60%,#0f1f2e 100%);margin:-1px -12px 14px;padding:12px 14px 10px;border-bottom:1px solid rgba(15,184,224,0.25);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}' .
+            '#csdt_security_summary .cs-dw-header{background:linear-gradient(135deg,#1a0a02 0%,#5c2500 60%,#1a0a02 100%);margin:-1px -12px 14px;padding:12px 14px 10px;border-bottom:1px solid rgba(200,110,30,0.35);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}' .
             '#csdt_security_summary .cs-dw-header-left{display:flex;align-items:center;gap:8px}' .
             '#csdt_security_summary .cs-dw-header-title{color:#e2e8f0;font-size:13px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;line-height:1.2}' .
             '#csdt_security_summary .cs-dw-header-sub{color:#94a3b8;font-size:10px;margin-top:2px;line-height:1.3}' .
