@@ -55,7 +55,7 @@ async function notify(env, recovered, downSecs) {
   return fetch(env.NTFY_URL, {
     method: 'POST',
     headers: {
-      Title:    (recovered ? 'Site Recovered: ' : 'Site Down: ') + env.SITE_URL,
+      Title:    (recovered ? 'CF: Recovered — ' : 'CF: Site Down — ') + env.SITE_URL,
       Priority: recovered ? 'default' : 'urgent',
       Tags:     recovered ? 'white_check_mark' : 'rotating_light',
     },

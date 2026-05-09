@@ -851,7 +851,7 @@ bantime  = 86400</pre>
         $site        = get_bloginfo( 'name' ) ?: home_url();
         $admin_url   = admin_url( 'tools.php?page=' . CloudScale_DevTools::TOOLS_SLUG . '&tab=security' );
 
-        $subject = sprintf( '[%s] Security Scan Complete — Score: %s/100 (%s)', $site, $score, $label );
+        $subject = sprintf( 'CSDT: Scan %s/100 %s — %s', $score, $label, $site );
         $body    = sprintf(
             "%s completed for %s\n\nScore: %s/100 (%s)\nCritical: %d | High: %d\n\n%s\n\nView full report: %s",
             $type_label, $site, $score, $label, $critical, $high, $summary, $admin_url

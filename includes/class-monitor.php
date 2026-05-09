@@ -198,7 +198,7 @@ class CSDT_Monitor {
         // Build alert message
         $site      = get_bloginfo( 'name' ) ?: home_url();
         $admin_url = admin_url( 'tools.php?page=' . CloudScale_DevTools::TOOLS_SLUG . '&tab=security' );
-        $subject   = sprintf( '[%s] 🚨 SSH Brute-Force Attack — %d failures in 60 seconds', $site, $count );
+        $subject   = sprintf( 'CSDT: 🚨 SSH Brute-Force — %d failures (%s)', $count, $site );
         $body      = sprintf(
             "SSH brute-force attack detected on %s\n\n%d failed SSH login attempts in the last 60 seconds.\n\nRecent failures:\n%s\n\nInstall fail2ban immediately to block attacking IPs automatically.\nQuick Fixes: %s",
             $site,
@@ -326,11 +326,11 @@ class CSDT_Monitor {
         $excerpt   = implode( "\n", array_slice( $all_new, 0, 5 ) );
 
         if ( $is_fatal ) {
-            $subject = sprintf( '[%s] PHP Fatal Error detected', $site );
+            $subject = sprintf( 'CSDT: PHP Fatal — %s', $site );
             $priority = 'urgent';
             $tags     = 'rotating_light,computer';
         } else {
-            $subject = sprintf( '[%s] %d new PHP error%s detected', $site, count( $new_lines ), count( $new_lines ) === 1 ? '' : 's' );
+            $subject = sprintf( 'CSDT: %d PHP error%s — %s', count( $new_lines ), count( $new_lines ) === 1 ? '' : 's', $site );
             $priority = 'high';
             $tags     = 'warning,computer';
         }

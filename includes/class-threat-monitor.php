@@ -79,7 +79,7 @@ class CSDT_Threat_Monitor {
             array_keys( $modified )
         ) );
 
-        $subject = sprintf( '[%s] ⚠️ Core file modification detected (%d file%s)', $site, $count, $count === 1 ? '' : 's' );
+        $subject = sprintf( 'CSDT: ⚠️ Core file changed (%d) — %s', $count, $site );
         $body    = sprintf(
             "WordPress core file modification detected on %s.\n\n%d file%s changed:\n%s\n\nIf you did not update WordPress or install a plugin, investigate immediately — this may indicate a compromise.\n\nSecurity dashboard: %s",
             home_url(), $count, $count === 1 ? '' : 's', $file_list, $admin_url
@@ -161,7 +161,7 @@ class CSDT_Threat_Monitor {
 
         $site      = get_bloginfo( 'name' ) ?: home_url();
         $admin_url = admin_url( 'tools.php?page=' . CloudScale_DevTools::TOOLS_SLUG . '&tab=security' );
-        $subject   = sprintf( '[%s] 🔍 Probe attack — %d requests to sensitive paths', $site, $count );
+        $subject   = sprintf( 'CSDT: 🔍 Probe — %d sensitive reqs (%s)', $count, $site );
         $body      = sprintf(
             "%d requests to sensitive paths (wp-login, xmlrpc, .env, .git, etc.) detected in the last 5 minutes on %s.\n\nThis indicates active scanning or an attack. Consider blocking the source IP via fail2ban or Cloudflare.\n\nSecurity dashboard: %s",
             $count, home_url(), $admin_url
@@ -221,7 +221,7 @@ class CSDT_Threat_Monitor {
 
         $site      = wp_specialchars_decode( get_bloginfo( 'name' ) ?: home_url(), ENT_QUOTES );
         $admin_url = admin_url( 'users.php' );
-        $subject   = sprintf( '[%s] 🚨 New admin: %s — via %s%s', $site, $user->user_login, $method, $test_flag );
+        $subject   = sprintf( 'CSDT: 🚨 New admin %s%s (%s)', $user->user_login, $test_flag, $site );
         $body      = sprintf(
             "A new administrator account was created on %s.\n\nUsername: %s\nEmail: %s\nCreated via: %s\nRegistered: %s\n\n%sIf you did not create this account, revoke it immediately.\n\nManage users: %s",
             home_url(), $user->user_login, $user->user_email, $method, $user->user_registered,
@@ -329,7 +329,7 @@ class CSDT_Threat_Monitor {
         $notif_sent   = false;
         if ( $is_locked && $ntfy_url ) {
             $site    = wp_specialchars_decode( get_bloginfo( 'name' ) ?: home_url(), ENT_QUOTES );
-            $subject = sprintf( '[%s] ✅ BF Protection TEST passed — lockout works', $site );
+            $subject = sprintf( 'CSDT: ✅ BF test passed (%s)', $site );
             $body    = sprintf(
                 "Self-test result: PASS\n\nBrute-force lockout fired correctly after %d failed attempts.\nTest account: %s\nLockout duration: %d minutes\n\nThis is a self-test message — no action needed.",
                 $max_attempts, $test_user, $lockout_mins
