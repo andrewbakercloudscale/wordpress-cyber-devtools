@@ -3,9 +3,10 @@
  *
  * Verifies:
  *  1. The "Run Site Audit" button is visible at the top of the CSP panel.
- *  2. Clicking it clears the violation log, opens tabs, and eventually shows results.
- *  3. Results panel appears and contains per-page rows.
- *  4. Audit does NOT immediately flip to "all clean" — it waits for real pages.
+ *  2. Clicking it does NOT open new windows or navigate away.
+ *  3. It calls csdt_devtools_csp_violations_get via AJAX.
+ *  4. Results panel appears and shows meaningful content.
+ *  5. No JS errors are thrown during the audit.
  *
  * Run:  npx playwright test tests/csp-site-audit.spec.js --headed
  */
@@ -28,7 +29,7 @@ if (!SECRET || !ROLE || !SESSION_URL) {
     throw new Error('CSDT_TEST_SECRET, CSDT_TEST_ROLE, and CSDT_TEST_SESSION_URL must be set in .env.test');
 }
 
-test.setTimeout(120_000);
+test.setTimeout(60_000);
 
 async function getAdminSession() {
     const ctx  = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
@@ -46,7 +47,7 @@ async function injectCookies(ctx, sess) {
     ]);
 }
 
-test('CSP audit button is visible at top of CSP panel', async ({ browser }) => {
+test('CSP audit button is visible at top of panel', async ({ browser }) => {
     const sess = await getAdminSession();
     const ctx  = await browser.newContext({ ignoreHTTPSErrors: true });
     await injectCookies(ctx, sess);
@@ -57,19 +58,19 @@ test('CSP audit button is visible at top of CSP panel', async ({ browser }) => {
     const auditBtn = page.locator('#cs-csp-audit-btn');
     await expect(auditBtn, 'Audit button must be visible').toBeVisible({ timeout: 10000 });
 
-    // Button should be near the top of the panel — before the Enable CSP checkbox
-    const btnBox     = await auditBtn.boundingBox();
-    const cspToggle  = page.locator('#cs-csp-enabled');
-    const toggleBox  = await cspToggle.boundingBox().catch(() => null);
+    // Button should appear before the Enable CSP checkbox (i.e. at the top of the panel).
+    const btnBox    = await auditBtn.boundingBox();
+    const cspToggle = page.locator('#cs-csp-enabled');
+    const toggleBox = await cspToggle.boundingBox().catch(() => null);
     if (btnBox && toggleBox) {
-        expect(btnBox.y, 'Audit button should appear above Enable CSP toggle').toBeLessThan(toggleBox.y);
+        expect(btnBox.y, 'Audit button should be above the CSP enable checkbox').toBeLessThan(toggleBox.y);
     }
 
-    console.log('✅ Audit button is visible and positioned above the CSP settings.');
+    console.log('✅ Audit button visible at top of panel.');
     await ctx.close();
 });
 
-test('CSP audit clears violation log before starting', async ({ browser }) => {
+test('CSP audit does NOT open new windows or navigate away', async ({ browser }) => {
     const sess = await getAdminSession();
     const ctx  = await browser.newContext({ ignoreHTTPSErrors: true });
     await injectCookies(ctx, sess);
@@ -77,93 +78,80 @@ test('CSP audit clears violation log before starting', async ({ browser }) => {
 
     await page.goto(HEADERS_TAB, { waitUntil: 'domcontentloaded', timeout: 20000 });
 
-    // Intercept AJAX — verify clear is called before violations_get
-    const actions = [];
+    // Track any new pages opened.
+    const newPages = [];
+    ctx.on('page', p => newPages.push(p.url()));
+
+    // Track navigation on the current page.
+    const originalUrl = page.url();
+    let navigatedAway = false;
+    page.on('framenavigated', frame => {
+        if (frame === page.mainFrame() && frame.url() !== originalUrl) {
+            navigatedAway = true;
+        }
+    });
+
+    await page.locator('#cs-csp-audit-btn').click();
+
+    // Give it 3 seconds to do anything async.
+    await page.waitForTimeout(3000);
+
+    expect(navigatedAway, 'Page must NOT navigate away when audit button is clicked').toBe(false);
+    expect(newPages.length, 'Audit must NOT open new windows or tabs').toBe(0);
+    expect(page.url(), 'URL must remain on headers tab').toContain('tab=headers');
+
+    console.log('✅ No navigation or new windows — audit stays on page.');
+    await ctx.close();
+});
+
+test('CSP audit calls violations_get and shows results', async ({ browser }) => {
+    const sess = await getAdminSession();
+    const ctx  = await browser.newContext({ ignoreHTTPSErrors: true });
+    await injectCookies(ctx, sess);
+    const page = await ctx.newPage();
+
+    await page.goto(HEADERS_TAB, { waitUntil: 'domcontentloaded', timeout: 20000 });
+
+    // Intercept AJAX to verify violations_get is called.
+    let violationsGetCalled = false;
     page.on('request', req => {
         if (req.url().includes('admin-ajax') && req.method() === 'POST') {
             const body = req.postData() || '';
-            const match = body.match(/action=([^&]+)/);
-            if (match && match[1].includes('csp_violation')) {
-                actions.push(match[1]);
-            }
+            if (body.includes('csp_violations_get')) violationsGetCalled = true;
         }
     });
 
-    // Click the audit button — but intercept window.open so tabs don't actually open
-    await page.evaluate(() => {
-        window.open = function(url) {
-            console.log('[test] window.open intercepted:', url);
-            return { close: function(){} };
-        };
-    });
+    // Collect JS errors.
+    const jsErrors = [];
+    page.on('pageerror', e => jsErrors.push(e.message));
 
     await page.locator('#cs-csp-audit-btn').click();
 
-    // Wait briefly for AJAX calls to fire
-    await page.waitForTimeout(2000);
+    // Wait for button to be re-enabled — that's the signal that the AJAX completed.
+    await expect(page.locator('#cs-csp-audit-btn'), 'Button must be re-enabled after completion').toBeEnabled({ timeout: 15000 });
 
-    const clearIdx = actions.indexOf('csdt_devtools_csp_violations_clear');
-    const getIdx   = actions.indexOf('csdt_devtools_csp_violations_get');
-
-    expect(clearIdx, 'violations_clear must be called').toBeGreaterThanOrEqual(0);
-    console.log('AJAX sequence:', actions);
-
-    // If get was called too, clear must come first
-    if (getIdx >= 0) {
-        expect(clearIdx, 'clear must come before get').toBeLessThan(getIdx);
-    }
-
-    console.log('✅ Violation log is cleared before audit starts.');
-    await ctx.close();
-});
-
-test('CSP audit shows results panel after completion', async ({ browser }) => {
-    const sess = await getAdminSession();
-    const ctx  = await browser.newContext({ ignoreHTTPSErrors: true });
-    await injectCookies(ctx, sess);
-    const page = await ctx.newPage();
-
-    await page.goto(HEADERS_TAB, { waitUntil: 'domcontentloaded', timeout: 20000 });
-
-    // Intercept window.open (no real tabs) and fast-forward the wait by mocking violations_get
-    await page.route('**/wp-admin/admin-ajax.php', async (route, request) => {
-        const body = request.postData() || '';
-        if (body.includes('csp_violations_get')) {
-            // Return empty violations so results render immediately
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify({ success: true, data: [] }),
-            });
-        } else if (body.includes('csp_violations_clear')) {
-            await route.fulfill({
-                status: 200, contentType: 'application/json',
-                body: JSON.stringify({ success: true }),
-            });
-        } else {
-            await route.continue();
-        }
-    });
-
-    await page.evaluate(() => {
-        // Shorten the dwell wait to near-zero for testing
-        window.open = function() { return { close: function(){} }; };
-    });
-
-    await page.locator('#cs-csp-audit-btn').click();
-
-    // Results panel should eventually appear (wait up to 60s for real, 10s with mock)
+    // Results wrap should now be visible.
     const auditWrap = page.locator('#cs-csp-audit-wrap');
-    await expect(auditWrap, 'Audit results panel must appear').toBeVisible({ timeout: 60000 });
+    await expect(auditWrap, 'Results panel must appear').toBeVisible({ timeout: 5000 });
 
-    // Status should update from "Running" to "Done"
-    await expect(page.locator('#cs-csp-audit-status'), 'Status should show Done').toContainText('Done', { timeout: 60000 });
+    // Status should have updated.
+    const status = page.locator('#cs-csp-audit-status');
+    await expect(status, 'Status must show something').not.toBeEmpty({ timeout: 5000 });
 
-    // Body should contain at least the clean banner or violation warning
+    // Body must have content and NOT show the loading spinner.
     const bodyText = await page.locator('#cs-csp-audit-body').textContent({ timeout: 5000 });
-    expect(bodyText.length, 'Audit body should have content').toBeGreaterThan(10);
-    expect(bodyText, 'Should not be blank after completion').not.toMatch(/^⏳/);
+    expect(bodyText.length, 'Audit body must have content').toBeGreaterThan(10);
+    expect(bodyText, 'Must not show loading spinner after completion').not.toMatch(/^⏳/);
 
-    console.log('✅ Audit results panel rendered. Body preview:', bodyText.slice(0, 120));
+    // Button already checked above.
+
+    console.log('violationsGetCalled:', violationsGetCalled);
+    console.log('Status:', await status.textContent());
+    console.log('Body preview:', bodyText.slice(0, 150));
+    console.log('JS errors:', jsErrors);
+
+    expect(violationsGetCalled, 'Must call csdt_devtools_csp_violations_get').toBe(true);
+    expect(jsErrors, 'No JS errors during audit').toHaveLength(0);
+
     await ctx.close();
 });

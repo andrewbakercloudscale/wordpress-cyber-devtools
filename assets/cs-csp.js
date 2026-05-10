@@ -1055,148 +1055,96 @@
         var auditStatus = document.getElementById('cs-csp-audit-status');
         if (!auditWrap || !auditBody) return;
 
-        var siteUrl  = (window.csdtCspI18n && window.csdtCspI18n.siteUrl) || (window.location.origin + '/');
-        var ajaxUrl  = (window.csdtVulnScan && window.csdtVulnScan.ajaxUrl) || (window.ajaxurl || '');
-        var nonce    = (window.csdtVulnScan && window.csdtVulnScan.nonce) || '';
-        var DWELL_MS = 7000;  // time for each page to fully load and fire violations
+        var ajaxUrl = (window.csdtVulnScan && window.csdtVulnScan.ajaxUrl) || (window.ajaxurl || '');
+        var nonce   = (window.csdtVulnScan && window.csdtVulnScan.nonce) || '';
 
-        // Helper: post to admin-ajax.php
-        function wpAjax(action, extra) {
+        function wpAjax(action) {
             var fd = new FormData();
             fd.append('action', action);
             fd.append('nonce',  nonce);
-            Object.keys(extra || {}).forEach(function(k) { fd.append(k, extra[k]); });
             return fetch(ajaxUrl, { method: 'POST', body: fd }).then(function(r) { return r.json(); });
         }
 
-        // Also probe the most recent article — fetch via REST.
-        var pagesPromise = fetch(siteUrl.replace(/\/$/, '') + '/wp-json/wp/v2/posts?per_page=1&status=publish&_fields=link', { credentials: 'omit' })
-            .then(function(r) { return r.json(); })
-            .then(function(posts) {
-                var pages = AUDIT_PAGES.slice();
-                if (posts && posts[0] && posts[0].link) {
-                    pages.push({ path: '', label: 'Latest article', full: posts[0].link });
-                }
-                return pages;
-            })
-            .catch(function() { return AUDIT_PAGES.slice(); });
-
         auditWrap.style.display = '';
-        auditBody.innerHTML = '<div style="color:#64748b;font-size:12px;padding:8px 0;">⏳ Clearing violation log and opening pages…<br><span style="font-size:11px;color:#94a3b8;">Each page is opened in a new tab and given ' + (DWELL_MS/1000) + 's to run its scripts. Do not close the tabs.</span></div>';
-        if (auditStatus) auditStatus.textContent = 'Running…';
-        if (auditBtn) { auditBtn.disabled = true; auditBtn.textContent = '⏳ Auditing…'; }
+        auditBody.innerHTML = '<div style="color:#64748b;font-size:12px;padding:8px 0;">⏳ Reading violation log…</div>';
+        if (auditStatus) auditStatus.textContent = 'Reading log…';
+        if (auditBtn) { auditBtn.disabled = true; auditBtn.textContent = '⏳ Loading…'; }
 
-        // Step 1: clear existing violation log so only this audit's violations appear.
-        wpAjax('csdt_devtools_csp_violations_clear', {}).catch(function(){}).then(function() {
-            pagesPromise.then(function(pages) {
-                var total = pages.length;
-                var popsOpened = 0;
-
-                // Step 2: open each page in a real tab (real scripts, real CSP enforcement).
-                // Stagger by 1s to avoid browser throttling.
-                pages.forEach(function(pg, idx) {
-                    var url = pg.full || (siteUrl.replace(/\/$/, '') + pg.path);
-                    setTimeout(function() {
-                        var w = window.open(url, '_blank', 'noopener');
-                        popsOpened++;
-                        if (auditStatus) auditStatus.textContent = 'Opened ' + popsOpened + '/' + total + ' pages — waiting for scripts to run…';
-                        // Auto-close after dwell time.
-                        if (w) { setTimeout(function() { try { w.close(); } catch(e){} }, DWELL_MS); }
-                    }, idx * 1000);
-                });
-
-                // Step 3: after all pages have had time to run, read the violation log.
-                var waitMs = total * 1000 + DWELL_MS + 1000;
-                if (auditStatus) auditStatus.textContent = 'Waiting for violations to be reported…';
-                setTimeout(function() {
-                    wpAjax('csdt_devtools_csp_violations_get', {})
-                        .then(function(resp) {
-                            var violations = (resp.success && Array.isArray(resp.data)) ? resp.data : [];
-                            renderResults(pages, violations);
-                        })
-                        .catch(function() { renderResults(pages, []); });
-                }, waitMs);
-            });
-        });
-
-        function renderResults(pages, violations) {
+        wpAjax('csdt_devtools_csp_violations_get')
+            .then(function(resp) {
                 if (auditBtn) { auditBtn.disabled = false; auditBtn.textContent = '🔍 Run Site Audit'; }
-                var total = pages.length;
-                if (auditStatus) auditStatus.textContent = 'Done — ' + total + ' page' + (total !== 1 ? 's' : '') + ' checked';
 
-                // Group violations by page URL.
-                var byUrl = {};
-                violations.forEach(function(v) {
-                    var pageUrl = v.page || '';
-                    if (!byUrl[pageUrl]) byUrl[pageUrl] = [];
-                    if (!isExpected(v.blocked_uri || '')) {
-                        byUrl[pageUrl].push({
-                            directive: v.effective_directive || v.directive || '',
-                            blocked:   v.blocked_uri || '',
-                            source:    v.source_file ? v.source_file.split('/').pop() + ':' + (v.line_number || '') : '',
-                        });
-                    }
+                var violations = (resp.success && Array.isArray(resp.data)) ? resp.data : [];
+
+                // Filter out expected/known third-party services.
+                var unexpected = violations.filter(function(v) {
+                    return !isExpected(v.blocked_uri || '');
                 });
 
-                // Per-page results keyed by full URL.
-                var pageResults = pages.map(function(pg) {
-                    var url  = pg.full || (siteUrl.replace(/\/$/, '') + pg.path);
-                    var viols = [];
-                    Object.keys(byUrl).forEach(function(key) {
-                        if (key === url || key.indexOf(url.replace(/\/$/, '')) === 0) {
-                            viols = viols.concat(byUrl[key]);
-                        }
-                    });
-                    return { label: pg.label, url: url, violations: viols };
+                // Group unexpected by page.
+                var byPage = {};
+                unexpected.forEach(function(v) {
+                    var pg = v.page || 'Unknown page';
+                    if (!byPage[pg]) byPage[pg] = [];
+                    byPage[pg].push(v);
                 });
 
-                // Also include violations for URLs not matched to a page (catch-all).
-                var allMatchedUrls = {};
-                pageResults.forEach(function(r) { allMatchedUrls[r.url] = true; });
-                var extra = [];
-                Object.keys(byUrl).forEach(function(key) {
-                    if (!allMatchedUrls[key]) { extra = extra.concat(byUrl[key]); }
-                });
-
-                var anyUnexpected = pageResults.some(function(r) { return r.violations.length > 0; }) || extra.length > 0;
+                var pageCount = Object.keys(byPage).length;
+                if (auditStatus) auditStatus.textContent = violations.length + ' total violations · ' + unexpected.length + ' unexpected';
 
                 var html = '';
-                pageResults.forEach(function(r) {
-                    var icon   = r.violations.length === 0 ? '✅' : '⚠️';
-                    var colour = r.violations.length === 0 ? '#15803d' : '#92400e';
-                    var bg     = r.violations.length === 0 ? '#f0fdf4' : '#fffbeb';
-                    var bd     = r.violations.length === 0 ? '#86efac' : '#fcd34d';
 
-                    html += '<div style="background:' + bg + ';border:1px solid ' + bd + ';border-radius:6px;padding:8px 12px;margin-bottom:8px;">';
-                    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
-                    html += '<span style="font-weight:700;color:' + colour + ';">' + icon + ' ' + escH(r.label) + '</span>';
-                    html += '<a href="' + escH(r.url) + '" target="_blank" rel="noopener" style="font-size:10px;color:#6366f1;text-decoration:none;">' + escH(r.url.replace(/^https?:\/\/[^/]+/, '').slice(0, 60) || '/') + ' ↗</a>';
-                    html += '</div>';
-                    if (r.violations.length > 0) {
-                        html += '<table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px;">';
-                        html += '<tr style="background:rgba(0,0,0,.04);"><th style="text-align:left;padding:3px 6px;color:#6b7280;">Directive</th><th style="text-align:left;padding:3px 6px;color:#6b7280;">Blocked resource</th><th style="text-align:left;padding:3px 6px;color:#6b7280;">Source</th></tr>';
-                        r.violations.forEach(function(v) {
-                            html += '<tr style="border-top:1px solid rgba(0,0,0,.06);">';
-                            html += '<td style="padding:3px 6px;font-weight:600;color:#b45309;">' + escH(v.directive) + '</td>';
-                            html += '<td style="padding:3px 6px;word-break:break-all;color:#374151;">' + escH(v.blocked) + '</td>';
-                            html += '<td style="padding:3px 6px;color:#94a3b8;">' + escH(v.source) + '</td>';
-                            html += '</tr>';
-                        });
-                        html += '</table>';
+                if (unexpected.length === 0) {
+                    if (violations.length === 0) {
+                        html = '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:12px 14px;font-size:13px;color:#0369a1;margin-bottom:8px;">'
+                            + '<strong>ℹ️ Violation log is empty.</strong><br>'
+                            + '<span style="font-size:12px;">The CSP violation log is populated automatically as real visitors browse your site with <strong>Report-Only</strong> mode active. '
+                            + 'Browse your site normally, then come back and click Run Site Audit to see results.</span>'
+                            + '</div>';
+                    } else {
+                        html = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;font-weight:700;color:#15803d;margin-bottom:8px;">'
+                            + '✅ ' + violations.length + ' violation' + (violations.length !== 1 ? 's' : '') + ' logged — all from known third-party services. No unexpected violations.</div>';
                     }
-                    html += '</div>';
-                });
-
-                if (!anyUnexpected) {
-                    html = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;font-weight:700;color:#15803d;margin-bottom:10px;">✅ All ' + total + ' pages clean — no unexpected CSP violations detected.</div>' + html;
                 } else {
                     html = '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:10px;">'
-                        + '<strong>⚠️ CSP violations found.</strong> Add the affected services to your allowlist above, then save and re-run the audit.'
-                        + '</div>' + html;
+                        + '<strong>⚠️ ' + unexpected.length + ' unexpected CSP violation' + (unexpected.length !== 1 ? 's' : '') + ' on ' + pageCount + ' page' + (pageCount !== 1 ? 's' : '') + '.</strong> '
+                        + 'Add the affected services to your allowlist above, save, then browse those pages again.'
+                        + '</div>';
                 }
-                html += '<p style="font-size:10px;color:#94a3b8;margin:8px 0 0;">Known third-party services (Google, Cloudflare, YouTube, etc.) are filtered from results. Only unexpected violations are shown.</p>';
+
+                // Render per-page sections for unexpected violations.
+                Object.keys(byPage).forEach(function(pg) {
+                    var viols = byPage[pg];
+                    var shortPg = pg.replace(/^https?:\/\/[^/]+/, '').slice(0, 60) || '/';
+                    html += '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;margin-bottom:8px;">';
+                    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">';
+                    html += '<span style="font-weight:700;color:#92400e;">⚠️ ' + escH(shortPg) + '</span>';
+                    html += '<a href="' + escH(pg) + '" target="_blank" rel="noopener" style="font-size:10px;color:#6366f1;text-decoration:none;">Open ↗</a>';
+                    html += '</div>';
+                    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
+                    html += '<tr style="background:rgba(0,0,0,.04);"><th style="text-align:left;padding:3px 6px;color:#6b7280;">Directive</th><th style="text-align:left;padding:3px 6px;color:#6b7280;">Blocked resource</th></tr>';
+                    viols.forEach(function(v) {
+                        html += '<tr style="border-top:1px solid rgba(0,0,0,.06);">';
+                        html += '<td style="padding:3px 6px;font-weight:600;color:#b45309;white-space:nowrap;">' + escH(v.effective_directive || v.directive || '') + '</td>';
+                        html += '<td style="padding:3px 6px;word-break:break-all;color:#374151;">' + escH(v.blocked_uri || '') + '</td>';
+                        html += '</tr>';
+                    });
+                    html += '</table></div>';
+                });
+
+                // Also show a summary of filtered-out expected violations.
+                var expected = violations.filter(function(v) { return isExpected(v.blocked_uri || ''); });
+                if (expected.length > 0) {
+                    html += '<p style="font-size:10px;color:#94a3b8;margin:8px 0 0;">' + expected.length + ' violation' + (expected.length !== 1 ? 's' : '') + ' from known third-party services (Google, Cloudflare, YouTube etc.) filtered out.</p>';
+                }
+
                 auditBody.innerHTML = html;
-        }
+            })
+            .catch(function(err) {
+                if (auditBtn) { auditBtn.disabled = false; auditBtn.textContent = '🔍 Run Site Audit'; }
+                if (auditStatus) auditStatus.textContent = 'Error';
+                auditBody.innerHTML = '<div style="color:#dc2626;font-size:12px;padding:8px 0;">✗ Failed to load violation log: ' + escH(err && err.message || 'Network error') + '</div>';
+            });
     }
 
     // Wire up the button — use event delegation so it works after tab-router injection.

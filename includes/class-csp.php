@@ -282,7 +282,7 @@ class CSDT_CSP {
             <div style="background:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 100%);border-radius:8px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
                 <div>
                     <div style="font-size:13px;font-weight:700;color:#fff;">🔍 <?php esc_html_e( 'CSP Site Audit', 'cloudscale-devtools' ); ?></div>
-                    <div style="font-size:11px;color:#93c5fd;margin-top:2px;"><?php esc_html_e( 'Opens each page in a new tab, lets scripts run, then reads the violation log. Takes ~30 seconds.', 'cloudscale-devtools' ); ?></div>
+                    <div style="font-size:11px;color:#93c5fd;margin-top:2px;"><?php esc_html_e( 'Reads the violation log populated by real visitor traffic in Report-Only mode. Enable CSP + Report-Only, browse your site, then click here.', 'cloudscale-devtools' ); ?></div>
                 </div>
                 <button type="button" id="cs-csp-audit-btn" style="background:#fff;color:#1e40af;font-size:13px;font-weight:700;padding:9px 20px;border:none;border-radius:7px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2);">
                     🔍 <?php esc_html_e( 'Run Site Audit', 'cloudscale-devtools' ); ?>
