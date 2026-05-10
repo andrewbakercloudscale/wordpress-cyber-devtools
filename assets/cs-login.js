@@ -63,10 +63,12 @@
             force_admins:     document.getElementById( 'cs-2fa-force' )?.checked ? '1' : '0',
             grace_logins:     document.getElementById( 'cs-2fa-grace-logins' )?.value || '0',
             session_duration: document.getElementById( 'cs-session-duration' )?.value || 'default',
-            bf_enabled:       document.getElementById( 'cs-bf-enabled' )?.checked ? '1' : '0',
-            bf_attempts:      document.getElementById( 'cs-bf-attempts' )?.value || '5',
-            bf_lockout:       document.getElementById( 'cs-bf-lockout' )?.value || '5',
-            bf_enum_protect:  document.getElementById( 'cs-bf-enum-protect' )?.checked ? '1' : '0',
+            bf_enabled:              document.getElementById( 'cs-bf-enabled' )?.checked ? '1' : '0',
+            bf_attempts:             document.getElementById( 'cs-bf-attempts' )?.value || '5',
+            bf_lockout:              document.getElementById( 'cs-bf-lockout' )?.value || '5',
+            bf_enum_protect:         document.getElementById( 'cs-bf-enum-protect' )?.checked ? '1' : '0',
+            ntfy_login_valid_user:   document.getElementById( 'cs-ntfy-login-valid' )?.checked ? '1' : '0',
+            ntfy_login_invalid_user: document.getElementById( 'cs-ntfy-login-invalid' )?.checked ? '1' : '0',
         };
     }
 

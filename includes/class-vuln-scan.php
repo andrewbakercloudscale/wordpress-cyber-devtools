@@ -24,12 +24,12 @@ class CSDT_Vuln_Scan {
         $deep_model      = isset( $_POST['deep_model'] )  ? sanitize_text_field( wp_unslash( $_POST['deep_model'] ) )   : '_auto_deep';
         $prompt          = isset( $_POST['prompt'] )      ? sanitize_textarea_field( wp_unslash( $_POST['prompt'] ) )   : '';
 
-        update_option( 'csdt_devtools_ai_provider',    $provider,   false );
-        if ( $clean_key     !== '' ) { update_option( 'csdt_devtools_anthropic_key', $clean_key,    false ); }
-        if ( $clean_gemini  !== '' ) { update_option( 'csdt_devtools_gemini_key',    $clean_gemini, false ); }
-        update_option( 'csdt_devtools_security_model',  $model,      false );
-        update_option( 'csdt_devtools_deep_scan_model', $deep_model, false );
-        update_option( 'csdt_devtools_security_prompt', $prompt,     false );
+        update_option( 'csdt_devtools_ai_provider',    $provider,   true );
+        if ( $clean_key     !== '' ) { update_option( 'csdt_devtools_anthropic_key', $clean_key,    true ); }
+        if ( $clean_gemini  !== '' ) { update_option( 'csdt_devtools_gemini_key',    $clean_gemini, true ); }
+        update_option( 'csdt_devtools_security_model',  $model,      true );
+        update_option( 'csdt_devtools_deep_scan_model', $deep_model, true );
+        update_option( 'csdt_devtools_security_prompt', $prompt,     true );
         delete_option( 'csdt_security_scan_v2' );
         delete_option( 'csdt_deep_scan_v1' );
 

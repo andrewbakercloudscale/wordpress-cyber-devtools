@@ -260,11 +260,11 @@ class CSDT_Threat_Monitor {
         $probe     = ( $_POST['probe']            ?? '0' ) === '1' ? '1' : '0';
         $threshold = max( 5, min( 500, (int) ( $_POST['probe_threshold'] ?? 25 ) ) );
 
-        update_option( 'csdt_threat_monitor_enabled',          $enabled,            false );
-        update_option( 'csdt_threat_file_integrity_enabled',   $file_int,           false );
-        update_option( 'csdt_threat_new_admin_enabled',        $new_admin,          false );
-        update_option( 'csdt_threat_probe_enabled',            $probe,              false );
-        update_option( 'csdt_threat_probe_threshold',          (string) $threshold, false );
+        update_option( 'csdt_threat_monitor_enabled',          $enabled,            true );
+        update_option( 'csdt_threat_file_integrity_enabled',   $file_int,           true );
+        update_option( 'csdt_threat_new_admin_enabled',        $new_admin,          true );
+        update_option( 'csdt_threat_probe_enabled',            $probe,              true );
+        update_option( 'csdt_threat_probe_threshold',          (string) $threshold, true );
 
         if ( $enabled === '1' ) {
             if ( ! wp_next_scheduled( 'csdt_threat_monitor' ) ) {

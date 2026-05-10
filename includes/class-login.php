@@ -1225,6 +1225,15 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
             wp_send_json_error( 'Unauthorized', 403 );
         }
 
+        // Snapshot current security state for downgrade detection.
+        $old_state = [
+            'hide_enabled' => (string) get_option( 'csdt_devtools_login_hide_enabled', '0' ),
+            'bf_enabled'   => (string) get_option( 'csdt_devtools_brute_force_enabled', '1' ),
+            'force_2fa'    => (string) get_option( 'csdt_devtools_2fa_force_admins', '0' ),
+            'tfa_method'   => (string) get_option( 'csdt_devtools_2fa_method', 'off' ),
+            'enum_protect' => (string) get_option( 'csdt_devtools_enum_protect', '1' ),
+        ];
+
         // Hide Login
         $hide = isset( $_POST['hide_enabled'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['hide_enabled'] ) ) ? '1' : '0';
         $slug = isset( $_POST['login_slug'] ) ? sanitize_title( wp_unslash( $_POST['login_slug'] ) ) : '';
@@ -1268,6 +1277,22 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $grace_logins = isset( $_POST['grace_logins'] ) ? (int) sanitize_text_field( wp_unslash( $_POST['grace_logins'] ) ) : 0;
         if ( $grace_logins < 0 || $grace_logins > 10 ) { $grace_logins = 0; }
         update_option( 'csdt_devtools_2fa_grace_logins', (string) $grace_logins );
+
+        // ntfy notification preferences.
+        $ntfy_valid   = isset( $_POST['ntfy_login_valid_user'] )   && '1' === sanitize_text_field( wp_unslash( $_POST['ntfy_login_valid_user'] ) )   ? '1' : '0';
+        $ntfy_invalid = isset( $_POST['ntfy_login_invalid_user'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['ntfy_login_invalid_user'] ) ) ? '1' : '0';
+        update_option( 'csdt_ntfy_login_valid_user',   $ntfy_valid );
+        update_option( 'csdt_ntfy_login_invalid_user', $ntfy_invalid );
+
+        // Check for security control downgrades and fire ntfy if needed.
+        $new_state = [
+            'hide_enabled' => $hide,
+            'bf_enabled'   => $bf_enabled,
+            'force_2fa'    => $force,
+            'tfa_method'   => $method,
+            'enum_protect' => $bf_enum_protect,
+        ];
+        self::check_settings_downgrade( $old_state, $new_state );
 
         $new_url = $hide === '1' && $slug ? home_url( '/' . $slug . '/' ) : wp_login_url();
         wp_send_json_success( [ 'login_url' => $new_url ] );
@@ -1736,6 +1761,147 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
             return sanitize_text_field( wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) );
         }
         return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+    }
+
+    // ─── ntfy helper ─────────────────────────────────────────────────────
+
+    /**
+     * Fire a ntfy.sh push notification using the shared scan-schedule credentials.
+     *
+     * @param string $title   Notification title (shown bold on device).
+     * @param string $body    Notification body text.
+     * @param string $priority  urgent|high|default|low|min
+     * @param string $tags    Comma-separated ntfy tag emoji names.
+     */
+    public static function send_ntfy( string $title, string $body, string $priority = 'high', string $tags = 'warning' ): void {
+        $ntfy_url = (string) get_option( 'csdt_scan_schedule_ntfy_url', '' );
+        if ( ! $ntfy_url ) {
+            return;
+        }
+        $site    = (string) get_option( 'siteurl', '' );
+        $host    = $site ? wp_parse_url( $site, PHP_URL_HOST ) : '';
+        $headers = [
+            'Title'    => ( $host ? "[{$host}] " : '' ) . $title,
+            'Priority' => $priority,
+            'Tags'     => $tags,
+        ];
+        $ntfy_tok = (string) get_option( 'csdt_scan_schedule_ntfy_token', '' );
+        if ( $ntfy_tok ) {
+            $headers['Authorization'] = 'Bearer ' . $ntfy_tok;
+        }
+        wp_remote_post( $ntfy_url, [
+            'timeout'    => 8,
+            'blocking'   => false,
+            'headers'    => $headers,
+            'body'       => $body,
+        ] );
+    }
+
+    // ─── Hook: ntfy on failed login attempt ──────────────────────────────
+
+    /**
+     * Hooked to `wp_login_failed`. Fires a ntfy alert based on whether the
+     * username is a known WordPress account (valid) or not (enumeration attempt).
+     */
+    public static function on_login_failed( string $username ): void {
+        $notify_valid   = get_option( 'csdt_ntfy_login_valid_user',   '0' ) === '1';
+        $notify_invalid = get_option( 'csdt_ntfy_login_invalid_user', '0' ) === '1';
+
+        if ( ! $notify_valid && ! $notify_invalid ) {
+            return;
+        }
+
+        $is_valid_user = (bool) get_user_by( 'login', $username );
+        if ( ! $is_valid_user ) {
+            // Also check by email.
+            $is_valid_user = (bool) get_user_by( 'email', $username );
+        }
+
+        if ( $is_valid_user && ! $notify_valid ) {
+            return;
+        }
+        if ( ! $is_valid_user && ! $notify_invalid ) {
+            return;
+        }
+
+        $ip      = self::get_client_ip();
+        $type    = $is_valid_user ? 'valid username' : 'unknown username';
+        $label   = $is_valid_user ? 'Known account targeted' : 'Unknown username tried';
+        $priority = $is_valid_user ? 'high' : 'default';
+        $tags     = $is_valid_user ? 'rotating_light' : 'warning';
+
+        self::send_ntfy(
+            "Failed login — {$label}",
+            "Username: {$username}\nType: {$type}\nIP: {$ip}",
+            $priority,
+            $tags
+        );
+    }
+
+    // ─── Hook: ntfy on REST API application-password failure ─────────────
+
+    /**
+     * Hooked to `application_password_failed_authentication`.
+     * Fires when a REST API request uses bad application-password credentials.
+     */
+    public static function on_rest_auth_failed( \WP_Error $error ): void {
+        if ( get_option( 'csdt_ntfy_login_valid_user', '0' ) !== '1'
+            && get_option( 'csdt_ntfy_login_invalid_user', '0' ) !== '1' ) {
+            return;
+        }
+        $ip = self::get_client_ip();
+        self::send_ntfy(
+            'REST API auth failure',
+            "An application password authentication attempt failed.\nIP: {$ip}\nError: " . $error->get_error_message(),
+            'high',
+            'rotating_light'
+        );
+    }
+
+    // ─── Hook: ntfy on security control downgrade ────────────────────────
+
+    /**
+     * Called from ajax_login_save() before writing new settings.
+     * Fires ntfy for any security control that is being turned off or weakened.
+     */
+    private static function check_settings_downgrade( array $old, array $new ): void {
+        $alerts = [];
+
+        // Hide Login disabled.
+        if ( $old['hide_enabled'] === '1' && $new['hide_enabled'] === '0' ) {
+            $alerts[] = 'Hide Login URL has been DISABLED — wp-login.php is now publicly accessible.';
+        }
+
+        // Brute-force protection disabled.
+        if ( $old['bf_enabled'] === '1' && $new['bf_enabled'] === '0' ) {
+            $alerts[] = 'Brute-force account lockout has been DISABLED.';
+        }
+
+        // Force 2FA turned off.
+        if ( $old['force_2fa'] === '1' && $new['force_2fa'] === '0' ) {
+            $alerts[] = 'Force 2FA for administrators has been TURNED OFF.';
+        }
+
+        // 2FA method turned off.
+        if ( $old['tfa_method'] !== 'off' && $new['tfa_method'] === 'off' ) {
+            $alerts[] = 'Site-wide 2FA method has been set to OFF (was: ' . $old['tfa_method'] . ').';
+        }
+
+        // Account enumeration protection disabled.
+        if ( $old['enum_protect'] === '1' && $new['enum_protect'] === '0' ) {
+            $alerts[] = 'Account enumeration protection has been DISABLED.';
+        }
+
+        if ( empty( $alerts ) ) {
+            return;
+        }
+
+        $who  = wp_get_current_user();
+        $name = $who && $who->exists() ? $who->user_login : 'unknown';
+        $ip   = self::get_client_ip();
+        $body = implode( "\n", $alerts ) . "\n\nChanged by: {$name}\nIP: {$ip}";
+
+        self::send_ntfy( 'Security control downgraded', $body, 'urgent', 'rotating_light,warning' );
     }
 
 }

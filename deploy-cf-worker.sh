@@ -4,7 +4,7 @@
 set -euo pipefail
 
 PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SEO_TESTS_DIR="REPO_BASE/wordpress-seo-ai-optimizer/tests"
+SEO_TESTS_DIR="/Users/cp363412/Desktop/github/wordpress-seo-ai-optimizer/tests"
 CONTAINER="pi_wordpress"
 WP_PATH="/var/www/html"
 WP_CLI="php ${WP_PATH}/wp-cli.phar --allow-root"

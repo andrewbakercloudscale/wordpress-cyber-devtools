@@ -398,7 +398,7 @@ class CSDT_Uptime {
         if ( $worker_url === '' ) {
             $worker_url = self::resolve_worker_url();
             if ( $worker_url !== '' ) {
-                update_option( 'csdt_uptime_worker_url', $worker_url, false );
+                update_option( 'csdt_uptime_worker_url', $worker_url, true );
             }
         }
         if ( $worker_url === '' ) {
@@ -582,7 +582,7 @@ class CSDT_Uptime {
         );
         $cron_ok = ! is_wp_error( $cron_resp ) && ! empty( json_decode( wp_remote_retrieve_body( $cron_resp ), true )['success'] );
 
-        update_option( 'csdt_uptime_enabled', '1', false );
+        update_option( 'csdt_uptime_enabled', '1', true );
 
         // Step 4: Get workers.dev subdomain for the Test button and WP-Cron heartbeat target
         $subdomain_resp = wp_remote_get(
@@ -595,7 +595,7 @@ class CSDT_Uptime {
             $subdomain = $sub_data['result']['subdomain'] ?? '';
             if ( $subdomain ) {
                 $worker_trigger_url = "https://cloudscale-uptime.{$subdomain}.workers.dev";
-                update_option( 'csdt_uptime_worker_url', $worker_trigger_url, false );
+                update_option( 'csdt_uptime_worker_url', $worker_trigger_url, true );
             }
         }
 

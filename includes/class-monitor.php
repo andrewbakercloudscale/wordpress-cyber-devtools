@@ -75,8 +75,8 @@ class CSDT_Monitor {
         }
         $enabled   = ( $_POST['enabled']   ?? '0' ) === '1' ? '1' : '0';
         $threshold = max( 1, min( 1000, (int) ( $_POST['threshold'] ?? 10 ) ) );
-        update_option( 'csdt_ssh_monitor_enabled',   $enabled,   false );
-        update_option( 'csdt_ssh_monitor_threshold', $threshold, false );
+        update_option( 'csdt_ssh_monitor_enabled',   $enabled,   true );
+        update_option( 'csdt_ssh_monitor_threshold', $threshold, true );
 
         if ( $enabled === '1' ) {
             if ( ! wp_next_scheduled( 'csdt_ssh_monitor' ) ) {
@@ -383,8 +383,8 @@ class CSDT_Monitor {
         }
         $enabled   = isset( $_POST['enabled'] ) && $_POST['enabled'] === '1' ? '1' : '0';
         $threshold = max( 1, min( 50, (int) ( $_POST['threshold'] ?? 1 ) ) );
-        update_option( 'csdt_php_error_monitor_enabled',   $enabled,           false );
-        update_option( 'csdt_php_error_monitor_threshold', (string) $threshold, false );
+        update_option( 'csdt_php_error_monitor_enabled',   $enabled,           true );
+        update_option( 'csdt_php_error_monitor_threshold', (string) $threshold, true );
         if ( $enabled === '1' ) {
             if ( ! wp_next_scheduled( 'csdt_php_error_monitor' ) ) {
                 wp_schedule_event( time() + 300, 'csdt_every_5min', 'csdt_php_error_monitor' );

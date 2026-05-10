@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.755
+ * Version: 1.9.758
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.755';
+    const VERSION      = '1.9.758';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -274,6 +274,7 @@ class CloudScale_DevTools {
      * @return void
      */
     public static function init() {
+        self::maybe_migrate_autoload();
         CSDT_SMTP::maybe_migrate_prefix();
         CSDT_SMTP::maybe_migrate_smtp_prefix();
         CSDT_SMTP::maybe_migrate_usermeta_prefix();
@@ -588,6 +589,9 @@ class CloudScale_DevTools {
         add_action( 'login_init', [ 'CSDT_Login', 'login_force_remember' ], 5 );
         // Security monitor — always track failed logins regardless of monitor toggle.
         add_action( 'wp_login_failed', [ 'CSDT_Perf_Monitor', 'perf_track_failed_login' ] );
+        // ntfy alerts for failed logins and REST API auth failures.
+        add_action( 'wp_login_failed', [ 'CSDT_Login', 'on_login_failed' ] );
+        add_action( 'application_password_failed_authentication', [ 'CSDT_Login', 'on_rest_auth_failed' ] );
         // Style the login error panel.
         add_action( 'login_enqueue_scripts', [ 'CSDT_Login', 'login_error_styles' ] );
         // Username enumeration protection — only register if option is enabled (default on).
@@ -680,6 +684,33 @@ class CloudScale_DevTools {
                 }, PHP_INT_MAX );
             }
         }
+    }
+
+    /* ==================================================================
+       0a. ONE-TIME MIGRATIONS
+       ================================================================== */
+
+    private static function maybe_migrate_autoload(): void {
+        global $wpdb;
+        $done_key = 'csdt_autoload_migrated_v1';
+        if ( get_option( $done_key ) ) {
+            return;
+        }
+        $names = [
+            'csdt_uptime_enabled', 'csdt_uptime_worker_url',
+            'csdt_ssh_monitor_enabled', 'csdt_ssh_monitor_threshold',
+            'csdt_php_error_monitor_enabled', 'csdt_php_error_monitor_threshold',
+            'csdt_threat_monitor_enabled', 'csdt_threat_file_integrity_enabled',
+            'csdt_threat_new_admin_enabled', 'csdt_threat_probe_enabled', 'csdt_threat_probe_threshold',
+            'csdt_devtools_ai_provider', 'csdt_devtools_anthropic_key', 'csdt_devtools_gemini_key',
+            'csdt_devtools_security_model', 'csdt_devtools_deep_scan_model', 'csdt_devtools_security_prompt',
+        ];
+        $placeholders = implode( ',', array_fill( 0, count( $names ), '%s' ) );
+        $wpdb->query( $wpdb->prepare( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+            "UPDATE {$wpdb->options} SET autoload = 'yes' WHERE option_name IN ({$placeholders}) AND autoload != 'yes'",
+            ...$names
+        ) );
+        add_option( $done_key, '1', '', 'yes' );
     }
 
     /* ==================================================================
@@ -3191,11 +3222,14 @@ class CloudScale_DevTools {
 
         <!-- ── Brute-Force Protection ───────────────── -->
         <?php
-        $bf_enabled       = get_option( 'csdt_devtools_brute_force_enabled', '1' );
-        $bf_attempts      = get_option( 'csdt_devtools_brute_force_attempts', '5' );
-        $bf_lockout       = get_option( 'csdt_devtools_brute_force_lockout', '10' );
-        $bf_enum_protect  = get_option( 'csdt_devtools_enum_protect', '1' );
-        $wplogin_stats    = get_option( 'csdt_wplogin_blocked_stats', [] );
+        $bf_enabled            = get_option( 'csdt_devtools_brute_force_enabled', '1' );
+        $bf_attempts           = get_option( 'csdt_devtools_brute_force_attempts', '5' );
+        $bf_lockout            = get_option( 'csdt_devtools_brute_force_lockout', '10' );
+        $bf_enum_protect       = get_option( 'csdt_devtools_enum_protect', '1' );
+        $ntfy_login_valid      = get_option( 'csdt_ntfy_login_valid_user', '0' );
+        $ntfy_login_invalid    = get_option( 'csdt_ntfy_login_invalid_user', '0' );
+        $ntfy_configured       = ! empty( get_option( 'csdt_scan_schedule_ntfy_url', '' ) );
+        $wplogin_stats         = get_option( 'csdt_wplogin_blocked_stats', [] );
         ?>
         <div class="cs-panel" id="cs-panel-brute-force">
             <div class="cs-section-header cs-section-header-red">
@@ -3245,6 +3279,31 @@ class CloudScale_DevTools {
                         <span class="cs-hint" style="margin-top:4px;display:block;"><?php esc_html_e( 'Returns "Invalid username or password." for all credential failures — prevents attackers from discovering which usernames are registered on this site.', 'cloudscale-devtools' ); ?></span>
                     </div>
                 </div>
+                <!-- ntfy login alerts -->
+                <div class="cs-field-row" style="margin-top:18px;border-top:1px solid #e2e8f0;padding-top:16px;">
+                    <div class="cs-field">
+                        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">
+                            🔔 <?php esc_html_e( 'ntfy.sh Login Alerts', 'cloudscale-devtools' ); ?>
+                            <?php if ( ! $ntfy_configured ) : ?>
+                            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;margin-left:6px;">
+                                ⚠ <?php esc_html_e( 'ntfy not configured', 'cloudscale-devtools' ); ?>
+                            </span>
+                            <?php endif; ?>
+                        </div>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;color:#334155;margin-bottom:6px;">
+                            <input type="checkbox" id="cs-ntfy-login-valid" <?php checked( $ntfy_login_valid, '1' ); ?>>
+                            <?php esc_html_e( 'Alert on failed login for a valid (known) username', 'cloudscale-devtools' ); ?>
+                            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;"><?php esc_html_e( 'High priority', 'cloudscale-devtools' ); ?></span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;color:#334155;">
+                            <input type="checkbox" id="cs-ntfy-login-invalid" <?php checked( $ntfy_login_invalid, '1' ); ?>>
+                            <?php esc_html_e( 'Alert on failed login for an unknown username', 'cloudscale-devtools' ); ?>
+                            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#fefce8;color:#854d0e;border:1px solid #fde047;"><?php esc_html_e( 'Default priority', 'cloudscale-devtools' ); ?></span>
+                        </label>
+                        <span class="cs-hint" style="margin-top:6px;display:block;"><?php esc_html_e( 'Security control changes (hide login off, brute-force off, 2FA off) always send an urgent ntfy alert regardless of these settings.', 'cloudscale-devtools' ); ?></span>
+                    </div>
+                </div>
+
                 <div style="margin-top:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                     <button type="button" class="cs-btn-primary" id="cs-bf-save">💾 <?php esc_html_e( 'Save Settings', 'cloudscale-devtools' ); ?></button>
                     <span class="cs-settings-saved" id="cs-bf-saved">✓ <?php esc_html_e( 'Saved', 'cloudscale-devtools' ); ?></span>
@@ -4425,6 +4484,11 @@ class CloudScale_DevTools {
     }
 
     public static function render_dashboard_widget(): void {
+        wp_prime_option_caches( [
+            'csdt_scan_history', 'csdt_adhoc_scans', 'csdt_site_audit_cache',
+            'csdt_devtools_bf_log', 'csdt_ip_blocklist', 'csdt_wplogin_blocked_stats',
+            'csdt_uptime_last_ping',
+        ] );
         $ai_cfg        = CSDT_AI_Dispatcher::get_config();
         $ai_provider   = $ai_cfg['provider'];
         $has_key       = ! empty( $ai_cfg['key'] );
