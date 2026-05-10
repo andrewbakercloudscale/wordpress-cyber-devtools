@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.781
+ * Version: 1.9.782
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.781';
+    const VERSION      = '1.9.782';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4706,6 +4706,11 @@ class CloudScale_DevTools {
         $invalid_count     = count( $seen_users ) - count( $valid_users ) - count( $deleted_users );
         $invalid_count     = max( 0, $invalid_count );
         $compromised_count = count( $valid_users ) + count( $deleted_users );
+
+        // Build ordered display list: valid accounts first, deleted second.
+        $targeted_users = [];
+        foreach ( $valid_users   as $u ) { $targeted_users[] = $u + [ 'deleted' => false ]; }
+        foreach ( $deleted_users as $u ) { $targeted_users[] = [ 'login' => $u['login'], 'email_mask' => '', 'deleted' => true ]; }
 
         $blocklist      = get_option( 'csdt_ip_blocklist', [] );
         $blocked_count  = is_array( $blocklist ) ? count( $blocklist ) : 0;

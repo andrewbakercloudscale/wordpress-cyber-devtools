@@ -1893,30 +1893,15 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $notify_valid   = get_option( 'csdt_ntfy_login_valid_user',   '0' ) === '1';
         $notify_invalid = get_option( 'csdt_ntfy_login_invalid_user', '0' ) === '1';
 
-        if ( ! $notify_valid && ! $notify_invalid ) {
-            return;
-        }
-
         $is_valid_user = (bool) get_user_by( 'login', $username );
         if ( ! $is_valid_user ) {
-            // Also check by email.
             $is_valid_user = (bool) get_user_by( 'email', $username );
         }
 
-        if ( $is_valid_user && ! $notify_valid ) {
-            return;
-        }
-        if ( ! $is_valid_user && ! $notify_invalid ) {
-            return;
-        }
+        $ip = self::get_client_ip();
 
-        $ip      = self::get_client_ip();
-        $type    = $is_valid_user ? 'valid username' : 'unknown username';
-        $label   = $is_valid_user ? 'Known account targeted' : 'Unknown username tried';
-        $priority = $is_valid_user ? 'high' : 'default';
-        $tags     = $is_valid_user ? 'rotating_light' : 'warning';
-
-        // Always record valid-username attacks to the security event log for the widget.
+        // Always record valid-username attacks to the security event log — this
+        // powers the "accounts targeted" count in the widget regardless of ntfy settings.
         if ( $is_valid_user ) {
             self::record_security_event(
                 'attack',
@@ -1924,6 +1909,22 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
                 "IP: {$ip}"
             );
         }
+
+        // ntfy alerts — only fire if the relevant option is enabled.
+        if ( ! $notify_valid && ! $notify_invalid ) {
+            return;
+        }
+        if ( $is_valid_user && ! $notify_valid ) {
+            return;
+        }
+        if ( ! $is_valid_user && ! $notify_invalid ) {
+            return;
+        }
+
+        $type     = $is_valid_user ? 'valid username' : 'unknown username';
+        $label    = $is_valid_user ? 'Known account targeted' : 'Unknown username tried';
+        $priority = $is_valid_user ? 'high' : 'default';
+        $tags     = $is_valid_user ? 'rotating_light' : 'warning';
 
         self::send_ntfy(
             "Failed login — {$label}",
