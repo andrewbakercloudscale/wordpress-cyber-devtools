@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.758
+ * Version: 1.9.759
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.758';
+    const VERSION      = '1.9.759';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4715,6 +4715,45 @@ class CloudScale_DevTools {
                 </span>
             </div>
         </div>
+
+        <!-- ── Recent Security Events ────────────────────────────────── -->
+        <?php
+        $sec_events = get_option( 'csdt_security_events', [] );
+        $sec_events = is_array( $sec_events ) ? array_reverse( $sec_events ) : [];
+        $sec_events = array_slice( $sec_events, 0, 5 );
+        if ( ! empty( $sec_events ) ) :
+        ?>
+        <div class="cs-dw-section">⚠️ <?php esc_html_e( 'Recent Security Events', 'cloudscale-devtools' ); ?></div>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;">
+            <?php foreach ( $sec_events as $ev ) :
+                $ev_time   = (int) ( $ev['time'] ?? 0 );
+                $ev_type   = (string) ( $ev['type'] ?? '' );
+                $ev_title  = (string) ( $ev['title'] ?? '' );
+                $ev_detail = (string) ( $ev['detail'] ?? '' );
+                $age       = $ev_time ? human_time_diff( $ev_time ) . ' ago' : '';
+                if ( $ev_type === 'downgrade' ) {
+                    $icon = '🔓'; $bg = '#fef2f2'; $border = '#fca5a5'; $tx = '#991b1b';
+                } elseif ( $ev_type === 'attack' ) {
+                    $icon = '🎯'; $bg = '#fff7ed'; $border = '#fdba74'; $tx = '#9a3412';
+                } else {
+                    $icon = '🔌'; $bg = '#fefce8'; $border = '#fde047'; $tx = '#854d0e';
+                }
+            ?>
+            <div style="background:<?php echo esc_attr( $bg ); ?>;border:1px solid <?php echo esc_attr( $border ); ?>;border-radius:6px;padding:6px 9px;display:flex;align-items:flex-start;gap:7px;">
+                <span style="font-size:13px;flex-shrink:0;line-height:1.4"><?php echo $icon; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:11px;font-weight:700;color:<?php echo esc_attr( $tx ); ?>;line-height:1.3"><?php echo esc_html( $ev_title ); ?></div>
+                    <?php if ( $ev_detail ) : ?>
+                    <div style="font-size:10px;color:#64748b;margin-top:1px"><?php echo esc_html( $ev_detail ); ?></div>
+                    <?php endif; ?>
+                </div>
+                <?php if ( $age ) : ?>
+                <span style="font-size:9px;color:#94a3b8;white-space:nowrap;flex-shrink:0;margin-top:2px"><?php echo esc_html( $age ); ?></span>
+                <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
 
         <!-- ── CTA ────────────────────────────────────────────────────── -->
         <div class="cs-dw-cta">

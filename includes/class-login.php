@@ -1763,6 +1763,35 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
     }
 
+    // ─── Security event log ──────────────────────────────────────────────
+
+    /**
+     * Append an entry to the security events log (shown on the dashboard widget).
+     * Capped at 20 entries, rolling 30-day window.
+     *
+     * @param string $type    'downgrade' | 'attack' | 'rest_fail'
+     * @param string $title   Short description shown in the widget.
+     * @param string $detail  Extra context (username, IP, etc.)
+     */
+    public static function record_security_event( string $type, string $title, string $detail = '' ): void {
+        $events = get_option( 'csdt_security_events', [] );
+        if ( ! is_array( $events ) ) {
+            $events = [];
+        }
+        $cutoff = time() - 30 * DAY_IN_SECONDS;
+        $events = array_values( array_filter( $events, fn( $e ) => ( $e['time'] ?? 0 ) >= $cutoff ) );
+        if ( count( $events ) >= 20 ) {
+            array_shift( $events );
+        }
+        $events[] = [
+            'time'   => time(),
+            'type'   => $type,
+            'title'  => $title,
+            'detail' => $detail,
+        ];
+        update_option( 'csdt_security_events', $events, false );
+    }
+
     // ─── ntfy helper ─────────────────────────────────────────────────────
 
     /**
@@ -1830,6 +1859,15 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $priority = $is_valid_user ? 'high' : 'default';
         $tags     = $is_valid_user ? 'rotating_light' : 'warning';
 
+        // Always record valid-username attacks to the security event log for the widget.
+        if ( $is_valid_user ) {
+            self::record_security_event(
+                'attack',
+                "Login attack on '{$username}'",
+                "IP: {$ip}"
+            );
+        }
+
         self::send_ntfy(
             "Failed login — {$label}",
             "Username: {$username}\nType: {$type}\nIP: {$ip}",
@@ -1850,6 +1888,7 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
             return;
         }
         $ip = self::get_client_ip();
+        self::record_security_event( 'rest_fail', 'REST API auth failure', "IP: {$ip}" );
         self::send_ntfy(
             'REST API auth failure',
             "An application password authentication attempt failed.\nIP: {$ip}\nError: " . $error->get_error_message(),
@@ -1900,6 +1939,11 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $name = $who && $who->exists() ? $who->user_login : 'unknown';
         $ip   = self::get_client_ip();
         $body = implode( "\n", $alerts ) . "\n\nChanged by: {$name}\nIP: {$ip}";
+
+        // Record every downgrade to the security event log for the widget.
+        foreach ( $alerts as $alert ) {
+            self::record_security_event( 'downgrade', $alert, "By: {$name} from {$ip}" );
+        }
 
         self::send_ntfy( 'Security control downgraded', $body, 'urgent', 'rotating_light,warning' );
     }
