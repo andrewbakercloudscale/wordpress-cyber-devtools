@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.771
+ * Version: 1.9.772
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.771';
+    const VERSION      = '1.9.772';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4730,7 +4730,7 @@ class CloudScale_DevTools {
                 <span class="cs-dw-dot" style="background:<?php echo ! empty( $login_slug ) ? '#16a34a' : '#dc2626'; ?>;"></span>
                 <span>
                     <span class="cs-dw-chip-label"><?php esc_html_e( 'Hide Login', 'cloudscale-devtools' ); ?></span><br>
-                    <?php echo ! empty( $login_slug ) ? '/' . esc_html( $login_slug ) : esc_html__( 'Off', 'cloudscale-devtools' ); ?>
+                    <?php echo ! empty( $login_slug ) ? esc_html__( 'Active', 'cloudscale-devtools' ) : esc_html__( 'Off', 'cloudscale-devtools' ); ?>
                 </span>
             </div>
             <div class="cs-dw-chip">
@@ -4810,7 +4810,20 @@ class CloudScale_DevTools {
                         <?php endif; ?>
                     </div>
                     <div style="font-size:10px;color:#64748b;margin-top:1px;">
-                        <?php esc_html_e( 'Username:', 'cloudscale-devtools' ); ?> <?php echo esc_html( $latest_usr ?: '—' ); ?> &nbsp;&middot;&nbsp;
+                        <?php
+                        if ( $latest_usr ) {
+                            $ulen       = mb_strlen( $latest_usr );
+                            $show_start = min( 2, $ulen );
+                            $show_end   = $ulen > 4 ? 2 : 0;
+                            $mask_len   = max( 0, $ulen - $show_start - $show_end );
+                            $masked_usr = mb_substr( $latest_usr, 0, $show_start )
+                                        . str_repeat( '•', $mask_len )
+                                        . ( $show_end ? mb_substr( $latest_usr, -$show_end ) : '' );
+                        } else {
+                            $masked_usr = '—';
+                        }
+                        ?>
+                        <?php esc_html_e( 'Username:', 'cloudscale-devtools' ); ?> <?php echo esc_html( $masked_usr ); ?> &nbsp;&middot;&nbsp;
                         IP: <?php echo esc_html( $latest_ip ); ?><?php echo $latest_cc ? ' · ' . esc_html( $latest_cc ) : ''; ?>
                     </div>
                 </div>
