@@ -880,41 +880,71 @@
     }
 
     function renderApiAttackTable( apiLog, now ) {
-        const containerId = 'cs-api-attack-log-wrap';
-        let wrap = document.getElementById( containerId );
-        if ( ! wrap ) {
-            wrap = document.createElement( 'div' );
-            wrap.id = containerId;
-            wrap.style.cssText = 'margin-top:20px;';
-            if ( bfLogWrap ) bfLogWrap.appendChild( wrap );
+        const chartEl = document.getElementById( 'cs-tam-api-chart' );
+        const tableEl = document.getElementById( 'cs-tam-api-table' );
+        const totalEl = document.getElementById( 'cs-tam-api-total' );
+        if ( ! chartEl && ! tableEl ) return;
+
+        if ( totalEl ) totalEl.textContent = apiLog.length + ' event' + ( apiLog.length !== 1 ? 's' : '' );
+
+        // ── Bar chart — 14-day view ──────────────────────────────────────
+        if ( chartEl ) {
+            const DAY = 86400;
+            const days = [];
+            for ( let i = 13; i >= 0; i-- ) {
+                const dayStart = Math.floor( ( now - i * DAY ) / DAY ) * DAY;
+                const dayEnd   = dayStart + DAY;
+                const count    = apiLog.filter( e => e[0] >= dayStart && e[0] < dayEnd ).length;
+                const d        = new Date( dayStart * 1000 );
+                days.push( {
+                    label: d.toLocaleDateString( 'en', { month: 'short', day: 'numeric' } ),
+                    count, isToday: i === 0,
+                } );
+            }
+            const rawMax    = Math.max( 1, ...days.map( d => d.count ) );
+            const mid       = rawMax === 1 ? 1 : Math.round( rawMax / 2 );
+            const barW      = Math.max( 28, Math.min( 48, Math.floor( chartEl.offsetWidth / 15 ) ) );
+            const yAxis     = `<div class="cs-bf-yaxis"><span class="cs-bf-ytick">${rawMax}</span><span class="cs-bf-ytick">${mid}</span><span class="cs-bf-ytick">0</span></div>`;
+            const isAttack  = days[ days.length - 1 ].count >= 5;
+            const bars      = days.map( d => {
+                const pct   = Math.max( 0, Math.round( ( d.count / rawMax ) * 100 ) );
+                const cls   = d.count === 0 ? ' cs-bf-bar-zero' : d.count >= rawMax * 0.75 ? ' cs-bf-bar-high' : ' cs-bf-bar-mid';
+                const extra = isAttack && d.count > 0 ? `background:#7c3aed!important;${ d.isToday ? 'box-shadow:0 0 8px rgba(124,58,237,.6);' : 'opacity:.7;' }` : '';
+                const cc    = d.count === 0 ? '#16a34a' : isAttack && d.isToday ? '#7c3aed' : '#94a3b8';
+                return `<div class="cs-bf-day" style="width:${barW}px;flex-shrink:0;flex-grow:0;">
+                    <div class="cs-bf-bar-track"><div class="cs-bf-bar${cls}" style="height:${pct}%;${extra}" title="${d.count} attempts"></div></div>
+                    <div class="cs-bf-day-label" style="${isAttack && d.isToday ? 'color:#7c3aed;font-weight:700;' : ''}">${d.label}</div>
+                    <div style="font-size:9px;font-weight:700;color:${cc};text-align:center;">${d.count}</div>
+                </div>`;
+            } ).join( '' );
+            chartEl.innerHTML = yAxis + `<div class="cs-bf-bars">${bars}</div>`;
         }
-        const rows = [ ...apiLog ].reverse().slice( 0, 50 );
-        let html = `<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">🔌 API Attack Log <span style="font-weight:400;color:#94a3b8;font-size:11px;">(${rows.length} event${rows.length !== 1 ? 's' : ''}, last 14 days)</span></div>`;
-        html += `<table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
-                <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">Time</th>
-                <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">Event</th>
-                <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">IP</th>
-                <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">Country</th>
-            </tr></thead><tbody>`;
-        rows.forEach( function ( entry ) {
-            const ts      = entry[0] * 1000;
-            const title   = escHtml( entry[1] || '' );
-            const ip      = escHtml( entry[2] || '—' );
-            const cc      = escHtml( entry[3] || '—' );
-            const age     = formatAge( Math.floor( ( now * 1000 - ts ) / 1000 ) );
-            const isLock  = title.toLowerCase().includes( 'locked' );
-            const rowBg   = isLock ? 'background:#fef2f2;' : '';
-            const ipLink  = entry[2] ? `<a href="https://ipinfo.io/${encodeURIComponent(entry[2])}" target="_blank" rel="noopener" style="font-size:10px;padding:2px 6px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#475569;text-decoration:none;margin-right:4px;">Whois</a>` : '';
-            html += `<tr style="border-bottom:1px solid #f0f4f8;${rowBg}">
-                <td style="padding:5px 8px;color:#94a3b8;white-space:nowrap;">${escHtml( age )}</td>
-                <td style="padding:5px 8px;font-weight:${isLock ? '700' : '400'};color:${isLock ? '#991b1b' : '#374151'};">${title}</td>
-                <td style="padding:5px 8px;">${ipLink}${ip}</td>
-                <td style="padding:5px 8px;color:#64748b;">${cc}</td>
-            </tr>`;
-        } );
-        html += `</tbody></table>`;
-        wrap.innerHTML = html;
+
+        // ── Table ────────────────────────────────────────────────────────
+        if ( tableEl ) {
+            const rows = [ ...apiLog ].reverse().slice( 0, 100 );
+            let html = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+                <thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                    <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">When</th>
+                    <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">Event</th>
+                    <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">IP / Country</th>
+                </tr></thead><tbody>`;
+            rows.forEach( function ( entry ) {
+                const age    = formatAge( Math.floor( ( now * 1000 - entry[0] * 1000 ) / 1000 ) );
+                const title  = escHtml( entry[1] || '' );
+                const ip     = entry[2] || '';
+                const cc     = escHtml( entry[3] || '' );
+                const isLock = title.toLowerCase().includes( 'locked' );
+                const ipLink = ip ? `<a href="https://ipinfo.io/${encodeURIComponent(ip)}" target="_blank" rel="noopener" style="font-size:10px;padding:2px 6px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#475569;text-decoration:none;margin-right:4px;">Whois</a>` : '';
+                html += `<tr style="border-bottom:1px solid #f0f4f8;${isLock ? 'background:#fef2f2;' : ''}">
+                    <td style="padding:5px 8px;color:#94a3b8;white-space:nowrap;">${escHtml( age )}</td>
+                    <td style="padding:5px 8px;font-weight:${isLock ? '700' : '400'};color:${isLock ? '#991b1b' : '#374151'};">${title}</td>
+                    <td style="padding:5px 8px;">${ipLink}${escHtml( ip || '—' )}${cc ? `<br><span style="color:#94a3b8;font-size:10px;">${cc}</span>` : ''}</td>
+                </tr>`;
+            } );
+            html += `</tbody></table>`;
+            tableEl.innerHTML = html;
+        }
     }
 
     function renderBfGeoMap( bfByCountry, blockedByCountry, apiByCountry ) {

@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.782
+ * Version: 1.9.783
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.782';
+    const VERSION      = '1.9.783';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4340,55 +4340,16 @@ class CloudScale_DevTools {
                             <?php endif; ?>
                             </div>
 
-                            <!-- API Attack Log -->
-                            <?php
-                            $api_attack_events = [];
-                            $all_evts = get_option( 'csdt_security_events', [] );
-                            if ( is_array( $all_evts ) ) {
-                                foreach ( array_reverse( $all_evts ) as $ae ) {
-                                    if ( ( $ae['type'] ?? '' ) === 'api_attack' ) {
-                                        $api_attack_events[] = $ae;
-                                    }
-                                }
-                            }
-                            $api_attack_events = array_slice( $api_attack_events, 0, 50 );
-                            ?>
-                            <?php if ( ! empty( $api_attack_events ) ) : ?>
-                            <div style="margin-top:16px;border:1px solid #fca5a5;border-radius:8px;overflow:hidden;">
-                                <div style="background:#fef2f2;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #fca5a5;">
-                                    <span style="font-size:12px;font-weight:700;color:#991b1b;">🔌 <?php esc_html_e( 'API Attack Log', 'cloudscale-devtools' ); ?> <span style="font-weight:400;color:#94a3b8;">(<?php echo esc_html( count( $api_attack_events ) ); ?> events)</span></span>
-                                    <a href="<?php echo esc_url( admin_url( 'tools.php?page=cloudscale-devtools&tab=credentials' ) ); ?>" style="font-size:11px;color:#991b1b;font-weight:600;text-decoration:none;">↺ <?php esc_html_e( 'Rotate path token', 'cloudscale-devtools' ); ?></a>
+                            <!-- API Attack Log — chart + table rendered by JS from bf_log_fetch api_log data -->
+                            <div id="cs-tam-api-log-wrap" class="cs-bf-log-wrap" style="margin-top:16px;">
+                                <div class="cs-bf-log-header">
+                                    <span class="cs-bf-log-title">🔌 <?php esc_html_e( 'API Failed Attempts — Last 14 Days', 'cloudscale-devtools' ); ?></span>
+                                    <span class="cs-bf-log-total" id="cs-tam-api-total"></span>
+                                    <a href="<?php echo esc_url( admin_url( 'tools.php?page=cloudscale-devtools&tab=credentials' ) ); ?>" style="font-size:11px;color:#991b1b;font-weight:600;text-decoration:none;white-space:nowrap;">↺ <?php esc_html_e( 'Rotate path', 'cloudscale-devtools' ); ?></a>
                                 </div>
-                                <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;">
-                                    <thead><tr style="background:#fef2f2;">
-                                        <th style="text-align:left;padding:5px 10px;color:#6b7280;font-weight:600;border-bottom:1px solid #fee2e2;"><?php esc_html_e( 'When', 'cloudscale-devtools' ); ?></th>
-                                        <th style="text-align:left;padding:5px 10px;color:#6b7280;font-weight:600;border-bottom:1px solid #fee2e2;"><?php esc_html_e( 'Event', 'cloudscale-devtools' ); ?></th>
-                                        <th style="text-align:left;padding:5px 10px;color:#6b7280;font-weight:600;border-bottom:1px solid #fee2e2;"><?php esc_html_e( 'IP', 'cloudscale-devtools' ); ?></th>
-                                    </tr></thead>
-                                    <tbody>
-                                    <?php foreach ( $api_attack_events as $i => $ae ) :
-                                        $ae_ts  = (int) ( $ae['time'] ?? 0 );
-                                        $ae_age = $ae_ts ? human_time_diff( $ae_ts ) . ' ago' : '—';
-                                        $ae_ip  = '';
-                                        if ( preg_match( '/IP:\s*([\d.a-fA-F:]+)/', $ae['detail'] ?? '', $ipm ) ) { $ae_ip = $ipm[1]; }
-                                        $is_lock = str_contains( $ae['title'] ?? '', 'LOCKED' );
-                                        $row_bg  = $i % 2 === 0 ? '#fff' : '#fafafa';
-                                    ?>
-                                    <tr style="background:<?php echo esc_attr( $is_lock ? '#fef2f2' : $row_bg ); ?>;border-top:1px solid #fee2e2;">
-                                        <td style="padding:5px 10px;color:#94a3b8;white-space:nowrap;"><?php echo esc_html( $ae_age ); ?></td>
-                                        <td style="padding:5px 10px;color:<?php echo $is_lock ? '#991b1b' : '#374151'; ?>;font-weight:<?php echo $is_lock ? '700' : '400'; ?>;"><?php echo esc_html( $ae['title'] ); ?></td>
-                                        <td style="padding:5px 10px;color:#374151;">
-                                            <?php echo esc_html( $ae_ip ?: '—' ); ?>
-                                            <?php if ( $ae_ip ) : ?>
-                                            <a href="https://ipinfo.io/<?php echo esc_attr( $ae_ip ); ?>" target="_blank" rel="noopener" style="font-size:10px;padding:1px 5px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#475569;text-decoration:none;margin-left:4px;">Whois</a>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                    </tbody>
-                                </table>
+                                <div id="cs-tam-api-chart" class="cs-bf-chart-wrap" style="margin-top:10px;"></div>
+                                <div id="cs-tam-api-table" style="margin-top:10px;"></div>
                             </div>
-                            <?php endif; ?>
 
                             <!-- .env.test snippet -->
                             <details style="margin-top:16px;" id="cs-pwr-snippet-details">

@@ -231,16 +231,17 @@ class CSDT_Test_Accounts {
             $fails = (int) get_transient( 'csdt_tsf' ) + 1;
             set_transient( 'csdt_tsf', $fails, 10 * MINUTE_IN_SECONDS );
             $ip = self::get_client_ip();
-            // Record every failed API attempt to the security events log.
+            $cc = $ip ? CSDT_Geo::get_country( $ip ) : '';
+            // Record every failed API attempt — include country so map works without re-resolving.
             CSDT_Login::record_security_event(
                 'api_attack',
                 "Test Session API: bad secret (attempt {$fails}/5)",
-                "IP: {$ip}"
+                "IP: {$ip}" . ( $cc ? " · {$cc}" : '' )
             );
             if ( $fails >= 5 ) {
                 set_transient( 'csdt_ts_locked', true, 10 * MINUTE_IN_SECONDS );
                 delete_transient( 'csdt_tsf' );
-                CSDT_Login::record_security_event( 'api_attack', 'Test Session API LOCKED — 5 bad attempts', "IP: {$ip}" );
+                CSDT_Login::record_security_event( 'api_attack', 'Test Session API LOCKED — 5 bad attempts', "IP: {$ip}" . ( $cc ? " · {$cc}" : '' ) );
                 self::send_security_ntfy( 'Test Session API: 5 failed auth attempts. API locked for 10 min.' );
             }
             return new WP_REST_Response( [ 'error' => 'Invalid secret' ], 401 );

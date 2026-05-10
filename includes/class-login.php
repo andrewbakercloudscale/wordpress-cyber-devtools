@@ -1221,10 +1221,16 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
                 if ( ( $ev['time'] ?? 0 ) < $cutoff ) { continue; }
                 // Parse IP from detail string "IP: x.x.x.x".
                 $ip = '';
+                $cc = '';
                 if ( preg_match( '/IP:\s*([\d.a-fA-F:]+)/', $ev['detail'] ?? '', $m ) ) {
                     $ip = $m[1];
                 }
-                $cc = $ip ? CSDT_Geo::get_country( $ip ) : '';
+                // Country stored in detail as "· CC" — use it directly to avoid geo lookup overhead.
+                if ( preg_match( '/·\s*([A-Z]{2})\s*$/', $ev['detail'] ?? '', $mc ) ) {
+                    $cc = $mc[1];
+                } elseif ( $ip ) {
+                    $cc = CSDT_Geo::get_country( $ip );
+                }
                 $api_log[] = [ $ev['time'], $ev['title'], $ip, $cc ];
                 if ( $cc ) {
                     $countries_api[ $cc ] = ( $countries_api[ $cc ] ?? 0 ) + 1;
