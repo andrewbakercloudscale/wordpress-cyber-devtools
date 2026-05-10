@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.773
+ * Version: 1.9.774
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.773';
+    const VERSION      = '1.9.774';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4172,12 +4172,14 @@ class CloudScale_DevTools {
                     <hr class="cs-sec-divider" style="margin:8px 0;">
 
                     <!-- Step 2: Shared secret -->
-                    <div class="cs-sec-row">
+                    <div class="cs-sec-row" style="align-items:center;">
                         <span class="cs-sec-label"><?php esc_html_e( 'Shared secret:', 'cloudscale-devtools' ); ?></span>
                         <div class="cs-sec-control">
                             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                                <code id="cs-pwr-secret-display" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:4px 10px;font-size:12px;letter-spacing:0.05em;"><?php echo esc_html( $masked_secret ); ?></code>
+                                <?php $full_mask = str_repeat( '•', strlen( $test_secret ) ); ?>
+                                <code id="cs-pwr-secret-display" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:4px 10px;font-size:12px;letter-spacing:0.05em;"><?php echo esc_html( $full_mask ); ?></code>
                                 <button type="button" id="cs-pwr-secret-show" class="cs-btn-secondary cs-btn-sm">👁 <?php esc_html_e( 'Show', 'cloudscale-devtools' ); ?></button>
+                                <button type="button" id="cs-pwr-secret-copy" class="cs-btn-secondary cs-btn-sm">⎘ <?php esc_html_e( 'Copy', 'cloudscale-devtools' ); ?></button>
                                 <button type="button" id="cs-pwr-secret-regen" class="cs-btn-secondary cs-btn-sm">↺ <?php esc_html_e( 'Regenerate', 'cloudscale-devtools' ); ?></button>
                             </div>
                             <span class="cs-hint" style="margin-top:6px;"><?php esc_html_e( 'Store in .env (never commit). Regenerating invalidates all existing .env files.', 'cloudscale-devtools' ); ?></span>

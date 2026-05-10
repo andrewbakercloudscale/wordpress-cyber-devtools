@@ -190,9 +190,21 @@
         if (showSecretBtn && secretDisplay) {
             showSecretBtn.addEventListener('click', function () {
                 secretShown = !secretShown;
-                secretDisplay.textContent = secretShown ? secret : ('•'.repeat(Math.min(20, secret.length)) + secret.slice(-4));
+                secretDisplay.textContent = secretShown ? secret : '•'.repeat(secret.length);
                 showSecretBtn.textContent = secretShown ? '🔒 Hide' : '👁 Show';
                 updateSnippet();
+            });
+        }
+
+        /* Copy secret */
+        var copySecretBtn = el('cs-pwr-secret-copy');
+        if (copySecretBtn) {
+            copySecretBtn.addEventListener('click', function () {
+                navigator.clipboard.writeText(secret).then(function () {
+                    var orig = copySecretBtn.textContent;
+                    copySecretBtn.textContent = '✓ Copied';
+                    setTimeout(function () { copySecretBtn.textContent = orig; }, 1500);
+                });
             });
         }
 
