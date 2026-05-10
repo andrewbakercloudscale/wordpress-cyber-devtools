@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.775
+ * Version: 1.9.776
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.775';
+    const VERSION      = '1.9.776';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4591,19 +4591,27 @@ class CloudScale_DevTools {
             if ( count( $bf_widget_rows ) >= 10 ) break;
         }
 
-        // Find unique real WP accounts that were targeted (username exists in WP).
+        // Find unique usernames that were targeted — include deleted accounts (they were
+        // real when attacked). Check WP for current users to show email; mark deleted ones.
         $targeted_users = [];
         foreach ( array_reverse( $bf_log ) as $entry ) {
             $usr = (string) ( $entry[1] ?? $entry['username'] ?? '' );
-            if ( $usr && ! isset( $targeted_users[ $usr ] ) ) {
-                $u = get_user_by( 'login', $usr );
-                if ( ! $u ) { $u = get_user_by( 'email', $usr ); }
-                if ( $u ) {
-                    $targeted_users[ $usr ] = [
-                        'login'      => $u->user_login,
-                        'email_mask' => preg_replace( '/(?<=.).(?=.*@)/u', '•', $u->user_email ),
-                    ];
-                }
+            if ( ! $usr || isset( $targeted_users[ $usr ] ) ) { continue; }
+            $u = get_user_by( 'login', $usr );
+            if ( ! $u ) { $u = get_user_by( 'email', $usr ); }
+            if ( $u ) {
+                $targeted_users[ $usr ] = [
+                    'login'      => $u->user_login,
+                    'email_mask' => preg_replace( '/(?<=.).(?=.*@)/u', '•', $u->user_email ),
+                    'deleted'    => false,
+                ];
+            } else {
+                // Username was tried but account no longer exists — was deleted after the attack.
+                $targeted_users[ $usr ] = [
+                    'login'   => $usr,
+                    'email_mask' => '',
+                    'deleted' => true,
+                ];
             }
         }
         $compromised_count = count( $targeted_users );
@@ -4863,9 +4871,16 @@ class CloudScale_DevTools {
                 </button>
                 <div style="display:none;margin-top:6px;background:#fef2f2;border:1px solid #fca5a5;border-radius:5px;padding:6px 10px;">
                     <?php foreach ( $targeted_users as $tuser ) : ?>
-                    <div style="font-size:10px;font-weight:600;color:#991b1b;padding:2px 0;">
-                        🔴 <?php echo esc_html( $tuser['login'] ); ?>
-                        <span style="font-weight:400;color:#94a3b8;margin-left:4px;"><?php echo esc_html( $tuser['email_mask'] ); ?></span>
+                    <div style="font-size:10px;font-weight:600;padding:2px 0;display:flex;align-items:center;gap:5px;">
+                        <?php if ( $tuser['deleted'] ) : ?>
+                        <span style="color:#6b7280;">⚫</span>
+                        <span style="color:#6b7280;"><?php echo esc_html( $tuser['login'] ); ?></span>
+                        <span style="font-size:9px;font-weight:400;padding:1px 5px;border-radius:6px;background:#f1f5f9;color:#94a3b8;border:1px solid #e2e8f0;"><?php esc_html_e( 'deleted', 'cloudscale-devtools' ); ?></span>
+                        <?php else : ?>
+                        <span style="color:#991b1b;">🔴</span>
+                        <span style="color:#991b1b;"><?php echo esc_html( $tuser['login'] ); ?></span>
+                        <span style="font-weight:400;color:#94a3b8;"><?php echo esc_html( $tuser['email_mask'] ); ?></span>
+                        <?php endif; ?>
                     </div>
                     <?php endforeach; ?>
                     <div style="font-size:9px;color:#94a3b8;margin-top:4px;"><?php esc_html_e( 'These are real accounts that were targeted. Consider changing their passwords.', 'cloudscale-devtools' ); ?></div>
