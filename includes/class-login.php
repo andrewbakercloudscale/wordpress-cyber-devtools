@@ -1948,25 +1948,61 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
      * Fires when a REST API request uses bad application-password credentials.
      */
     public static function on_rest_auth_failed( \WP_Error $error ): void {
-        $ip   = self::get_client_ip();
-        $cc   = $ip ? CSDT_Geo::get_country( $ip ) : '';
-        // Capture the path being probed (tells us which REST endpoint they're hitting).
-        $path = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-        // Strip query string so we don't leak tokens in logs.
-        $path = strtok( $path, '?' ) ?: '';
+        $ip  = self::get_client_ip();
+        $cc  = $ip ? CSDT_Geo::get_country( $ip ) : '';
 
-        self::record_security_event( 'api_attack', 'REST API auth failure', "IP: {$ip}" . ( $cc ? " · {$cc}" : '' ) );
+        // ── Gather every useful signal available at this hook ──────────────
 
-        // Always fire ntfy for REST API attacks — these are active attacks regardless of ntfy prefs.
-        // Strip HTML from the WP error message before sending.
-        $clean_error = wp_strip_all_tags( $error->get_error_message() );
+        // Path probed — strip query string to avoid leaking tokens.
+        $raw_uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+        $path     = strtok( $raw_uri, '?' ) ?: '/wp-json/';
 
-        self::send_ntfy(
-            'REST API auth failure',
-            "Application password brute-force attempt.\nPath: {$path}\nIP: {$ip}" . ( $cc ? " · {$cc}" : '' ) . "\nError: {$clean_error}",
-            'high',
-            'rotating_light'
-        );
+        // HTTP method.
+        $method   = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) ) : 'POST';
+
+        // Auth type: Basic vs Bearer vs other.
+        $auth_hdr = isset( $_SERVER['HTTP_AUTHORIZATION'] )
+            ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ) )
+            : ( isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] )
+                ? sanitize_text_field( wp_unslash( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) )
+                : '' );
+        if ( stripos( $auth_hdr, 'Basic ' ) === 0 ) {
+            $auth_type = 'Basic Auth (Application Password)';
+        } elseif ( stripos( $auth_hdr, 'Bearer ' ) === 0 ) {
+            $auth_type = 'Bearer Token';
+        } else {
+            $auth_type = $auth_hdr ? 'Unknown (' . substr( $auth_hdr, 0, 10 ) . '…)' : 'Basic Auth';
+        }
+
+        // Username tried — available in PHP_AUTH_USER before WP resets it.
+        $tried_user = isset( $_SERVER['PHP_AUTH_USER'] )
+            ? sanitize_user( wp_unslash( $_SERVER['PHP_AUTH_USER'] ), true )
+            : '';
+
+        // Failure reason (strip WP's HTML tags).
+        $reason     = wp_strip_all_tags( $error->get_error_message() );
+        $error_code = $error->get_error_code();
+
+        // User agent (truncated).
+        $ua = isset( $_SERVER['HTTP_USER_AGENT'] )
+            ? substr( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ), 0, 80 )
+            : '—';
+
+        // ── Record + alert ─────────────────────────────────────────────────
+
+        $detail = "IP: {$ip}" . ( $cc ? " · {$cc}" : '' );
+        self::record_security_event( 'api_attack', 'REST API auth failure', $detail );
+
+        $body  = "🔌 REST API brute-force attempt\n";
+        $body .= "─────────────────────────\n";
+        $body .= "Path:      {$method} {$path}\n";
+        $body .= "Auth type: {$auth_type}\n";
+        $body .= "Username:  " . ( $tried_user ?: '(none)' ) . "\n";
+        $body .= "IP:        {$ip}" . ( $cc ? " · {$cc}" : '' ) . "\n";
+        $body .= "Reason:    {$reason} [{$error_code}]\n";
+        $body .= "Agent:     {$ua}";
+
+        self::send_ntfy( 'REST API auth failure', $body, 'high', 'rotating_light' );
     }
 
     /**
