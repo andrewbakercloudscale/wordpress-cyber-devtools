@@ -1014,4 +1014,195 @@
     document.addEventListener('csdt:tab-shown', function(e) {
         if (e.detail && e.detail.tab === 'headers') csdtCspInit();
     });
+
+    // ── CSP Site Audit ────────────────────────────────────────────────────
+    // Loads key pages in hidden iframes, collects securitypolicyviolation
+    // events, and reports results inline in the panel.
+
+    var AUDIT_PAGES = [
+        { path: '/',       label: 'Home' },
+        { path: '/blog/',  label: 'Blog' },
+    ];
+
+    // Patterns for known/expected violations — never flagged as errors.
+    var EXPECTED = [
+        /googletagmanager\.com/,
+        /googlesyndication\.com/,
+        /adsbygoogle/,
+        /cloudflareinsights\.com/,
+        /recaptcha/,
+        /youtube\.com/,
+        /ytimg\.com/,
+        /doubleclick\.net/,
+        /google-analytics\.com/,
+        /googleadservices\.com/,
+        /fonts\.googleapis\.com/,
+        /fonts\.gstatic\.com/,
+    ];
+
+    function isExpected(blocked) {
+        return EXPECTED.some(function(p) { return p.test(blocked); });
+    }
+
+    function escH(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function runCspAudit() {
+        var auditBtn    = document.getElementById('cs-csp-audit-btn');
+        var auditWrap   = document.getElementById('cs-csp-audit-wrap');
+        var auditBody   = document.getElementById('cs-csp-audit-body');
+        var auditStatus = document.getElementById('cs-csp-audit-status');
+        var framesDiv   = document.getElementById('cs-csp-audit-frames');
+        if (!auditWrap || !auditBody || !framesDiv) return;
+
+        var siteUrl = (window.csdtCspI18n && window.csdtCspI18n.siteUrl) || (window.location.origin + '/');
+
+        // Also probe the most recent article — fetch via REST.
+        var pagesPromise = fetch(siteUrl.replace(/\/$/, '') + '/wp-json/wp/v2/posts?per_page=1&status=publish&_fields=link', { credentials: 'omit' })
+            .then(function(r) { return r.json(); })
+            .then(function(posts) {
+                var pages = AUDIT_PAGES.slice();
+                if (posts && posts[0] && posts[0].link) {
+                    var articlePath = posts[0].link.replace(siteUrl.replace(/\/$/, ''), '') || '/';
+                    pages.push({ path: articlePath, label: 'Latest article', full: posts[0].link });
+                }
+                return pages;
+            })
+            .catch(function() { return AUDIT_PAGES.slice(); });
+
+        auditWrap.style.display = '';
+        auditBody.innerHTML = '<div style="color:#64748b;font-size:12px;padding:4px 0;">⏳ Loading pages…</div>';
+        if (auditStatus) auditStatus.textContent = 'Running…';
+        if (auditBtn) { auditBtn.disabled = true; auditBtn.textContent = '⏳ Auditing…'; }
+
+        pagesPromise.then(function(pages) {
+            var results = [];
+            var done    = 0;
+            var total   = pages.length;
+
+            // Clean up old iframes
+            framesDiv.innerHTML = '';
+
+            pages.forEach(function(pg) {
+                var violations = [];
+                var timedOut   = false;
+                var url = pg.full || (siteUrl.replace(/\/$/, '') + pg.path);
+
+                var iframe = document.createElement('iframe');
+                iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+                iframe.style.cssText = 'position:absolute;width:1px;height:1px;';
+                framesDiv.appendChild(iframe);
+
+                // Listen for CSP violations bubbling from the iframe's document.
+                // Note: violation events from cross-origin iframes don't bubble,
+                // but since this is same-origin they do.
+                function onViolation(e) {
+                    if (!isExpected(e.blockedURI || '')) {
+                        violations.push({
+                            directive: e.effectiveDirective,
+                            blocked:   e.blockedURI,
+                            source:    e.sourceFile ? e.sourceFile.split('/').pop() + ':' + e.lineNumber : '',
+                        });
+                    }
+                }
+
+                var finishTimeout = setTimeout(function() {
+                    timedOut = true;
+                    finish();
+                }, 12000);
+
+                iframe.addEventListener('load', function() {
+                    // Inject listener into iframe document (same-origin only)
+                    try {
+                        var idoc = iframe.contentDocument;
+                        if (idoc) {
+                            idoc.addEventListener('securitypolicyviolation', onViolation);
+                        }
+                    } catch(ex) { /* cross-origin fallback — can't inject */ }
+                    // Give scripts 4 s to execute before collecting
+                    setTimeout(function() {
+                        clearTimeout(finishTimeout);
+                        finish();
+                    }, 4000);
+                });
+
+                // Also listen at top level for same-origin violations
+                document.addEventListener('securitypolicyviolation', function globalListener(e) {
+                    if (!isExpected(e.blockedURI || '')) {
+                        violations.push({
+                            directive: e.effectiveDirective,
+                            blocked:   e.blockedURI,
+                            source:    e.sourceFile ? e.sourceFile.split('/').pop() + ':' + e.lineNumber : '',
+                        });
+                    }
+                    document.removeEventListener('securitypolicyviolation', globalListener);
+                });
+
+                iframe.src = url;
+
+                function finish() {
+                    results.push({ label: pg.label, url: url, violations: violations, timedOut: timedOut });
+                    done++;
+                    if (auditStatus) auditStatus.textContent = 'Checking ' + done + '/' + total + '…';
+                    if (done === total) renderResults();
+                }
+            });
+
+            function renderResults() {
+                if (auditBtn) { auditBtn.disabled = false; auditBtn.textContent = '🔍 Run Site Audit'; }
+                if (auditStatus) auditStatus.textContent = 'Done — ' + total + ' page' + (total !== 1 ? 's' : '') + ' checked';
+                framesDiv.innerHTML = '';
+
+                var anyUnexpected = results.some(function(r) { return r.violations.length > 0; });
+                var html = '';
+
+                results.forEach(function(r) {
+                    var icon   = r.violations.length === 0 ? '✅' : '⚠️';
+                    var colour = r.violations.length === 0 ? '#15803d' : '#92400e';
+                    var bg     = r.violations.length === 0 ? '#f0fdf4' : '#fffbeb';
+                    var bd     = r.violations.length === 0 ? '#86efac' : '#fcd34d';
+
+                    html += '<div style="background:' + bg + ';border:1px solid ' + bd + ';border-radius:6px;padding:8px 12px;margin-bottom:8px;">';
+                    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
+                    html += '<span style="font-weight:700;color:' + colour + ';">' + icon + ' ' + escH(r.label) + '</span>';
+                    html += '<a href="' + escH(r.url) + '" target="_blank" rel="noopener" style="font-size:10px;color:#6366f1;text-decoration:none;">' + escH(r.url.replace(/^https?:\/\/[^/]+/, '').slice(0, 60) || '/') + ' ↗</a>';
+                    html += '</div>';
+
+                    if (r.violations.length > 0) {
+                        html += '<table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px;">';
+                        html += '<tr style="background:rgba(0,0,0,.04);"><th style="text-align:left;padding:3px 6px;color:#6b7280;">Directive</th><th style="text-align:left;padding:3px 6px;color:#6b7280;">Blocked resource</th><th style="text-align:left;padding:3px 6px;color:#6b7280;">Source</th></tr>';
+                        r.violations.forEach(function(v) {
+                            html += '<tr style="border-top:1px solid rgba(0,0,0,.06);">';
+                            html += '<td style="padding:3px 6px;font-weight:600;color:#b45309;">' + escH(v.directive) + '</td>';
+                            html += '<td style="padding:3px 6px;word-break:break-all;color:#374151;">' + escH(v.blocked) + '</td>';
+                            html += '<td style="padding:3px 6px;color:#94a3b8;">' + escH(v.source) + '</td>';
+                            html += '</tr>';
+                        });
+                        html += '</table>';
+                    }
+
+                    html += '</div>';
+                });
+
+                if (!anyUnexpected) {
+                    html = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;font-weight:700;color:#15803d;margin-bottom:10px;">✅ All ' + total + ' pages clean — no unexpected CSP violations detected.</div>' + html;
+                } else {
+                    html = '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:10px;">'
+                        + '<strong>⚠️ CSP violations found.</strong> Add the affected services to your allowlist above, then save and re-run the audit.'
+                        + '</div>' + html;
+                }
+
+                html += '<p style="font-size:10px;color:#94a3b8;margin:8px 0 0;">Known third-party services (Google, Cloudflare, YouTube, etc.) are filtered from results. Only unexpected violations are shown.</p>';
+
+                auditBody.innerHTML = html;
+            }
+        });
+    }
+
+    // Wire up the button — use event delegation so it works after tab-router injection.
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('#cs-csp-audit-btn')) runCspAudit();
+    });
+
 })();

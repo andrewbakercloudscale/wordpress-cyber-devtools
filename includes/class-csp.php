@@ -372,6 +372,7 @@ class CSDT_CSP {
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <button type="button" id="cs-csp-save-btn" class="cs-btn-primary cs-btn-sm"><?php esc_html_e( 'Save Settings', 'cloudscale-devtools' ); ?></button>
                 <span id="cs-csp-saved" style="display:none;color:#16a34a;font-size:13px;font-weight:600;">✓ <?php esc_html_e( 'Saved', 'cloudscale-devtools' ); ?></span>
+                <button type="button" id="cs-csp-audit-btn" class="cs-btn-secondary cs-btn-sm" style="background:#1e3a8a;color:#fff;border-color:#1e3a8a;">🔍 <?php esc_html_e( 'Run Site Audit', 'cloudscale-devtools' ); ?></button>
                 <?php if ( $backup_time ) : ?>
                 <button type="button" id="cs-csp-rollback-btn" class="cs-btn-secondary cs-btn-sm" style="border-color:#f87171;color:#dc2626;">
                     ↩ <?php esc_html_e( 'Rollback to previous settings', 'cloudscale-devtools' ); ?>
@@ -380,6 +381,17 @@ class CSDT_CSP {
                 <span id="cs-csp-rolledback" style="display:none;color:#d97706;font-size:13px;font-weight:600;">↩ <?php esc_html_e( 'Rolled back', 'cloudscale-devtools' ); ?></span>
                 <?php endif; ?>
             </div>
+
+            <!-- ── Site Audit Results ─────────────────────────────────── -->
+            <div id="cs-csp-audit-wrap" style="display:none;margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                <div style="background:#1e3a8a;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <span style="color:#fff;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;">🔍 <?php esc_html_e( 'CSP Site Audit', 'cloudscale-devtools' ); ?></span>
+                    <span id="cs-csp-audit-status" style="font-size:11px;color:#93c5fd;"></span>
+                </div>
+                <div id="cs-csp-audit-body" style="background:#fff;padding:12px 14px;font-size:12px;"></div>
+            </div>
+            <!-- hidden iframes for CSP probe — injected and removed by JS -->
+            <div id="cs-csp-audit-frames" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;"></div>
 
             <?php if ( ! empty( $csp_history ) ) : ?>
             <!-- ── Change History ─────────────────────────────────────── -->
