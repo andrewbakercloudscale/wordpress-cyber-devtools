@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.764
+ * Version: 1.9.766
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.764';
+    const VERSION      = '1.9.766';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -594,6 +594,8 @@ class CloudScale_DevTools {
         // ntfy alerts for failed logins and REST API auth failures.
         add_action( 'wp_login_failed', [ 'CSDT_Login', 'on_login_failed' ] );
         add_action( 'application_password_failed_authentication', [ 'CSDT_Login', 'on_rest_auth_failed' ] );
+        // Alert on ANY write to security-critical options — catches WP-CLI, direct DB edits, etc.
+        add_action( 'updated_option', [ 'CSDT_Login', 'on_option_updated' ], 10, 3 );
         // Style the login error panel.
         add_action( 'login_enqueue_scripts', [ 'CSDT_Login', 'login_error_styles' ] );
         // Username enumeration protection — only register if option is enabled (default on).
@@ -1336,6 +1338,16 @@ class CloudScale_DevTools {
      * @return void
      */
     public static function enqueue_admin_assets( $hook ) {
+        // Dashboard widget inline CSS — needed on the dashboard only.
+        if ( $hook === 'index.php' ) {
+            wp_add_inline_style( 'dashboard', self::get_dashboard_widget_css() );
+        }
+
+        // All remaining assets are only needed on the plugin's own tools page.
+        if ( $hook !== 'tools_page_' . self::TOOLS_SLUG ) {
+            return;
+        }
+
         // Tabs CSS
         wp_enqueue_style(
             'csdt-admin-tabs',
@@ -1345,11 +1357,6 @@ class CloudScale_DevTools {
         );
         // Explain modal description styling — scoped to .cs-explain-desc.
         wp_add_inline_style( 'csdt-admin-tabs', CSDT_Perf_Monitor::get_explain_modal_css() );
-
-        // Dashboard widget styles (only on wp-admin dashboard).
-        if ( $hook === 'index.php' ) {
-            wp_add_inline_style( 'dashboard', self::get_dashboard_widget_css() );
-        }
 
         // Migrate CSS + JS
         wp_enqueue_style(

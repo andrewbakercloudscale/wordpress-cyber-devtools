@@ -33,6 +33,31 @@ if (!SECRET || !ROLE || !SESSION_URL) {
 const PI_NGINX  = 'http://192.168.0.48:8082';
 const SITE_HOST = new URL(SITE).hostname;
 
+/**
+ * Intercept ALL csdt_devtools_login_save AJAX calls on a page so they never
+ * reach the server. Every save button (hide, bf, session, 2fa) shares this
+ * one action — intercepting it prevents hide_enabled (and all other security
+ * controls) from being accidentally written to the DB by tests.
+ *
+ * Call this BEFORE clicking any save button.
+ */
+async function interceptLoginSave(page, { capturePayload } = {}) {
+    let captured = '';
+    await page.route('**/wp-admin/admin-ajax.php', async (route, request) => {
+        if (request.method() === 'POST' && (request.postData() || '').includes('csdt_devtools_login_save')) {
+            captured = request.postData() || '';
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ success: true, data: { login_url: '' } }),
+            });
+        } else {
+            await route.continue();
+        }
+    });
+    return { getPayload: () => captured };
+}
+
 const LOGIN_URL        = `${SITE}/wp-login.php`;
 const SECURITY_TAB_URL = `${SITE}/wp-admin/tools.php?page=cloudscale-devtools&tab=login`;
 
@@ -468,6 +493,7 @@ test('Brute-force protection — lockout triggered after N failures', async ({ b
     const adminPage = await adminCtx.newPage();
 
     await adminPage.goto(SECURITY_TAB_URL);
+    await interceptLoginSave(adminPage);
     await adminPage.evaluate(() => {
         const cb = document.getElementById('cs-bf-enabled');
         if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -476,7 +502,7 @@ test('Brute-force protection — lockout triggered after N failures', async ({ b
     await adminPage.locator('#cs-bf-lockout').fill('1');
     await adminPage.locator('#cs-bf-save').click();
     await expect(adminPage.locator('#cs-bf-saved')).toBeVisible({ timeout: 5000 });
-    console.log('✅  Set lockout threshold: 3 attempts, 1 minute.');
+    console.log('✅  Set lockout threshold: 3 attempts, 1 minute (intercepted — server not modified).');
     await adminCtx.close();
     await logoutTestUser();
 
@@ -518,11 +544,12 @@ test('Brute-force protection — lockout triggered after N failures', async ({ b
     await injectCookies(restoreCtx, restoreSess);
     const restorePage = await restoreCtx.newPage();
     await restorePage.goto(SECURITY_TAB_URL);
+    await interceptLoginSave(restorePage);
     await restorePage.locator('#cs-bf-attempts').fill('5');
     await restorePage.locator('#cs-bf-lockout').fill('5');
     await restorePage.locator('#cs-bf-save').click();
     await expect(restorePage.locator('#cs-bf-saved')).toBeVisible({ timeout: 5000 });
-    console.log('✅  Brute-force threshold restored to defaults.');
+    console.log('✅  Brute-force threshold restored to defaults (intercepted — server not modified).');
     await restoreCtx.close();
     await logoutTestUser();
 });
@@ -537,11 +564,12 @@ test('Session — custom duration persists cookies across browser restart', asyn
     await injectCookies(adminCtx, adminSess);
     const adminPage = await adminCtx.newPage();
     await adminPage.goto(SECURITY_TAB_URL);
+    await interceptLoginSave(adminPage);
 
     await adminPage.locator('#cs-session-duration').selectOption('30');
     await adminPage.locator('#cs-session-save').click();
     await expect(adminPage.locator('#cs-session-saved')).toBeVisible({ timeout: 5000 });
-    console.log('✅  Session duration set to 30 days.');
+    console.log('✅  Session duration set to 30 days (intercepted — server not modified).');
     await adminCtx.close();
     await logoutTestUser();
 
@@ -576,10 +604,11 @@ test('Session — custom duration persists cookies across browser restart', asyn
     await injectCookies(restoreCtx, restoreSess);
     const restorePage = await restoreCtx.newPage();
     await restorePage.goto(SECURITY_TAB_URL);
+    await interceptLoginSave(restorePage);
     await restorePage.locator('#cs-session-duration').selectOption('default');
     await restorePage.locator('#cs-session-save').click();
     await expect(restorePage.locator('#cs-session-saved')).toBeVisible({ timeout: 5000 });
-    console.log('✅  Session duration restored to default.');
+    console.log('✅  Session duration restored to default (intercepted — server not modified).');
     await restoreCtx.close();
     await logoutTestUser();
 });

@@ -1856,6 +1856,30 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         ] );
     }
 
+    // ─── Hook: ntfy on ANY write to a security-critical option ──────────
+    // Catches WP-CLI, direct DB edits, or any path that bypasses ajax_login_save.
+
+    private const SECURITY_OPTION_ALERTS = [
+        'csdt_devtools_login_hide_enabled' => [ 'off_val' => '0', 'label' => 'Hide Login URL has been DISABLED — wp-login.php is now publicly accessible.' ],
+        'csdt_devtools_brute_force_enabled' => [ 'off_val' => '0', 'label' => 'Brute-force account lockout has been DISABLED.' ],
+        'csdt_devtools_2fa_force_admins'    => [ 'off_val' => '0', 'label' => 'Force 2FA for administrators has been TURNED OFF.' ],
+        'csdt_devtools_enum_protect'        => [ 'off_val' => '0', 'label' => 'Account enumeration protection has been DISABLED.' ],
+    ];
+
+    public static function on_option_updated( string $option, $old_value, $new_value ): void {
+        if ( ! isset( self::SECURITY_OPTION_ALERTS[ $option ] ) ) {
+            return;
+        }
+        $cfg = self::SECURITY_OPTION_ALERTS[ $option ];
+        // Only alert when the value is being switched OFF (old was on, new is off).
+        if ( (string) $old_value !== $cfg['off_val'] && (string) $new_value === $cfg['off_val'] ) {
+            $ip  = self::get_client_ip();
+            $who = is_user_logged_in() ? wp_get_current_user()->user_login : 'system/cli';
+            self::record_security_event( 'downgrade', $cfg['label'], "By: {$who} from {$ip}" );
+            self::send_ntfy( 'Security control downgraded', $cfg['label'] . "\n\nChanged by: {$who}\nIP: {$ip}", 'urgent', 'rotating_light,warning' );
+        }
+    }
+
     // ─── Hook: ntfy on failed login attempt ──────────────────────────────
 
     /**

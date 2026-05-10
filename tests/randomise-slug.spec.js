@@ -62,9 +62,9 @@ test.describe('Randomise slug button', () => {
         expect(after).toMatch(HEX16);
         expect(after).not.toBe(before);
 
-        // URL preview should update too
-        const urlText = await page.$eval('#cs-current-login-url', el => el.textContent);
-        expect(urlText).toContain(after);
+        // URL preview updates — shown text is masked (bullets), real value in data-real attr
+        const realUrl = await page.$eval('#cs-current-login-url-display', el => el.dataset.real || '');
+        expect(realUrl).toContain(after);
 
         await ctx.close();
     });
