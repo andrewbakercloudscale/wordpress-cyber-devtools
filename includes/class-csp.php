@@ -278,6 +278,17 @@ class CSDT_CSP {
         </div>
         <div style="padding:20px;background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 6px 6px;margin-bottom:0;" id="cs-csp-panel">
 
+            <!-- ── Site Audit CTA ───────────────────────────────────────── -->
+            <div style="background:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 100%);border-radius:8px;padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:#fff;">🔍 <?php esc_html_e( 'CSP Site Audit', 'cloudscale-devtools' ); ?></div>
+                    <div style="font-size:11px;color:#93c5fd;margin-top:2px;"><?php esc_html_e( 'Opens each page in a new tab, lets scripts run, then reads the violation log. Takes ~30 seconds.', 'cloudscale-devtools' ); ?></div>
+                </div>
+                <button type="button" id="cs-csp-audit-btn" style="background:#fff;color:#1e40af;font-size:13px;font-weight:700;padding:9px 20px;border:none;border-radius:7px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2);">
+                    🔍 <?php esc_html_e( 'Run Site Audit', 'cloudscale-devtools' ); ?>
+                </button>
+            </div>
+
             <!-- Quick-start guide — hidden once CSP is enabled -->
             <?php if ( ! $csp_on ) : ?>
             <div id="cs-csp-quickstart" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 16px;margin-bottom:16px;">
@@ -372,7 +383,6 @@ class CSDT_CSP {
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <button type="button" id="cs-csp-save-btn" class="cs-btn-primary cs-btn-sm"><?php esc_html_e( 'Save Settings', 'cloudscale-devtools' ); ?></button>
                 <span id="cs-csp-saved" style="display:none;color:#16a34a;font-size:13px;font-weight:600;">✓ <?php esc_html_e( 'Saved', 'cloudscale-devtools' ); ?></span>
-                <button type="button" id="cs-csp-audit-btn" class="cs-btn-secondary cs-btn-sm" style="background:#1e3a8a;color:#fff;border-color:#1e3a8a;">🔍 <?php esc_html_e( 'Run Site Audit', 'cloudscale-devtools' ); ?></button>
                 <?php if ( $backup_time ) : ?>
                 <button type="button" id="cs-csp-rollback-btn" class="cs-btn-secondary cs-btn-sm" style="border-color:#f87171;color:#dc2626;">
                     ↩ <?php esc_html_e( 'Rollback to previous settings', 'cloudscale-devtools' ); ?>

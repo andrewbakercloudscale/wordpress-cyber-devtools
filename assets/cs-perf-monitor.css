@@ -514,14 +514,14 @@
     0%,100% { opacity: 1; }
     50%      { opacity: .5; }
 }
-/* Toolbar flash — 3 red pulses when a browser error is captured */
+/* Toolbar flash — 5 red pulses when a browser error is captured */
 @keyframes cs-flash-err {
     0%,100% { background: transparent; box-shadow: none; }
-    15%,45%,75% { background: rgba(244,71,71,.25); box-shadow: 0 0 0 2px #f44747; }
-    30%,60%     { background: transparent; box-shadow: none; }
+    9%,27%,45%,63%,81%  { background: rgba(244,71,71,.30); box-shadow: 0 0 0 3px #f44747; }
+    18%,36%,54%,72%,90% { background: transparent; box-shadow: none; }
 }
 .cs-monitor-flash {
-    animation: cs-flash-err 1.2s ease-in-out;
+    animation: cs-flash-err 2s ease-in-out;
     border-radius: 6px;
 }
 .cs-time-val { font-size: 11px; font-variant-numeric: tabular-nums; }

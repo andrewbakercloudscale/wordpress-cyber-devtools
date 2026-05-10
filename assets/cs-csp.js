@@ -1053,10 +1053,21 @@
         var auditWrap   = document.getElementById('cs-csp-audit-wrap');
         var auditBody   = document.getElementById('cs-csp-audit-body');
         var auditStatus = document.getElementById('cs-csp-audit-status');
-        var framesDiv   = document.getElementById('cs-csp-audit-frames');
-        if (!auditWrap || !auditBody || !framesDiv) return;
+        if (!auditWrap || !auditBody) return;
 
-        var siteUrl = (window.csdtCspI18n && window.csdtCspI18n.siteUrl) || (window.location.origin + '/');
+        var siteUrl  = (window.csdtCspI18n && window.csdtCspI18n.siteUrl) || (window.location.origin + '/');
+        var ajaxUrl  = (window.csdtVulnScan && window.csdtVulnScan.ajaxUrl) || (window.ajaxurl || '');
+        var nonce    = (window.csdtVulnScan && window.csdtVulnScan.nonce) || '';
+        var DWELL_MS = 7000;  // time for each page to fully load and fire violations
+
+        // Helper: post to admin-ajax.php
+        function wpAjax(action, extra) {
+            var fd = new FormData();
+            fd.append('action', action);
+            fd.append('nonce',  nonce);
+            Object.keys(extra || {}).forEach(function(k) { fd.append(k, extra[k]); });
+            return fetch(ajaxUrl, { method: 'POST', body: fd }).then(function(r) { return r.json(); });
+        }
 
         // Also probe the most recent article — fetch via REST.
         var pagesPromise = fetch(siteUrl.replace(/\/$/, '') + '/wp-json/wp/v2/posts?per_page=1&status=publish&_fields=link', { credentials: 'omit' })
@@ -1064,100 +1075,93 @@
             .then(function(posts) {
                 var pages = AUDIT_PAGES.slice();
                 if (posts && posts[0] && posts[0].link) {
-                    var articlePath = posts[0].link.replace(siteUrl.replace(/\/$/, ''), '') || '/';
-                    pages.push({ path: articlePath, label: 'Latest article', full: posts[0].link });
+                    pages.push({ path: '', label: 'Latest article', full: posts[0].link });
                 }
                 return pages;
             })
             .catch(function() { return AUDIT_PAGES.slice(); });
 
         auditWrap.style.display = '';
-        auditBody.innerHTML = '<div style="color:#64748b;font-size:12px;padding:4px 0;">⏳ Loading pages…</div>';
+        auditBody.innerHTML = '<div style="color:#64748b;font-size:12px;padding:8px 0;">⏳ Clearing violation log and opening pages…<br><span style="font-size:11px;color:#94a3b8;">Each page is opened in a new tab and given ' + (DWELL_MS/1000) + 's to run its scripts. Do not close the tabs.</span></div>';
         if (auditStatus) auditStatus.textContent = 'Running…';
         if (auditBtn) { auditBtn.disabled = true; auditBtn.textContent = '⏳ Auditing…'; }
 
-        pagesPromise.then(function(pages) {
-            var results = [];
-            var done    = 0;
-            var total   = pages.length;
+        // Step 1: clear existing violation log so only this audit's violations appear.
+        wpAjax('csdt_devtools_csp_violations_clear', {}).catch(function(){}).then(function() {
+            pagesPromise.then(function(pages) {
+                var total = pages.length;
+                var popsOpened = 0;
 
-            // Clean up old iframes
-            framesDiv.innerHTML = '';
-
-            pages.forEach(function(pg) {
-                var violations = [];
-                var timedOut   = false;
-                var url = pg.full || (siteUrl.replace(/\/$/, '') + pg.path);
-
-                var iframe = document.createElement('iframe');
-                iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
-                iframe.style.cssText = 'position:absolute;width:1px;height:1px;';
-                framesDiv.appendChild(iframe);
-
-                // Listen for CSP violations bubbling from the iframe's document.
-                // Note: violation events from cross-origin iframes don't bubble,
-                // but since this is same-origin they do.
-                function onViolation(e) {
-                    if (!isExpected(e.blockedURI || '')) {
-                        violations.push({
-                            directive: e.effectiveDirective,
-                            blocked:   e.blockedURI,
-                            source:    e.sourceFile ? e.sourceFile.split('/').pop() + ':' + e.lineNumber : '',
-                        });
-                    }
-                }
-
-                var finishTimeout = setTimeout(function() {
-                    timedOut = true;
-                    finish();
-                }, 12000);
-
-                iframe.addEventListener('load', function() {
-                    // Inject listener into iframe document (same-origin only)
-                    try {
-                        var idoc = iframe.contentDocument;
-                        if (idoc) {
-                            idoc.addEventListener('securitypolicyviolation', onViolation);
-                        }
-                    } catch(ex) { /* cross-origin fallback — can't inject */ }
-                    // Give scripts 4 s to execute before collecting
+                // Step 2: open each page in a real tab (real scripts, real CSP enforcement).
+                // Stagger by 1s to avoid browser throttling.
+                pages.forEach(function(pg, idx) {
+                    var url = pg.full || (siteUrl.replace(/\/$/, '') + pg.path);
                     setTimeout(function() {
-                        clearTimeout(finishTimeout);
-                        finish();
-                    }, 4000);
+                        var w = window.open(url, '_blank', 'noopener');
+                        popsOpened++;
+                        if (auditStatus) auditStatus.textContent = 'Opened ' + popsOpened + '/' + total + ' pages — waiting for scripts to run…';
+                        // Auto-close after dwell time.
+                        if (w) { setTimeout(function() { try { w.close(); } catch(e){} }, DWELL_MS); }
+                    }, idx * 1000);
                 });
 
-                // Also listen at top level for same-origin violations
-                document.addEventListener('securitypolicyviolation', function globalListener(e) {
-                    if (!isExpected(e.blockedURI || '')) {
-                        violations.push({
-                            directive: e.effectiveDirective,
-                            blocked:   e.blockedURI,
-                            source:    e.sourceFile ? e.sourceFile.split('/').pop() + ':' + e.lineNumber : '',
+                // Step 3: after all pages have had time to run, read the violation log.
+                var waitMs = total * 1000 + DWELL_MS + 1000;
+                if (auditStatus) auditStatus.textContent = 'Waiting for violations to be reported…';
+                setTimeout(function() {
+                    wpAjax('csdt_devtools_csp_violations_get', {})
+                        .then(function(resp) {
+                            var violations = (resp.success && Array.isArray(resp.data)) ? resp.data : [];
+                            renderResults(pages, violations);
+                        })
+                        .catch(function() { renderResults(pages, []); });
+                }, waitMs);
+            });
+        });
+
+        function renderResults(pages, violations) {
+                if (auditBtn) { auditBtn.disabled = false; auditBtn.textContent = '🔍 Run Site Audit'; }
+                var total = pages.length;
+                if (auditStatus) auditStatus.textContent = 'Done — ' + total + ' page' + (total !== 1 ? 's' : '') + ' checked';
+
+                // Group violations by page URL.
+                var byUrl = {};
+                violations.forEach(function(v) {
+                    var pageUrl = v.page || '';
+                    if (!byUrl[pageUrl]) byUrl[pageUrl] = [];
+                    if (!isExpected(v.blocked_uri || '')) {
+                        byUrl[pageUrl].push({
+                            directive: v.effective_directive || v.directive || '',
+                            blocked:   v.blocked_uri || '',
+                            source:    v.source_file ? v.source_file.split('/').pop() + ':' + (v.line_number || '') : '',
                         });
                     }
-                    document.removeEventListener('securitypolicyviolation', globalListener);
                 });
 
-                iframe.src = url;
+                // Per-page results keyed by full URL.
+                var pageResults = pages.map(function(pg) {
+                    var url  = pg.full || (siteUrl.replace(/\/$/, '') + pg.path);
+                    var viols = [];
+                    Object.keys(byUrl).forEach(function(key) {
+                        if (key === url || key.indexOf(url.replace(/\/$/, '')) === 0) {
+                            viols = viols.concat(byUrl[key]);
+                        }
+                    });
+                    return { label: pg.label, url: url, violations: viols };
+                });
 
-                function finish() {
-                    results.push({ label: pg.label, url: url, violations: violations, timedOut: timedOut });
-                    done++;
-                    if (auditStatus) auditStatus.textContent = 'Checking ' + done + '/' + total + '…';
-                    if (done === total) renderResults();
-                }
-            });
+                // Also include violations for URLs not matched to a page (catch-all).
+                var allMatchedUrls = {};
+                pageResults.forEach(function(r) { allMatchedUrls[r.url] = true; });
+                var extra = [];
+                Object.keys(byUrl).forEach(function(key) {
+                    if (!allMatchedUrls[key]) { extra = extra.concat(byUrl[key]); }
+                });
 
-            function renderResults() {
-                if (auditBtn) { auditBtn.disabled = false; auditBtn.textContent = '🔍 Run Site Audit'; }
-                if (auditStatus) auditStatus.textContent = 'Done — ' + total + ' page' + (total !== 1 ? 's' : '') + ' checked';
-                framesDiv.innerHTML = '';
+                var anyUnexpected = pageResults.some(function(r) { return r.violations.length > 0; }) || extra.length > 0;
 
-                var anyUnexpected = results.some(function(r) { return r.violations.length > 0; });
                 var html = '';
-
-                results.forEach(function(r) {
+                pageResults.forEach(function(r) {
                     var icon   = r.violations.length === 0 ? '✅' : '⚠️';
                     var colour = r.violations.length === 0 ? '#15803d' : '#92400e';
                     var bg     = r.violations.length === 0 ? '#f0fdf4' : '#fffbeb';
@@ -1168,7 +1172,6 @@
                     html += '<span style="font-weight:700;color:' + colour + ';">' + icon + ' ' + escH(r.label) + '</span>';
                     html += '<a href="' + escH(r.url) + '" target="_blank" rel="noopener" style="font-size:10px;color:#6366f1;text-decoration:none;">' + escH(r.url.replace(/^https?:\/\/[^/]+/, '').slice(0, 60) || '/') + ' ↗</a>';
                     html += '</div>';
-
                     if (r.violations.length > 0) {
                         html += '<table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px;">';
                         html += '<tr style="background:rgba(0,0,0,.04);"><th style="text-align:left;padding:3px 6px;color:#6b7280;">Directive</th><th style="text-align:left;padding:3px 6px;color:#6b7280;">Blocked resource</th><th style="text-align:left;padding:3px 6px;color:#6b7280;">Source</th></tr>';
@@ -1181,7 +1184,6 @@
                         });
                         html += '</table>';
                     }
-
                     html += '</div>';
                 });
 
@@ -1192,12 +1194,9 @@
                         + '<strong>⚠️ CSP violations found.</strong> Add the affected services to your allowlist above, then save and re-run the audit.'
                         + '</div>' + html;
                 }
-
                 html += '<p style="font-size:10px;color:#94a3b8;margin:8px 0 0;">Known third-party services (Google, Cloudflare, YouTube, etc.) are filtered from results. Only unexpected violations are shown.</p>';
-
                 auditBody.innerHTML = html;
-            }
-        });
+        }
     }
 
     // Wire up the button — use event delegation so it works after tab-router injection.
