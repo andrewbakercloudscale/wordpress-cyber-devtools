@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.778
+ * Version: 1.9.779
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.778';
+    const VERSION      = '1.9.779';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -3249,7 +3249,8 @@ class CloudScale_DevTools {
         $bf_enabled            = get_option( 'csdt_devtools_brute_force_enabled', '1' );
         $bf_attempts           = get_option( 'csdt_devtools_brute_force_attempts', '5' );
         $bf_lockout            = get_option( 'csdt_devtools_brute_force_lockout', '10' );
-        $bf_enum_protect       = get_option( 'csdt_devtools_enum_protect', '1' );
+        $bf_enum_protect          = get_option( 'csdt_devtools_enum_protect', '1' );
+        $bf_auto_block_threshold  = (int) get_option( 'csdt_devtools_bf_auto_block_threshold', '10' );
         $ntfy_login_valid      = get_option( 'csdt_ntfy_login_valid_user', '0' );
         $ntfy_login_invalid    = get_option( 'csdt_ntfy_login_invalid_user', '0' );
         $ntfy_configured       = ! empty( get_option( 'csdt_scan_schedule_ntfy_url', '' ) );
@@ -3303,6 +3304,16 @@ class CloudScale_DevTools {
                         <span class="cs-hint" style="margin-top:4px;display:block;"><?php esc_html_e( 'Returns "Invalid username or password." for all credential failures — prevents attackers from discovering which usernames are registered on this site.', 'cloudscale-devtools' ); ?></span>
                     </div>
                 </div>
+                <!-- Auto IP block -->
+                <div class="cs-field-row" style="margin-top:18px;">
+                    <div class="cs-field">
+                        <label class="cs-label" for="cs-bf-auto-block"><?php esc_html_e( 'Auto-block IP after N failures / hour:', 'cloudscale-devtools' ); ?></label>
+                        <input type="number" id="cs-bf-auto-block" class="cs-input" min="0" max="1000"
+                               value="<?php echo esc_attr( $bf_auto_block_threshold ); ?>" style="max-width:100px">
+                        <span class="cs-hint"><?php esc_html_e( 'Permanently adds the IP to the blocklist after this many failures within 1 hour. Set to 0 to disable auto-blocking. Default: 10.', 'cloudscale-devtools' ); ?></span>
+                    </div>
+                </div>
+
                 <!-- ntfy login alerts -->
                 <div class="cs-field-row" style="margin-top:18px;border-top:1px solid #e2e8f0;padding-top:16px;">
                     <div class="cs-field">
@@ -4591,11 +4602,26 @@ class CloudScale_DevTools {
             if ( count( $bf_widget_rows ) >= 10 ) break;
         }
 
-        // Categorise tried usernames: valid (active WP account), deleted (existed, now gone),
-        // invalid (never existed — bots guessing common names).
+        // Three groups:
+        //  1. valid   — username currently exists as a WP account
+        //  2. deleted — was recorded as a real-account attack (type='attack' in security events log)
+        //               but no longer exists in WP
+        //  3. invalid — never existed; just bots guessing common names (shown as count only)
+        $attack_usernames = [];
+        $sec_evts = get_option( 'csdt_security_events', [] );
+        if ( is_array( $sec_evts ) ) {
+            foreach ( $sec_evts as $se ) {
+                if ( ( $se['type'] ?? '' ) === 'attack' ) {
+                    // title format: "Login attack on 'username'"
+                    if ( preg_match( "/Login attack on '(.+)'/", $se['title'] ?? '', $m ) ) {
+                        $attack_usernames[ $m[1] ] = true;
+                    }
+                }
+            }
+        }
+
         $valid_users   = [];
         $deleted_users = [];
-        $invalid_count = 0;
         $seen_users    = [];
         foreach ( array_reverse( $bf_log ) as $entry ) {
             $usr = (string) ( $entry[1] ?? $entry['username'] ?? '' );
@@ -4604,35 +4630,19 @@ class CloudScale_DevTools {
             $u = get_user_by( 'login', $usr );
             if ( ! $u ) { $u = get_user_by( 'email', $usr ); }
             if ( $u ) {
-                $valid_users[] = [
+                $valid_users[ $usr ] = [
                     'login'      => $u->user_login,
                     'email_mask' => preg_replace( '/(?<=.).(?=.*@)/u', '•', $u->user_email ),
                 ];
-            } else {
-                // Heuristic: if username looks like a real WP login (alphanumeric, no random
-                // strings) we flag as deleted; pure noise goes to invalid.
-                // Simple rule: previously appeared in WP user list is unknowable, so treat all
-                // non-existing accounts with > 3 chars that aren't obvious random strings as deleted.
-                // For now: anything tried is either valid or we split on whether it looks like
-                // a plausible human username (no hex-like strings, not purely numeric).
-                $is_plausible = strlen( $usr ) >= 4
-                    && ! preg_match( '/^[0-9a-f]{8,}$/i', $usr )
-                    && ! preg_match( '/^\d+$/', $usr );
-                if ( $is_plausible ) {
-                    $deleted_users[] = [ 'login' => $usr ];
-                } else {
-                    $invalid_count++;
-                }
+            } elseif ( isset( $attack_usernames[ $usr ] ) ) {
+                // Was a real account when the attack fired the ntfy.
+                $deleted_users[ $usr ] = [ 'login' => $usr ];
             }
+            // else: invalid — counts toward the summary only
         }
-        // invalid_count = unique non-empty tried usernames that matched neither valid nor deleted.
-        $invalid_count = count( $seen_users ) - count( $valid_users ) - count( $deleted_users );
-        $invalid_count = max( 0, $invalid_count );
 
-        // Build combined targeted list: valid first, deleted second.
-        $targeted_users    = [];
-        foreach ( $valid_users   as $u ) { $targeted_users[] = $u + [ 'deleted' => false ]; }
-        foreach ( $deleted_users as $u ) { $targeted_users[] = $u + [ 'email_mask' => '', 'deleted' => true ]; }
+        $invalid_count     = count( $seen_users ) - count( $valid_users ) - count( $deleted_users );
+        $invalid_count     = max( 0, $invalid_count );
         $compromised_count = count( $valid_users ) + count( $deleted_users );
 
         $blocklist      = get_option( 'csdt_ip_blocklist', [] );

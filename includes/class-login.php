@@ -1297,11 +1297,14 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $bf_lockout  = isset( $_POST['bf_lockout'] )  ? (int) sanitize_text_field( wp_unslash( $_POST['bf_lockout'] ) )  : 10;
         if ( $bf_attempts < 1 || $bf_attempts > 100 )   { $bf_attempts = 5; }
         if ( $bf_lockout  < 1 || $bf_lockout  > 1440 )  { $bf_lockout  = 10; }
-        $bf_enum_protect = isset( $_POST['bf_enum_protect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['bf_enum_protect'] ) ) ? '1' : '0';
-        update_option( 'csdt_devtools_brute_force_enabled',  $bf_enabled );
-        update_option( 'csdt_devtools_brute_force_attempts', (string) $bf_attempts );
-        update_option( 'csdt_devtools_brute_force_lockout',  (string) $bf_lockout );
-        update_option( 'csdt_devtools_enum_protect',         $bf_enum_protect );
+        $bf_enum_protect       = isset( $_POST['bf_enum_protect'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['bf_enum_protect'] ) ) ? '1' : '0';
+        $bf_auto_block         = isset( $_POST['bf_auto_block_threshold'] ) ? (int) sanitize_text_field( wp_unslash( $_POST['bf_auto_block_threshold'] ) ) : 10;
+        if ( $bf_auto_block < 0 || $bf_auto_block > 1000 ) { $bf_auto_block = 10; }
+        update_option( 'csdt_devtools_brute_force_enabled',       $bf_enabled );
+        update_option( 'csdt_devtools_brute_force_attempts',      (string) $bf_attempts );
+        update_option( 'csdt_devtools_brute_force_lockout',       (string) $bf_lockout );
+        update_option( 'csdt_devtools_enum_protect',              $bf_enum_protect );
+        update_option( 'csdt_devtools_bf_auto_block_threshold',   (string) $bf_auto_block );
 
         // Grace logins
         $grace_logins = isset( $_POST['grace_logins'] ) ? (int) sanitize_text_field( wp_unslash( $_POST['grace_logins'] ) ) : 0;

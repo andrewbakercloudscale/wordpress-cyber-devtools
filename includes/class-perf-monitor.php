@@ -1303,6 +1303,50 @@ class CSDT_Perf_Monitor {
             // Still within the window — keep counting.
             set_transient( $count_key, $attempts, $lockout_secs * 2 );
         }
+
+        // ── Auto IP block after N failures in 1 hour ─────────────────────────
+        // Default threshold: 10 failures/hour. Configurable via option.
+        // Skips already-blocked IPs and local/private ranges.
+        if ( ! $ip ) { return; }
+        if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) === false ) { return; }
+
+        $auto_block_threshold = (int) get_option( 'csdt_devtools_bf_auto_block_threshold', '10' );
+        if ( $auto_block_threshold < 1 ) { return; }
+
+        // Check if already manually or auto-blocked.
+        $blocklist = get_option( 'csdt_ip_blocklist', [] );
+        if ( ! is_array( $blocklist ) ) { $blocklist = []; }
+        if ( isset( $blocklist[ $ip ] ) ) { return; }
+
+        // Count how many failures this IP had in the last hour using the ip_index times array.
+        $ip_index   = get_option( 'csdt_devtools_failed_login_ips', [] );
+        $hour_ago   = time() - HOUR_IN_SECONDS;
+        $recent_hits = 0;
+        if ( isset( $ip_index[ $ip ]['times'] ) ) {
+            $recent_hits = count( array_filter( $ip_index[ $ip ]['times'], fn( $t ) => $t >= $hour_ago ) );
+        }
+
+        if ( $recent_hits >= $auto_block_threshold ) {
+            $blocklist[ $ip ] = [
+                'reason'     => sprintf( 'Auto-blocked: %d failed logins in 1 hour', $recent_hits ),
+                'blocked_at' => time(),
+                'auto'       => true,
+            ];
+            update_option( 'csdt_ip_blocklist', $blocklist, false );
+
+            // Record security event + ntfy.
+            CSDT_Login::record_security_event(
+                'attack',
+                "IP auto-blocked: {$ip}",
+                "Reason: {$recent_hits} failed logins in 1 hour"
+            );
+            CSDT_Login::send_ntfy(
+                "IP auto-blocked: {$ip}",
+                "Blocked after {$recent_hits} failed login attempts in 1 hour.\nIP: {$ip}",
+                'high',
+                'rotating_light'
+            );
+        }
     }
 
     /**

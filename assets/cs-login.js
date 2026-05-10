@@ -67,8 +67,9 @@
             bf_attempts:             document.getElementById( 'cs-bf-attempts' )?.value || '5',
             bf_lockout:              document.getElementById( 'cs-bf-lockout' )?.value || '5',
             bf_enum_protect:         document.getElementById( 'cs-bf-enum-protect' )?.checked ? '1' : '0',
-            ntfy_login_valid_user:   document.getElementById( 'cs-ntfy-login-valid' )?.checked ? '1' : '0',
-            ntfy_login_invalid_user: document.getElementById( 'cs-ntfy-login-invalid' )?.checked ? '1' : '0',
+            ntfy_login_valid_user:    document.getElementById( 'cs-ntfy-login-valid' )?.checked ? '1' : '0',
+            ntfy_login_invalid_user:  document.getElementById( 'cs-ntfy-login-invalid' )?.checked ? '1' : '0',
+            bf_auto_block_threshold:  document.getElementById( 'cs-bf-auto-block' )?.value || '10',
         };
     }
 
@@ -432,16 +433,10 @@
                 isToday: i === 0,
             } );
         }
-        // Outlier-resistant scale: if the top day is 4× the second-highest, cap the
-        // display max so the spike doesn't flatten every other bar.
-        const rawMax = Math.max( 1, ...days.map( d => d.count ) );
-        const sortedDesc = days.map( d => d.count ).sort( ( a, b ) => b - a );
-        const secondMax  = sortedDesc[ 1 ] || 0;
-        const isCapped   = secondMax > 0 && rawMax > secondMax * 4;
-        const displayMax = isCapped ? Math.max( 1, Math.ceil( secondMax * 2 ) ) : rawMax;
-
-        const mid = displayMax === 1 ? 1 : Math.round( displayMax / 2 );
-        const topLabel = isCapped ? displayMax + '+' : displayMax;
+        const rawMax     = Math.max( 1, ...days.map( d => d.count ) );
+        const displayMax = rawMax;
+        const mid        = displayMax === 1 ? 1 : Math.round( displayMax / 2 );
+        const topLabel   = displayMax;
         const yAxis = `<div class="cs-bf-yaxis">
             <span class="cs-bf-ytick">${topLabel}</span>
             <span class="cs-bf-ytick">${mid}</span>
@@ -455,14 +450,13 @@
         const barW    = Math.max( 24, Math.floor( ( chartW - YAXIS_W - VISIBLE * GAP ) / VISIBLE ) );
 
         const bars = days.map( d => {
-            const truncated = d.count > displayMax;
-            const pct = truncated ? 92 : Math.round( ( d.count / displayMax ) * 100 );
+            const pct = Math.max( 0, Math.round( ( d.count / displayMax ) * 100 ) );
             let cls = d.count === 0 ? ' cs-bf-bar-zero' : d.count >= displayMax * 0.75 ? ' cs-bf-bar-high' : d.count >= displayMax * 0.4 ? ' cs-bf-bar-mid' : '';
             const extraStyle = isAttack && d.count > 0
                 ? `background:#dc2626!important;${ d.isToday ? 'box-shadow:0 0 8px rgba(220,38,38,.6);' : 'opacity:.7;' }`
                 : '';
-            const countColor = truncated ? '#dc2626' : d.count === 0 ? '#16a34a' : '#94a3b8';
-            const countText  = truncated ? d.count + '+' : d.count;
+            const countColor = d.count === 0 ? '#16a34a' : isAttack && d.isToday ? '#dc2626' : '#94a3b8';
+            const countText  = d.count;
             return `<div class="cs-bf-day" style="width:${barW}px;flex-shrink:0;flex-grow:0;">
                 <div class="cs-bf-bar-track">
                     <div class="cs-bf-bar${cls}" style="height:${pct}%;${extraStyle}" title="${d.count} failed attempt${d.count !== 1 ? 's' : ''}"></div>
