@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.790
+ * Version: 1.9.791
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.790';
+    const VERSION      = '1.9.791';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -594,6 +594,8 @@ class CloudScale_DevTools {
         // ntfy alerts for failed logins and REST API auth failures.
         add_action( 'wp_login_failed', [ 'CSDT_Login', 'on_login_failed' ] );
         add_action( 'application_password_failed_authentication', [ 'CSDT_Login', 'on_rest_auth_failed' ] );
+        // Return generic 401 so attackers can't enumerate usernames via REST auth errors.
+        add_filter( 'rest_authentication_errors', [ 'CSDT_Login', 'rest_generic_auth_error' ], 99 );
         // Alert on ANY write to security-critical options — catches WP-CLI, direct DB edits, etc.
         add_action( 'updated_option', [ 'CSDT_Login', 'on_option_updated' ], 10, 3 );
         // Style the login error panel.

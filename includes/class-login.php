@@ -1948,21 +1948,49 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
      * Fires when a REST API request uses bad application-password credentials.
      */
     public static function on_rest_auth_failed( \WP_Error $error ): void {
-        $ip = self::get_client_ip();
-        $cc = $ip ? CSDT_Geo::get_country( $ip ) : '';
-        // Use api_attack type so the widget, map, and panel all pick it up.
+        $ip   = self::get_client_ip();
+        $cc   = $ip ? CSDT_Geo::get_country( $ip ) : '';
+        // Capture the path being probed (tells us which REST endpoint they're hitting).
+        $path = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+        // Strip query string so we don't leak tokens in logs.
+        $path = strtok( $path, '?' ) ?: '';
+
         self::record_security_event( 'api_attack', 'REST API auth failure', "IP: {$ip}" . ( $cc ? " · {$cc}" : '' ) );
 
-        if ( get_option( 'csdt_ntfy_login_valid_user', '0' ) !== '1'
-            && get_option( 'csdt_ntfy_login_invalid_user', '0' ) !== '1' ) {
-            return;
-        }
+        // Always fire ntfy for REST API attacks — these are active attacks regardless of ntfy prefs.
+        // Strip HTML from the WP error message before sending.
+        $clean_error = wp_strip_all_tags( $error->get_error_message() );
+
         self::send_ntfy(
             'REST API auth failure',
-            "An application password authentication attempt failed.\nIP: {$ip}\nError: " . $error->get_error_message(),
+            "Application password brute-force attempt.\nPath: {$path}\nIP: {$ip}" . ( $cc ? " · {$cc}" : '' ) . "\nError: {$clean_error}",
             'high',
             'rotating_light'
         );
+    }
+
+    /**
+     * Hooked to `rest_authentication_errors` at priority 99.
+     * Replaces WP's default credential-revealing error ("Unknown username",
+     * "The provided password is an application password") with a generic 401
+     * so attackers cannot enumerate valid usernames via the REST API.
+     */
+    public static function rest_generic_auth_error( $result ) {
+        // Only replace WP's own auth errors — leave other errors (e.g. nonce failures) untouched.
+        if ( is_wp_error( $result ) ) {
+            $reveal_codes = [ 'invalid_username', 'invalid_email', 'incorrect_password',
+                              'application_passwords_disabled', 'application_passwords_disabled_for_user' ];
+            foreach ( $reveal_codes as $code ) {
+                if ( $result->get_error_message( $code ) ) {
+                    return new \WP_Error(
+                        'rest_forbidden',
+                        'Authentication failed.',
+                        [ 'status' => 401 ]
+                    );
+                }
+            }
+        }
+        return $result;
     }
 
     // ─── Hook: ntfy on security control downgrade ────────────────────────
