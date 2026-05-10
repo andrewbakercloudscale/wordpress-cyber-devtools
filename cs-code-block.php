@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.784
+ * Version: 1.9.785
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.784';
+    const VERSION      = '1.9.785';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -3532,7 +3532,7 @@ class CloudScale_DevTools {
                     <?php
                     $api_evts_raw = get_option( 'csdt_security_events', [] );
                     if ( ! is_array( $api_evts_raw ) ) { $api_evts_raw = []; }
-                    $api_evts = array_values( array_filter( $api_evts_raw, fn( $e ) => ( $e['type'] ?? '' ) === 'api_attack' ) );
+                    $api_evts = array_values( array_filter( $api_evts_raw, fn( $e ) => in_array( $e['type'] ?? '', [ 'api_attack', 'rest_fail' ], true ) ) );
 
                     // Build 7-day daily counts.
                     $api_days = [];
@@ -3578,8 +3578,8 @@ class CloudScale_DevTools {
                             <a href="<?php echo esc_url( admin_url( 'tools.php?page=cloudscale-devtools&tab=credentials' ) ); ?>" style="font-size:11px;color:#991b1b;font-weight:600;text-decoration:none;">↺ <?php esc_html_e( 'Rotate path token', 'cloudscale-devtools' ); ?></a>
                         </div>
                         <?php if ( $api_total === 0 ) : ?>
-                        <div class="cs-bf-empty" style="margin-top:8px;">✅ <?php esc_html_e( 'No API attack attempts recorded — the hidden path is working.', 'cloudscale-devtools' ); ?></div>
-                        <?php else : ?>
+                        <div class="cs-bf-empty" style="margin-top:8px;color:#15803d;">✅ <?php esc_html_e( 'No API attack attempts — the hidden path is working.', 'cloudscale-devtools' ); ?></div>
+                        <?php endif; ?>
                         <div class="cs-bf-layout">
                             <div class="cs-bf-chart">
                                 <div class="cs-bf-yaxis">
@@ -3655,7 +3655,6 @@ class CloudScale_DevTools {
                             &nbsp;from&nbsp;<code style="font-size:11px;"><?php echo esc_html( $api_last_ip ); ?></code>
                             <?php endif; ?>
                         </div>
-                        <?php endif; ?>
                         <?php endif; ?>
                     </div>
 
@@ -4815,7 +4814,7 @@ class CloudScale_DevTools {
         $all_sec_events  = is_array( $all_sec_events ) ? $all_sec_events : [];
         $api_attacks_today = 0;
         foreach ( $all_sec_events as $ev ) {
-            if ( ( $ev['type'] ?? '' ) === 'api_attack'
+            if ( in_array( $ev['type'] ?? '', [ 'api_attack', 'rest_fail' ], true )
                 && gmdate( 'Y-m-d', (int) ( $ev['time'] ?? 0 ) ) === $today_str ) {
                 $api_attacks_today++;
             }
@@ -5108,13 +5107,15 @@ class CloudScale_DevTools {
         $deduped    = [];
         foreach ( $raw_events as $ev ) {
             $etype = (string) ( $ev['type'] ?? 'other' );
-            // Count today's occurrences.
+            // Normalise: treat rest_fail as api_attack for grouping/display.
+            $bucket = ( $etype === 'rest_fail' ) ? 'api_attack' : $etype;
+            // Count today's occurrences (keyed by bucket).
             if ( gmdate( 'Y-m-d', (int) ( $ev['time'] ?? 0 ) ) === $today_str ) {
-                $today_counts[ $etype ] = ( $today_counts[ $etype ] ?? 0 ) + 1;
+                $today_counts[ $bucket ] = ( $today_counts[ $bucket ] ?? 0 ) + 1;
             }
-            // Keep only first (most recent) of each type.
-            if ( ! isset( $seen_types[ $etype ] ) ) {
-                $seen_types[ $etype ] = true;
+            // Keep only first (most recent) of each bucket type.
+            if ( ! isset( $seen_types[ $bucket ] ) ) {
+                $seen_types[ $bucket ] = true;
                 $deduped[] = $ev;
             }
         }
@@ -5131,7 +5132,8 @@ class CloudScale_DevTools {
                 $ev_title  = (string) ( $ev['title'] ?? '' );
                 $ev_detail = (string) ( $ev['detail'] ?? '' );
                 $age       = $ev_time ? human_time_diff( $ev_time ) . ' ago' : '';
-                $today_n   = (int) ( $today_counts[ $ev_type ] ?? 0 );
+                $today_bucket = ( $ev_type === 'rest_fail' ) ? 'api_attack' : $ev_type;
+                $today_n   = (int) ( $today_counts[ $today_bucket ] ?? 0 );
                 if ( $ev_type === 'downgrade' ) {
                     $icon = '🔓'; $bg = '#fef2f2'; $border = '#fca5a5'; $tx = '#991b1b';
                     $ev_href = $base_url . '&tab=login';
@@ -5140,12 +5142,8 @@ class CloudScale_DevTools {
                     $icon = '🎯'; $bg = '#fff7ed'; $border = '#fdba74'; $tx = '#9a3412';
                     $ev_href = $base_url . '&tab=login';
                     $ev_hint = __( 'Go to Login Security', 'cloudscale-devtools' );
-                } elseif ( $ev_type === 'api_attack' ) {
+                } elseif ( $ev_type === 'api_attack' || $ev_type === 'rest_fail' ) {
                     $icon = '🔌'; $bg = '#fef2f2'; $border = '#fca5a5'; $tx = '#991b1b';
-                    $ev_href = $base_url . '&tab=login#cs-panel-test-accounts';
-                    $ev_hint = __( 'Go to Test Account Manager', 'cloudscale-devtools' );
-                } elseif ( $ev_type === 'rest_fail' ) {
-                    $icon = '🔌'; $bg = '#fefce8'; $border = '#fde047'; $tx = '#854d0e';
                     $ev_href = $base_url . '&tab=login#cs-panel-test-accounts';
                     $ev_hint = __( 'Go to Test Account Manager', 'cloudscale-devtools' );
                 } else {
@@ -5587,8 +5585,8 @@ class CloudScale_DevTools {
                 $age       = $ev_time ? human_time_diff( $ev_time ) . ' ago' : '';
                 if ( $ev_type === 'downgrade' ) {
                     $icon = '🔓'; $tx = '#991b1b'; $bg = '#fef2f2'; $bd = '#fca5a5';
-                } elseif ( $ev_type === 'api_attack' ) {
-                    $icon = '🔌'; $tx = '#7c2d12'; $bg = '#fff7ed'; $bd = '#fdba74';
+                } elseif ( $ev_type === 'api_attack' || $ev_type === 'rest_fail' ) {
+                    $icon = '🔌'; $tx = '#7c2d12'; $bg = '#fef2f2'; $bd = '#fca5a5';
                 } elseif ( $ev_type === 'attack' ) {
                     $icon = '🎯'; $tx = '#92400e'; $bg = '#fffbeb'; $bd = '#fcd34d';
                 } else {

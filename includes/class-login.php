@@ -1217,7 +1217,8 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $countries_api = [];
         if ( is_array( $sec_events ) ) {
             foreach ( $sec_events as $ev ) {
-                if ( ( $ev['type'] ?? '' ) !== 'api_attack' ) { continue; }
+                // Both api_attack and rest_fail are "API attacks" for map/table purposes.
+                if ( ! in_array( $ev['type'] ?? '', [ 'api_attack', 'rest_fail' ], true ) ) { continue; }
                 if ( ( $ev['time'] ?? 0 ) < $cutoff ) { continue; }
                 // Parse IP from detail string "IP: x.x.x.x".
                 $ip = '';
@@ -1947,12 +1948,15 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
      * Fires when a REST API request uses bad application-password credentials.
      */
     public static function on_rest_auth_failed( \WP_Error $error ): void {
+        $ip = self::get_client_ip();
+        $cc = $ip ? CSDT_Geo::get_country( $ip ) : '';
+        // Use api_attack type so the widget, map, and panel all pick it up.
+        self::record_security_event( 'api_attack', 'REST API auth failure', "IP: {$ip}" . ( $cc ? " · {$cc}" : '' ) );
+
         if ( get_option( 'csdt_ntfy_login_valid_user', '0' ) !== '1'
             && get_option( 'csdt_ntfy_login_invalid_user', '0' ) !== '1' ) {
             return;
         }
-        $ip = self::get_client_ip();
-        self::record_security_event( 'rest_fail', 'REST API auth failure', "IP: {$ip}" );
         self::send_ntfy(
             'REST API auth failure',
             "An application password authentication attempt failed.\nIP: {$ip}\nError: " . $error->get_error_message(),
