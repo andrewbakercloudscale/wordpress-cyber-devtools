@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.783
+ * Version: 1.9.784
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.783';
+    const VERSION      = '1.9.784';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -3527,6 +3527,137 @@ class CloudScale_DevTools {
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
+
+                    <!-- API Attacks panel -->
+                    <?php
+                    $api_evts_raw = get_option( 'csdt_security_events', [] );
+                    if ( ! is_array( $api_evts_raw ) ) { $api_evts_raw = []; }
+                    $api_evts = array_values( array_filter( $api_evts_raw, fn( $e ) => ( $e['type'] ?? '' ) === 'api_attack' ) );
+
+                    // Build 7-day daily counts.
+                    $api_days = [];
+                    for ( $i = 6; $i >= 0; $i-- ) {
+                        $d = gmdate( 'Y-m-d', strtotime( "-{$i} days" ) );
+                        $api_days[ $d ] = 0;
+                    }
+                    // Per-IP aggregation: last_ts, count, country.
+                    $api_ip_stats = [];
+                    $api_last_ts  = 0;
+                    $api_last_ip  = '';
+                    foreach ( $api_evts as $ae ) {
+                        $ae_ts  = (int) ( $ae['time'] ?? 0 );
+                        $ae_d   = gmdate( 'Y-m-d', $ae_ts );
+                        if ( isset( $api_days[ $ae_d ] ) ) { $api_days[ $ae_d ]++; }
+                        $ae_ip = '';
+                        if ( preg_match( '/IP:\s*([\d.a-fA-F:]+)/', $ae['detail'] ?? '', $ipm ) ) { $ae_ip = $ipm[1]; }
+                        $ae_cc = '';
+                        if ( preg_match( '/·\s*([A-Z]{2})\s*$/', $ae['detail'] ?? '', $ccm ) ) { $ae_cc = $ccm[1]; }
+                        if ( $ae_ip ) {
+                            if ( ! isset( $api_ip_stats[ $ae_ip ] ) ) {
+                                $api_ip_stats[ $ae_ip ] = [ 'count' => 0, 'last_ts' => 0, 'country' => $ae_cc ];
+                            }
+                            $api_ip_stats[ $ae_ip ]['count']++;
+                            if ( $ae_ts > $api_ip_stats[ $ae_ip ]['last_ts'] ) {
+                                $api_ip_stats[ $ae_ip ]['last_ts'] = $ae_ts;
+                            }
+                            if ( $ae_cc ) { $api_ip_stats[ $ae_ip ]['country'] = $ae_cc; }
+                        }
+                        if ( $ae_ts > $api_last_ts ) { $api_last_ts = $ae_ts; $api_last_ip = $ae_ip; }
+                    }
+                    $api_total    = count( $api_evts );
+                    $api_day_max  = max( 1, max( array_values( $api_days ) ) );
+                    $api_day_mid  = (int) round( $api_day_max / 2 );
+                    uasort( $api_ip_stats, fn( $a, $b ) => $b['last_ts'] - $a['last_ts'] );
+                    $api_ip_recent = array_slice( $api_ip_stats, 0, 50, true );
+                    $blocklist_check = get_option( 'csdt_ip_blocklist', [] );
+                    ?>
+                    <div style="margin-top:22px;border-top:1px solid #e8edf5;padding-top:20px;">
+                        <div class="cs-bf-log-header">
+                            <span class="cs-bf-log-title">🔌 <?php esc_html_e( 'API Failed Attempts — Last 7 Days', 'cloudscale-devtools' ); ?></span>
+                            <span class="cs-bf-log-total"><?php echo (int) $api_total; ?> events</span>
+                            <a href="<?php echo esc_url( admin_url( 'tools.php?page=cloudscale-devtools&tab=credentials' ) ); ?>" style="font-size:11px;color:#991b1b;font-weight:600;text-decoration:none;">↺ <?php esc_html_e( 'Rotate path token', 'cloudscale-devtools' ); ?></a>
+                        </div>
+                        <?php if ( $api_total === 0 ) : ?>
+                        <div class="cs-bf-empty" style="margin-top:8px;">✅ <?php esc_html_e( 'No API attack attempts recorded — the hidden path is working.', 'cloudscale-devtools' ); ?></div>
+                        <?php else : ?>
+                        <div class="cs-bf-layout">
+                            <div class="cs-bf-chart">
+                                <div class="cs-bf-yaxis">
+                                    <span class="cs-bf-ytick"><?php echo esc_html( number_format( $api_day_max ) ); ?></span>
+                                    <span class="cs-bf-ytick"><?php echo esc_html( number_format( $api_day_mid ) ); ?></span>
+                                    <span class="cs-bf-ytick">0</span>
+                                </div>
+                                <?php foreach ( $api_days as $ad => $ac ) :
+                                    $apct = $ac > 0 ? max( 2, (int) round( $ac / $api_day_max * 100 ) ) : 0;
+                                    $acls = $ac === 0 ? ' cs-bf-bar-zero' : ( $ac >= $api_day_max * 0.75 ? ' cs-bf-bar-high' : ( $ac >= $api_day_max * 0.4 ? ' cs-bf-bar-mid' : '' ) );
+                                    $alcl = $ac === 0 ? '#16a34a' : '#64748b';
+                                ?>
+                                <div class="cs-bf-day" style="flex:1;min-width:28px;">
+                                    <div class="cs-bf-bar-track" style="position:relative;">
+                                        <span style="position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:<?php echo esc_attr( $alcl ); ?>;white-space:nowrap;"><?php echo esc_html( number_format( $ac ) ); ?></span>
+                                        <div class="cs-bf-bar<?php echo esc_attr( $acls ); ?>"
+                                             style="height:<?php echo $apct; ?>%;<?php echo $ac > 0 ? 'background:#7c3aed!important;' : ''; ?>"
+                                             title="<?php echo esc_attr( number_format( $ac ) . ' attempts on ' . gmdate( 'M j', strtotime( $ad ) ) ); ?>"></div>
+                                    </div>
+                                    <div class="cs-bf-day-label"><?php echo esc_html( gmdate( 'M j', strtotime( $ad ) ) ); ?></div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="cs-bf-table-wrap">
+                                <?php if ( ! empty( $api_ip_recent ) ) : ?>
+                                <table class="cs-bf-table">
+                                    <thead><tr>
+                                        <th class="cs-bf-th"><?php esc_html_e( 'Last attempt', 'cloudscale-devtools' ); ?></th>
+                                        <th class="cs-bf-th"><?php esc_html_e( 'IP / Country', 'cloudscale-devtools' ); ?></th>
+                                        <th class="cs-bf-th" style="text-align:right;"><?php esc_html_e( 'Attempts', 'cloudscale-devtools' ); ?></th>
+                                        <th class="cs-bf-th"></th>
+                                    </tr></thead>
+                                    <tbody>
+                                    <?php foreach ( $api_ip_recent as $a_ip => $a_data ) :
+                                        $a_blocked = isset( $blocklist_check[ $a_ip ] );
+                                        $a_cc = strtoupper( $a_data['country'] ?? '' );
+                                        $a_flag = $a_cc && strlen( $a_cc ) === 2
+                                            ? mb_chr( 0x1F1E6 + ord( $a_cc[0] ) - 65 ) . mb_chr( 0x1F1E6 + ord( $a_cc[1] ) - 65 )
+                                            : '';
+                                    ?>
+                                    <tr data-ts="<?php echo (int) $a_data['last_ts']; ?>" data-cnt="<?php echo (int) $a_data['count']; ?>">
+                                        <td class="cs-bf-td cs-bf-td-time"><?php echo $a_data['last_ts'] ? esc_html( human_time_diff( (int) $a_data['last_ts'] ) . ' ago' ) : '—'; ?></td>
+                                        <td class="cs-bf-td cs-bf-td-ip"><?php echo esc_html( $a_ip ); ?>
+                                            <?php if ( $a_cc ) : ?>
+                                            <div style="font-size:10px;color:#64748b;margin-top:2px;"><?php echo esc_html( $a_flag . ' ' . $a_cc ); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="cs-bf-td" style="text-align:right;font-weight:700;color:#7c3aed;"><?php echo number_format( (int) $a_data['count'] ); ?></td>
+                                        <td class="cs-bf-td" style="white-space:nowrap;text-align:right;">
+                                            <a href="https://ipinfo.io/<?php echo esc_attr( $a_ip ); ?>" target="_blank" rel="noopener"
+                                               style="font-size:10px;padding:2px 6px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#475569;text-decoration:none;margin-right:4px;">Whois</a>
+                                            <?php if ( $a_blocked ) : ?>
+                                            <span style="font-size:10px;padding:2px 6px;border:1px solid #86efac;border-radius:4px;background:#dcfce7;color:#15803d;font-weight:600;">🚫 Blocked</span>
+                                            <?php else : ?>
+                                            <button type="button" class="cs-ip-block-btn" data-ip="<?php echo esc_attr( $a_ip ); ?>"
+                                                    style="font-size:10px;padding:2px 6px;border:1px solid #fca5a5;border-radius:4px;background:#fef2f2;color:#dc2626;cursor:pointer;font-weight:600;">Block</button>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                                <?php else : ?>
+                                <div class="cs-bf-empty"><?php esc_html_e( 'Per-IP log populates as new attacks arrive.', 'cloudscale-devtools' ); ?></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if ( $api_last_ts > 0 ) : ?>
+                        <div style="font-size:12px;color:#475569;margin-top:8px;">
+                            <?php esc_html_e( 'Last attempt:', 'cloudscale-devtools' ); ?>
+                            <strong><?php echo esc_html( human_time_diff( $api_last_ts ) . ' ago' ); ?></strong>
+                            <?php if ( $api_last_ip ) : ?>
+                            &nbsp;from&nbsp;<code style="font-size:11px;"><?php echo esc_html( $api_last_ip ); ?></code>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
 
                     <!-- Attack Origins map -->
                     <div style="margin-top:22px;border-top:1px solid #e8edf5;padding-top:20px;">
