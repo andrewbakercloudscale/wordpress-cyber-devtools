@@ -481,6 +481,86 @@
             });
         }
 
+        // Generic show/hide toggle for password-type fields (.cs-pw-toggle)
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('.cs-pw-toggle');
+            if (!btn) return;
+            var inp = document.getElementById(btn.getAttribute('data-target'));
+            if (!inp) return;
+            var showing = inp.type !== 'password';
+            inp.type = showing ? 'password' : 'text';
+            btn.textContent = showing ? '👁 Show' : '🔒 Hide';
+        });
+
+        // Credentials panel — show/copy/rotate
+        document.addEventListener('click', function(e) {
+            var showBtn = e.target.closest('.cs-cred-show');
+            if (showBtn) {
+                var code = document.getElementById(showBtn.getAttribute('data-target'));
+                if (!code) return;
+                var shown = showBtn.textContent.includes('Hide');
+                code.textContent = shown ? (code.dataset.masked || '') : (code.dataset.real || '');
+                showBtn.textContent = shown ? '👁 Show' : '🔒 Hide';
+                return;
+            }
+            var copyBtn = e.target.closest('.cs-cred-copy');
+            if (copyBtn) {
+                var code2 = document.getElementById(copyBtn.getAttribute('data-target'));
+                if (!code2) return;
+                navigator.clipboard.writeText(code2.dataset.real || '').then(function() {
+                    var orig = copyBtn.textContent;
+                    copyBtn.textContent = '✓ Copied';
+                    setTimeout(function() { copyBtn.textContent = orig; }, 1500);
+                });
+                return;
+            }
+            var regenBtn = e.target.closest('.cs-cred-regen');
+            if (regenBtn) {
+                if (!confirm('Rotate this credential? You must update all .env files and scripts that use it.')) return;
+                var action = regenBtn.getAttribute('data-action');
+                var target = regenBtn.getAttribute('data-target');
+                var ftype  = regenBtn.getAttribute('data-type');
+                var code3  = document.getElementById(target);
+                regenBtn.disabled = true;
+                regenBtn.textContent = '⏳';
+                var body = new FormData();
+                body.append('action', action);
+                body.append('nonce',  (window.csdtTestAccounts || {}).nonce || (window.csdtDevtoolsLogin || {}).nonce || '');
+                fetch(window.csdtTestAccounts && window.csdtTestAccounts.ajaxUrl ? window.csdtTestAccounts.ajaxUrl : (window.ajaxurl || ''), { method: 'POST', body: body })
+                    .then(function(r) { return r.json(); })
+                    .then(function(res) {
+                        regenBtn.disabled = false;
+                        regenBtn.textContent = '↺ Rotate';
+                        if (res.success && code3) {
+                            var newVal = res.data.secret || res.data.path_token_url || res.data.session_url || '';
+                            if (newVal) {
+                                var masked = newVal.length > 8
+                                    ? '•'.repeat(Math.min(24, newVal.length - 4)) + newVal.slice(-4)
+                                    : newVal;
+                                if (ftype === 'url') {
+                                    var parts = newVal.replace(/\/$/, '').split('/');
+                                    var last  = parts.pop();
+                                    masked    = parts.join('/') + '/' + '•'.repeat(Math.max(8, last.length - 4)) + last.slice(-4);
+                                }
+                                code3.dataset.real   = newVal;
+                                code3.dataset.masked = masked;
+                                code3.textContent    = masked;
+                                // Reset sibling show button
+                                var row = code3.closest('td');
+                                if (row) {
+                                    var sb = row.querySelector('.cs-cred-show');
+                                    if (sb) sb.textContent = '👁 Show';
+                                }
+                                // Flash row green
+                                var tr = code3.closest('tr');
+                                if (tr) { tr.style.background = '#f0fdf4'; setTimeout(function() { tr.style.background = ''; }, 2000); }
+                            }
+                        }
+                    })
+                    .catch(function() { regenBtn.disabled = false; regenBtn.textContent = '↺ Rotate'; });
+            }
+        });
+
         // Eye toggle for Cloudflare credential fields
         document.querySelectorAll('.csdt-cf-eye-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {

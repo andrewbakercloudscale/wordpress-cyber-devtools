@@ -79,11 +79,21 @@
                 hideSaveBtn.disabled = false;
                 if ( res.success ) {
                     flash( hideSaved, true );
-                    // Update the displayed current login URL
-                    const urlEl = document.getElementById( 'cs-current-login-url' );
+                    // Update the displayed current login URL (keep masked unless already shown).
+                    const urlEl    = document.getElementById( 'cs-current-login-url-display' );
+                    const openEl   = document.getElementById( 'cs-current-login-url-open' );
+                    const showBtnU = document.getElementById( 'cs-login-url-show' );
                     if ( urlEl && res.data?.login_url ) {
-                        urlEl.href        = res.data.login_url;
-                        urlEl.textContent = res.data.login_url;
+                        const newUrl   = res.data.login_url;
+                        const slug     = newUrl.replace( /^.*\/([^/]+)\/$/, '$1' );
+                        const masked   = newUrl.replace( slug, '•'.repeat( Math.max( 4, slug.length - 4 ) ) + slug.slice( -4 ) );
+                        urlEl.dataset.real   = newUrl;
+                        urlEl.dataset.masked = masked;
+                        const isShown  = showBtnU && showBtnU.textContent.includes( 'Hide' );
+                        urlEl.textContent    = isShown ? newUrl : masked;
+                    }
+                    if ( openEl && res.data?.login_url ) {
+                        openEl.href = res.data.login_url;
                     }
                     // (slug input already has the current value — no update needed)
                 } else {
@@ -599,15 +609,18 @@
     if ( bfLogWrap ) {
         post( 'csdt_devtools_bf_log_fetch', {} ).then( res => {
             if ( ! res.success ) return;
-            const { log, now, today_count, countries_bf, blocked_ips } = res.data;
+            const { log, now, today_count, countries_bf, blocked_ips, api_log, countries_api } = res.data;
             const isAttack = today_count >= 30;
             if ( bfLogTotal ) bfLogTotal.textContent = log.length + ' event' + ( log.length !== 1 ? 's' : '' );
             renderBfChart( log, now, isAttack );
             renderBfTable( log, now, blocked_ips );
+            if ( api_log && api_log.length > 0 ) {
+                renderApiAttackTable( api_log, now );
+            }
 
             const countriesBlocked = ( window.csdtDevtoolsLogin || {} ).countriesBlocked || {};
-            if ( Object.keys( countries_bf || {} ).length > 0 || Object.keys( countriesBlocked ).length > 0 ) {
-                renderBfGeoMap( countries_bf || {}, countriesBlocked );
+            if ( Object.keys( countries_bf || {} ).length > 0 || Object.keys( countriesBlocked ).length > 0 || Object.keys( countries_api || {} ).length > 0 ) {
+                renderBfGeoMap( countries_bf || {}, countriesBlocked, countries_api || {} );
             }
 
             // Fix it CTA — shown when there are active failed logins and Hide Login is not yet enabled.
@@ -734,10 +747,25 @@
         } );
     }
 
+    // ── Login URL show/hide ──────────────────────────────────────────────
+
+    ( function () {
+        const showBtn  = document.getElementById( 'cs-login-url-show' );
+        const urlCode  = document.getElementById( 'cs-current-login-url-display' );
+        const openLink = document.getElementById( 'cs-current-login-url-open' );
+        if ( ! showBtn || ! urlCode ) return;
+        let shown = false;
+        showBtn.addEventListener( 'click', function () {
+            shown = !shown;
+            urlCode.textContent  = shown ? ( urlCode.dataset.real || '' ) : ( urlCode.dataset.masked || '' );
+            showBtn.textContent  = shown ? '🔒 Hide' : '👁 Show';
+        } );
+    } )();
+
     // ── Slug live preview + weak-slug warning ────────────────────────────
 
     const slugInput = document.getElementById( 'cs-login-slug' );
-    const urlLink   = document.getElementById( 'cs-current-login-url' );
+    const urlCode2  = document.getElementById( 'cs-current-login-url-display' );
     const baseEl    = document.querySelector( '.cs-slug-base' );
     const weakWarn  = document.getElementById( 'cs-slug-weak-warn' );
 
@@ -747,20 +775,25 @@
 
     function updateSlugPreview() {
         const inp  = document.getElementById( 'cs-login-slug' );
-        const link = document.getElementById( 'cs-current-login-url' );
+        const code = document.getElementById( 'cs-current-login-url-display' );
         const base = document.querySelector( '.cs-slug-base' );
         const warn = document.getElementById( 'cs-slug-weak-warn' );
-        if ( ! inp || ! link || ! base ) return;
+        if ( ! inp || ! code || ! base ) return;
         const slug = inp.value.trim();
-        const full = slug ? base.textContent.replace( /\/$/, '' ) + '/' + slug + '/' : link.dataset.default || base.textContent.replace( /\/$/, '' ) + '/wp-login.php';
-        link.textContent = full;
-        link.href        = full;
+        const full = slug ? base.textContent.replace( /\/$/, '' ) + '/' + slug + '/' : base.textContent.replace( /\/$/, '' ) + '/wp-login.php';
+        // Update the masked and real data attrs so show/hide stays in sync.
+        code.dataset.real    = full;
+        const maskedFull     = base.textContent.replace( /\/$/, '' ) + '/' + '•'.repeat( Math.max( 4, slug.length - 4 ) ) + slug.slice( -4 ) + '/';
+        code.dataset.masked  = maskedFull;
+        // Only update visible text if currently masked.
+        const showBtn = document.getElementById( 'cs-login-url-show' );
+        const isShown = showBtn && showBtn.textContent.includes( 'Hide' );
+        code.textContent = isShown ? full : maskedFull;
         if ( warn ) warn.style.display = isWeakSlug( slug ) ? '' : 'none';
     }
 
-    if ( slugInput && urlLink && baseEl ) {
+    if ( slugInput && urlCode2 && baseEl ) {
         slugInput.addEventListener( 'input', updateSlugPreview );
-        urlLink.dataset.default = urlLink.href;
         updateSlugPreview();
     }
 
@@ -811,25 +844,66 @@
         }
     }
 
-    function renderBfGeoMap( bfByCountry, blockedByCountry ) {
+    function renderApiAttackTable( apiLog, now ) {
+        const containerId = 'cs-api-attack-log-wrap';
+        let wrap = document.getElementById( containerId );
+        if ( ! wrap ) {
+            wrap = document.createElement( 'div' );
+            wrap.id = containerId;
+            wrap.style.cssText = 'margin-top:20px;';
+            if ( bfLogWrap ) bfLogWrap.appendChild( wrap );
+        }
+        const rows = [ ...apiLog ].reverse().slice( 0, 50 );
+        let html = `<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">🔌 API Attack Log <span style="font-weight:400;color:#94a3b8;font-size:11px;">(${rows.length} event${rows.length !== 1 ? 's' : ''}, last 14 days)</span></div>`;
+        html += `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">Time</th>
+                <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">Event</th>
+                <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">IP</th>
+                <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">Country</th>
+            </tr></thead><tbody>`;
+        rows.forEach( function ( entry ) {
+            const ts      = entry[0] * 1000;
+            const title   = escHtml( entry[1] || '' );
+            const ip      = escHtml( entry[2] || '—' );
+            const cc      = escHtml( entry[3] || '—' );
+            const age     = formatAge( Math.floor( ( now * 1000 - ts ) / 1000 ) );
+            const isLock  = title.toLowerCase().includes( 'locked' );
+            const rowBg   = isLock ? 'background:#fef2f2;' : '';
+            const ipLink  = entry[2] ? `<a href="https://ipinfo.io/${encodeURIComponent(entry[2])}" target="_blank" rel="noopener" style="font-size:10px;padding:2px 6px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#475569;text-decoration:none;margin-right:4px;">Whois</a>` : '';
+            html += `<tr style="border-bottom:1px solid #f0f4f8;${rowBg}">
+                <td style="padding:5px 8px;color:#94a3b8;white-space:nowrap;">${escHtml( age )}</td>
+                <td style="padding:5px 8px;font-weight:${isLock ? '700' : '400'};color:${isLock ? '#991b1b' : '#374151'};">${title}</td>
+                <td style="padding:5px 8px;">${ipLink}${ip}</td>
+                <td style="padding:5px 8px;color:#64748b;">${cc}</td>
+            </tr>`;
+        } );
+        html += `</tbody></table>`;
+        wrap.innerHTML = html;
+    }
+
+    function renderBfGeoMap( bfByCountry, blockedByCountry, apiByCountry ) {
         initBfGeoMap();
         if ( ! bfGeoMap ) return;
 
         bfGeoMarkers.forEach( function ( m ) { bfGeoMap.removeLayer( m ); } );
         bfGeoMarkers = [];
 
+        apiByCountry = apiByCountry || {};
         var bfMax      = Math.max( 1, ...Object.values( bfByCountry ) );
         var blockedMax = Math.max( 1, ...Object.values( blockedByCountry ) );
+        var apiMax     = Math.max( 1, ...( Object.values( apiByCountry ).length ? Object.values( apiByCountry ) : [ 1 ] ) );
 
-        // Collect all country codes present in either dataset.
-        var allCCs = Object.keys( Object.assign( {}, bfByCountry, blockedByCountry ) );
+        // Collect all country codes present in any dataset.
+        var allCCs = Object.keys( Object.assign( {}, bfByCountry, blockedByCountry, apiByCountry ) );
 
         allCCs.forEach( function ( cc ) {
             var coords = bfCountryCentroids[ cc ];
             if ( ! coords ) return;
 
-            var bfCount      = bfByCountry[ cc ] || 0;
+            var bfCount      = bfByCountry[ cc ]      || 0;
             var blockedCount = blockedByCountry[ cc ] || 0;
+            var apiCount     = apiByCountry[ cc ]     || 0;
             var name         = bfCountryNames[ cc ] || cc;
             var flag         = bfCountryFlag( cc );
 
@@ -867,10 +941,31 @@
                 fMarker.bindTooltip(
                     '<strong>' + flag + name + '</strong><br>'
                     + '<span style="color:#d97706;">⚠ ' + bfCount.toLocaleString() + ' failed logins</span>'
-                    + ( blockedCount > 0 ? '<br><span style="color:#dc2626;">🚫 ' + blockedCount.toLocaleString() + ' blocked probes</span>' : '' ),
+                    + ( blockedCount > 0 ? '<br><span style="color:#dc2626;">🚫 ' + blockedCount.toLocaleString() + ' blocked probes</span>' : '' )
+                    + ( apiCount > 0 ? '<br><span style="color:#7c3aed;">🔌 ' + apiCount.toLocaleString() + ' API attacks</span>' : '' ),
                     { direction: 'top', offset: [ 0, -fRadius ] }
                 );
                 bfGeoMarkers.push( fMarker );
+            }
+
+            if ( apiCount > 0 ) {
+                var aRatio  = apiCount / apiMax;
+                var aRadius = Math.max( 4, Math.min( 18, 4 + aRatio * 14 ) );
+                var aMarker = L.circleMarker( coords, {
+                    radius:      aRadius,
+                    fillColor:   '#7c3aed',
+                    color:       '#4c1d95',
+                    weight:      1.5,
+                    fillOpacity: 0.30 + aRatio * 0.45,
+                    opacity:     0.9,
+                } ).addTo( bfGeoMap );
+                aMarker.bindTooltip(
+                    '<strong>' + flag + name + '</strong><br>'
+                    + '<span style="color:#7c3aed;">🔌 ' + apiCount.toLocaleString() + ' API attacks</span>'
+                    + ( bfCount > 0 ? '<br><span style="color:#d97706;">⚠ ' + bfCount.toLocaleString() + ' failed logins</span>' : '' ),
+                    { direction: 'top', offset: [ 0, -aRadius ] }
+                );
+                bfGeoMarkers.push( aMarker );
             }
         } );
 

@@ -213,6 +213,20 @@
             });
         }
 
+        /* Show/hide Session URL and Logout URL */
+        [ ['cs-ta-session-url-show', 'cs-ta-session-url-display'],
+          ['cs-ta-logout-url-show',  'cs-ta-logout-url-display'] ].forEach(function (pair) {
+            var btn  = el(pair[0]);
+            var code = el(pair[1]);
+            if (!btn || !code) return;
+            var shown = false;
+            btn.addEventListener('click', function () {
+                shown = !shown;
+                code.textContent = shown ? (code.dataset.real || '') : (code.dataset.masked || '');
+                btn.textContent  = shown ? '🔒 Hide' : '👁 Show';
+            });
+        });
+
         /* Copy URL buttons */
         document.querySelectorAll('.cs-copy-url').forEach(function (btn) {
             btn.addEventListener('click', function () {

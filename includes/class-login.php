@@ -1210,7 +1210,37 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
 
         $blocklist   = get_option( 'csdt_ip_blocklist', [] );
         $blocked_ips = is_array( $blocklist ) ? array_keys( $blocklist ) : [];
-        wp_send_json_success( [ 'log' => $log, 'now' => time(), 'today_count' => $today_count, 'countries_bf' => $countries_bf, 'blocked_ips' => $blocked_ips ] );
+
+        // API attack log — from csdt_security_events, type=api_attack, last 14 days.
+        $sec_events = get_option( 'csdt_security_events', [] );
+        $api_log    = [];
+        $countries_api = [];
+        if ( is_array( $sec_events ) ) {
+            foreach ( $sec_events as $ev ) {
+                if ( ( $ev['type'] ?? '' ) !== 'api_attack' ) { continue; }
+                if ( ( $ev['time'] ?? 0 ) < $cutoff ) { continue; }
+                // Parse IP from detail string "IP: x.x.x.x".
+                $ip = '';
+                if ( preg_match( '/IP:\s*([\d.a-fA-F:]+)/', $ev['detail'] ?? '', $m ) ) {
+                    $ip = $m[1];
+                }
+                $cc = $ip ? CSDT_Geo::get_country( $ip ) : '';
+                $api_log[] = [ $ev['time'], $ev['title'], $ip, $cc ];
+                if ( $cc ) {
+                    $countries_api[ $cc ] = ( $countries_api[ $cc ] ?? 0 ) + 1;
+                }
+            }
+        }
+
+        wp_send_json_success( [
+            'log'          => $log,
+            'now'          => time(),
+            'today_count'  => $today_count,
+            'countries_bf' => $countries_bf,
+            'blocked_ips'  => $blocked_ips,
+            'api_log'      => $api_log,
+            'countries_api' => $countries_api,
+        ] );
     }
 
     /**

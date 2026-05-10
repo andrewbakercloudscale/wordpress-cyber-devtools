@@ -230,9 +230,17 @@ class CSDT_Test_Accounts {
         if ( ! $stored || ! hash_equals( $stored, $secret ) ) {
             $fails = (int) get_transient( 'csdt_tsf' ) + 1;
             set_transient( 'csdt_tsf', $fails, 10 * MINUTE_IN_SECONDS );
+            $ip = self::get_client_ip();
+            // Record every failed API attempt to the security events log.
+            CSDT_Login::record_security_event(
+                'api_attack',
+                "Test Session API: bad secret (attempt {$fails}/5)",
+                "IP: {$ip}"
+            );
             if ( $fails >= 5 ) {
                 set_transient( 'csdt_ts_locked', true, 10 * MINUTE_IN_SECONDS );
                 delete_transient( 'csdt_tsf' );
+                CSDT_Login::record_security_event( 'api_attack', 'Test Session API LOCKED — 5 bad attempts', "IP: {$ip}" );
                 self::send_security_ntfy( 'Test Session API: 5 failed auth attempts. API locked for 10 min.' );
             }
             return new WP_REST_Response( [ 'error' => 'Invalid secret' ], 401 );
@@ -348,13 +356,28 @@ class CSDT_Test_Accounts {
         return $result;
     }
 
+    private static function get_client_ip(): string {
+        foreach ( [ 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR' ] as $key ) {
+            if ( ! empty( $_SERVER[ $key ] ) ) {
+                $candidate = sanitize_text_field( wp_unslash( explode( ',', $_SERVER[ $key ] )[0] ) );
+                if ( filter_var( $candidate, FILTER_VALIDATE_IP ) ) {
+                    return $candidate;
+                }
+            }
+        }
+        return '';
+    }
+
     private static function send_security_ntfy( string $message ): void {
         $ntfy_url = get_option( 'csdt_scan_schedule_ntfy_url', '' );
         if ( ! $ntfy_url ) { return; }
-        $headers = [ 'Title' => 'CloudScale Security Alert', 'Priority' => 'urgent', 'Tags' => 'rotating_light' ];
+        $site    = (string) get_option( 'siteurl', '' );
+        $host    = $site ? wp_parse_url( $site, PHP_URL_HOST ) : '';
+        $title   = ( $host ? "[{$host}] " : '' ) . 'Security Alert';
+        $headers = [ 'Title' => $title, 'Priority' => 'urgent', 'Tags' => 'rotating_light' ];
         $tok     = get_option( 'csdt_scan_schedule_ntfy_token', '' );
         if ( $tok ) { $headers['Authorization'] = 'Bearer ' . $tok; }
-        wp_remote_post( $ntfy_url, [ 'timeout' => 8, 'headers' => $headers, 'body' => $message ] );
+        wp_remote_post( $ntfy_url, [ 'timeout' => 8, 'blocking' => false, 'headers' => $headers, 'body' => $message ] );
     }
 
     public static function ajax_create_playwright_role(): void {
@@ -449,6 +472,21 @@ class CSDT_Test_Accounts {
         $secret = wp_generate_password( 32, false, false );
         update_option( 'csdt_test_session_secret', $secret, false );
         wp_send_json_success( [ 'secret' => $secret ] );
+    }
+
+    public static function ajax_regen_path_token(): void {
+        if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Forbidden', 403 ); }
+        check_ajax_referer( 'csdt_devtools_login_nonce', 'nonce' );
+
+        $token = wp_generate_password( 32, false, false );
+        update_option( 'csdt_test_session_path_token', $token, false );
+        $session_url = rest_url( 'csdt/v1/test-session-' . $token );
+        $logout_url  = rest_url( 'csdt/v1/test-logout-' . $token );
+        wp_send_json_success( [
+            'path_token'  => $token,
+            'session_url' => $session_url,
+            'logout_url'  => $logout_url,
+        ] );
     }
 
     public static function ajax_toggle_block_basic_auth(): void {

@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.759
+ * Version: 1.9.762
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.759';
+    const VERSION      = '1.9.762';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -279,6 +279,7 @@ class CloudScale_DevTools {
         CSDT_SMTP::maybe_migrate_smtp_prefix();
         CSDT_SMTP::maybe_migrate_usermeta_prefix();
         add_filter( 'xmlrpc_enabled', '__return_false' );
+        remove_action( 'init', '_register_theme_block_patterns' );
 
         // One-click security hardening — option-driven filters applied at every boot
         if ( get_option( 'csdt_block_basic_auth', '0' ) === '1' ) {
@@ -454,6 +455,7 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_playwright_role_delete',       [ 'CSDT_Test_Accounts', 'ajax_delete_playwright_role' ] );
         add_action( 'wp_ajax_csdt_kill_test_sessions',           [ 'CSDT_Test_Accounts', 'ajax_kill_test_sessions' ] );
         add_action( 'wp_ajax_csdt_regen_test_secret',            [ 'CSDT_Test_Accounts', 'ajax_regen_test_secret' ] );
+        add_action( 'wp_ajax_csdt_regen_path_token',             [ 'CSDT_Test_Accounts', 'ajax_regen_path_token' ] );
         add_action( 'wp_ajax_csdt_toggle_block_basic_auth',      [ 'CSDT_Test_Accounts', 'ajax_toggle_block_basic_auth' ] );
         add_action( 'rest_api_init',                             [ 'CSDT_Test_Accounts', 'register_rest_routes' ] );
         self::cron_action( 'csdt_scheduled_scan',                [ 'CSDT_Site_Audit', 'run_scheduled_scan' ] );
@@ -1755,6 +1757,10 @@ class CloudScale_DevTools {
                    class="cs-tab <?php echo $active_tab === 'thumbnails' ? 'active' : ''; ?>">
                     🖼️ <?php esc_html_e( 'Thumbnails', 'cloudscale-devtools' ); ?>
                 </a>
+                <a href="<?php echo esc_url( $base_url . '&tab=credentials' ); ?>"
+                   class="cs-tab <?php echo $active_tab === 'credentials' ? 'active' : ''; ?>" style="<?php echo $active_tab === 'credentials' ? '' : 'color:#f59e0b;'; ?>">
+                    🔑 <?php esc_html_e( 'Credentials', 'cloudscale-devtools' ); ?>
+                </a>
             </div>
             <!-- Copy All action bar -->
             <div id="cs-tab-actions">
@@ -1779,6 +1785,10 @@ class CloudScale_DevTools {
             <?php elseif ( $active_tab === 'thumbnails' ) : ?>
                 <div class="cs-tab-content active">
                     <?php CSDT_Thumbnails::render_thumbnails_panel(); ?>
+                </div>
+            <?php elseif ( $active_tab === 'credentials' ) : ?>
+                <div class="cs-tab-content active">
+                    <?php self::render_credentials_panel(); ?>
                 </div>
             <?php elseif ( $active_tab === 'ai-images' ) : ?>
                 <div class="cs-tab-content active">
@@ -3167,9 +3177,14 @@ class CloudScale_DevTools {
                     </div>
                 </div>
 
-                <div class="cs-login-current-url" style="margin-top:14px">
+                <?php
+                $masked_login_url = trailingslashit( home_url() ) . str_repeat( '•', max( 8, strlen( $slug ) - 4 ) ) . substr( $slug, -4 );
+                ?>
+                <div class="cs-login-current-url" style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <span class="cs-label" style="display:inline"><?php esc_html_e( 'Current Login URL:', 'cloudscale-devtools' ); ?></span>
-                    <a id="cs-current-login-url" href="<?php echo esc_url( $current_url ); ?>" target="_blank" style="margin-left:8px;font-size:13px;color:#1e6fd9"><?php echo esc_html( $current_url ); ?></a>
+                    <code id="cs-current-login-url-display" style="font-size:13px;color:#1e6fd9;" data-real="<?php echo esc_attr( $current_url ); ?>" data-masked="<?php echo esc_attr( $masked_login_url ); ?>"><?php echo esc_html( $masked_login_url ); ?></code>
+                    <button type="button" id="cs-login-url-show" style="padding:3px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;font-size:12px;">👁 <?php esc_html_e( 'Show', 'cloudscale-devtools' ); ?></button>
+                    <a id="cs-current-login-url-open" href="<?php echo esc_url( $current_url ); ?>" target="_blank" style="font-size:12px;color:#6366f1;font-weight:600;text-decoration:none;"><?php esc_html_e( 'Open →', 'cloudscale-devtools' ); ?></a>
                 </div>
 
                 <div style="margin-top:18px;display:flex;align-items:center;gap:10px">
@@ -3240,7 +3255,7 @@ class CloudScale_DevTools {
                     [ 'name' => 'Failed attempts',     'rec' => 'Recommended', 'html' => '<ul><li><code>3</code> — tightest, but may lock out users who mistype their password twice</li><li><code>5</code> — default, good balance for most sites</li><li><code>10</code> — more forgiving for sites with non-technical users</li></ul><br><strong>Unlock one account via SSH:</strong><br><code>wp transient delete csdt_devtools_bf_lock_$(php -r "echo md5(strtolower(\'USERNAME\'));") --path=/var/www/html</code><br><br><strong>Unlock all locked accounts:</strong><br><code>wp eval \'global $wpdb; $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE \"%csdt_devtools_bf_lock%\"");\' --path=/var/www/html</code>' ],
                     [ 'name' => 'Lockout period',      'rec' => 'Recommended', 'html' => 'Default is <code>10</code> minutes. The lock lifts automatically — no admin action needed.<br><br><ul><li><strong>10 min</strong> — default, stops automated attacks cold</li><li><strong>30–60 min</strong> — better for targeted attacks, small UX cost for forgotten-password users</li></ul>' ],
                     [ 'name' => 'Account enumeration', 'rec' => 'Critical',    'html' => '<p>WordPress by default reveals whether a username exists: wrong username → <em>"The username xyz is not registered."</em>, right username wrong password → <em>"The password is incorrect."</em> An attacker can automate this to map every account on your site in minutes.</p><p>Enable this to make both failures return the same generic message. The <strong>✓ Active</strong> badge appears next to the checkbox when it is on. Legitimate users who forget their username can still recover via <em>Lost your password?</em> using their email.</p>' ],
-                    [ 'name' => 'Attack Origins map',  'rec' => 'Info',        'html' => 'A world map shows the country of origin for failed logins (amber circles) and wp-login.php blocked probes (red circles). Each type uses its own independent scale so low-volume countries still appear.<br><br>Country is resolved from the Cloudflare CF-IPCountry header first (zero overhead). If CF is absent, the DB-IP Lite database (~30 MB local file) is used as a fallback — download it using the button below the map. Auto-update keeps it current monthly. Data accumulates from new events.' ],
+                    [ 'name' => 'Attack Origins map',  'rec' => 'Info',        'html' => 'A world map shows the country of origin for failed logins (amber circles), wp-login.php blocked probes (red circles), and Test Session API attacks (purple circles). Each type uses its own independent scale so low-volume countries still appear.<br><br>Country is resolved from the Cloudflare CF-IPCountry header first (zero overhead). If CF is absent, the DB-IP Lite database (~30 MB local file) is used as a fallback — download it using the button below the map. Auto-update keeps it current monthly. Data accumulates from new events.' ],
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
@@ -3500,6 +3515,7 @@ class CloudScale_DevTools {
                             <span style="display:flex;align-items:center;gap:12px;font-size:11px;">
                                 <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;opacity:0.8;"></span><?php esc_html_e( 'Failed Logins', 'cloudscale-devtools' ); ?></span>
                                 <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;opacity:0.8;"></span><?php esc_html_e( 'Blocked Probes', 'cloudscale-devtools' ); ?></span>
+                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#7c3aed;display:inline-block;opacity:0.8;"></span><?php esc_html_e( 'API Attacks', 'cloudscale-devtools' ); ?></span>
                             </span>
                         </div>
                         <div id="cs-bf-geo-map" style="height:280px;border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;background:#e8f4f4;margin-top:8px;"></div>
@@ -4160,11 +4176,19 @@ class CloudScale_DevTools {
                     </div>
 
                     <!-- Session URL -->
+                    <?php
+                    $session_base   = rest_url( 'csdt/v1/test-session-' );
+                    $logout_base    = rest_url( 'csdt/v1/test-logout-' );
+                    $masked_tok     = str_repeat( '•', 24 ) . substr( $path_token, -4 );
+                    $masked_sess    = $session_base . $masked_tok;
+                    $masked_logout  = $logout_base  . $masked_tok;
+                    ?>
                     <div class="cs-sec-row" style="margin-top:8px;">
                         <span class="cs-sec-label"><?php esc_html_e( 'Session URL:', 'cloudscale-devtools' ); ?></span>
                         <div class="cs-sec-control">
                             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                                <code style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:4px 10px;font-size:11px;word-break:break-all;"><?php echo esc_html( $session_url ); ?></code>
+                                <code id="cs-ta-session-url-display" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:4px 10px;font-size:11px;word-break:break-all;" data-real="<?php echo esc_attr( $session_url ); ?>" data-masked="<?php echo esc_attr( $masked_sess ); ?>"><?php echo esc_html( $masked_sess ); ?></code>
+                                <button type="button" class="cs-btn-secondary cs-btn-sm" id="cs-ta-session-url-show">👁 <?php esc_html_e( 'Show', 'cloudscale-devtools' ); ?></button>
                                 <button type="button" class="cs-btn-secondary cs-btn-sm cs-copy-url" data-url="<?php echo esc_attr( $session_url ); ?>">⎘ <?php esc_html_e( 'Copy', 'cloudscale-devtools' ); ?></button>
                             </div>
                         </div>
@@ -4175,7 +4199,8 @@ class CloudScale_DevTools {
                         <span class="cs-sec-label"><?php esc_html_e( 'Logout URL:', 'cloudscale-devtools' ); ?></span>
                         <div class="cs-sec-control">
                             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                                <code style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:4px 10px;font-size:11px;word-break:break-all;"><?php echo esc_html( $logout_url ); ?></code>
+                                <code id="cs-ta-logout-url-display" style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:4px 10px;font-size:11px;word-break:break-all;" data-real="<?php echo esc_attr( $logout_url ); ?>" data-masked="<?php echo esc_attr( $masked_logout ); ?>"><?php echo esc_html( $masked_logout ); ?></code>
+                                <button type="button" class="cs-btn-secondary cs-btn-sm" id="cs-ta-logout-url-show">👁 <?php esc_html_e( 'Show', 'cloudscale-devtools' ); ?></button>
                                 <button type="button" class="cs-btn-secondary cs-btn-sm cs-copy-url" data-url="<?php echo esc_attr( $logout_url ); ?>">⎘ <?php esc_html_e( 'Copy', 'cloudscale-devtools' ); ?></button>
                             </div>
                         </div>
@@ -4540,6 +4565,17 @@ class CloudScale_DevTools {
         $probes_today   = (int) ( $probe_stats[ $today_str ]['count'] ?? 0 );
         $session_dur    = get_option( 'csdt_devtools_session_duration', 'default' );
 
+        // API attack count (today, from security events log).
+        $all_sec_events  = get_option( 'csdt_security_events', [] );
+        $all_sec_events  = is_array( $all_sec_events ) ? $all_sec_events : [];
+        $api_attacks_today = 0;
+        foreach ( $all_sec_events as $ev ) {
+            if ( ( $ev['type'] ?? '' ) === 'api_attack'
+                && gmdate( 'Y-m-d', (int) ( $ev['time'] ?? 0 ) ) === $today_str ) {
+                $api_attacks_today++;
+            }
+        }
+
         $base_url = admin_url( 'tools.php?page=cloudscale-devtools' );
         ?>
 
@@ -4595,6 +4631,10 @@ class CloudScale_DevTools {
                 <div class="cs-dw-hpill" style="color:<?php echo $blocked_count > 0 ? '#fcd34d' : '#86efac'; ?>">
                     <span class="cs-dw-hpill-num"><?php echo esc_html( $blocked_count ); ?></span>
                     <span class="cs-dw-hpill-lbl"><?php esc_html_e( 'Blocked', 'cloudscale-devtools' ); ?></span>
+                </div>
+                <div class="cs-dw-hpill" style="color:<?php echo $api_attacks_today > 0 ? '#fca5a5' : '#86efac'; ?>">
+                    <span class="cs-dw-hpill-num"><?php echo esc_html( $api_attacks_today ); ?></span>
+                    <span class="cs-dw-hpill-lbl"><?php esc_html_e( 'API', 'cloudscale-devtools' ); ?></span>
                 </div>
                 <span style="background:rgba(15,184,224,0.15);border:1px solid rgba(15,184,224,0.4);color:#67e8f9;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:0.04em">v<?php echo esc_html( self::VERSION ); ?></span>
             </div>
@@ -4735,6 +4775,8 @@ class CloudScale_DevTools {
                     $icon = '🔓'; $bg = '#fef2f2'; $border = '#fca5a5'; $tx = '#991b1b';
                 } elseif ( $ev_type === 'attack' ) {
                     $icon = '🎯'; $bg = '#fff7ed'; $border = '#fdba74'; $tx = '#9a3412';
+                } elseif ( $ev_type === 'api_attack' ) {
+                    $icon = '🔌'; $bg = '#fef2f2'; $border = '#fca5a5'; $tx = '#991b1b';
                 } else {
                     $icon = '🔌'; $bg = '#fefce8'; $border = '#fde047'; $tx = '#854d0e';
                 }
@@ -4761,6 +4803,195 @@ class CloudScale_DevTools {
                 <span style="font-size:15px;">🛡️</span>
                 <?php esc_html_e( 'Open Cyber and Devtools', 'cloudscale-devtools' ); ?>
             </a>
+        </div>
+        <?php
+    }
+
+    // ─── Credentials panel ───────────────────────────────────────────────
+
+    private static function render_credentials_panel(): void {
+        $base = admin_url( 'tools.php?page=' . self::TOOLS_SLUG );
+
+        // Collect all secrets.
+        $creds = [
+            [
+                'group'  => '🔌 Test Session API',
+                'hint'   => __( 'Rotate the path token and secret whenever you suspect compromise.', 'cloudscale-devtools' ),
+                'edit'   => $base . '&tab=login#cs-panel-test-accounts',
+                'fields' => [
+                    [
+                        'label'  => __( 'Session URL', 'cloudscale-devtools' ),
+                        'value'  => rest_url( 'csdt/v1/test-session-' . CSDT_Test_Accounts::get_or_create_path_token() ),
+                        'type'   => 'url',
+                        'regen_action' => 'csdt_regen_path_token',
+                        'regen_note'   => __( 'Updates both Session URL and Logout URL. Update .env.test immediately.', 'cloudscale-devtools' ),
+                    ],
+                    [
+                        'label'  => __( 'Logout URL', 'cloudscale-devtools' ),
+                        'value'  => rest_url( 'csdt/v1/test-logout-' . CSDT_Test_Accounts::get_or_create_path_token() ),
+                        'type'   => 'url',
+                    ],
+                    [
+                        'label'  => __( 'Shared Secret', 'cloudscale-devtools' ),
+                        'value'  => CSDT_Test_Accounts::get_or_create_secret(),
+                        'type'   => 'secret',
+                        'regen_action' => 'csdt_regen_test_secret',
+                    ],
+                ],
+            ],
+            [
+                'group'  => '🔔 ntfy.sh',
+                'hint'   => __( 'Change the topic path to immediately stop receiving alerts on the old channel.', 'cloudscale-devtools' ),
+                'edit'   => $base . '&tab=security',
+                'fields' => [
+                    [
+                        'label'  => __( 'Topic URL', 'cloudscale-devtools' ),
+                        'value'  => (string) get_option( 'csdt_scan_schedule_ntfy_url', '' ),
+                        'type'   => 'secret',
+                    ],
+                    [
+                        'label'  => __( 'Auth Token', 'cloudscale-devtools' ),
+                        'value'  => (string) get_option( 'csdt_scan_schedule_ntfy_token', '' ),
+                        'type'   => 'secret',
+                    ],
+                ],
+            ],
+            [
+                'group'  => '☁️ Cloudflare',
+                'hint'   => __( 'Rotate the API Token if it is compromised — the Zone ID is not a secret but is listed here for convenience.', 'cloudscale-devtools' ),
+                'edit'   => $base . '&tab=debug',
+                'fields' => [
+                    [
+                        'label'  => __( 'Zone ID', 'cloudscale-devtools' ),
+                        'value'  => (string) get_option( 'csdt_devtools_cf_zone_id', '' ),
+                        'type'   => 'secret',
+                    ],
+                    [
+                        'label'  => __( 'API Token', 'cloudscale-devtools' ),
+                        'value'  => (string) get_option( 'csdt_devtools_cf_api_token', '' ),
+                        'type'   => 'secret',
+                    ],
+                ],
+            ],
+            [
+                'group'  => '🤖 AI API Keys',
+                'hint'   => __( 'Used for security scans, image generation, and prompt writing.', 'cloudscale-devtools' ),
+                'edit'   => $base . '&tab=security',
+                'fields' => [
+                    [
+                        'label'  => 'OpenAI',
+                        'value'  => (string) get_option( 'csdt_devtools_openai_key', '' ),
+                        'type'   => 'secret',
+                    ],
+                    [
+                        'label'  => 'Anthropic',
+                        'value'  => (string) get_option( 'csdt_devtools_anthropic_key', '' ),
+                        'type'   => 'secret',
+                    ],
+                    [
+                        'label'  => 'Gemini',
+                        'value'  => (string) get_option( 'csdt_devtools_gemini_key', '' ),
+                        'type'   => 'secret',
+                    ],
+                ],
+            ],
+            [
+                'group'  => '📧 SMTP',
+                'hint'   => __( 'Update these whenever you rotate your email account password.', 'cloudscale-devtools' ),
+                'edit'   => $base . '&tab=mail',
+                'fields' => [
+                    [
+                        'label'  => __( 'Host', 'cloudscale-devtools' ),
+                        'value'  => (string) get_option( 'csdt_devtools_smtp_host', '' ),
+                        'type'   => 'plain',
+                    ],
+                    [
+                        'label'  => __( 'Username', 'cloudscale-devtools' ),
+                        'value'  => (string) get_option( 'csdt_devtools_smtp_user', '' ),
+                        'type'   => 'plain',
+                    ],
+                    [
+                        'label'  => __( 'Password', 'cloudscale-devtools' ),
+                        'value'  => (string) get_option( 'csdt_devtools_smtp_pass', '' ),
+                        'type'   => 'secret',
+                    ],
+                ],
+            ],
+        ];
+
+        static $cred_idx = 0;
+        ?>
+        <div class="cs-panel" style="max-width:860px">
+            <div class="cs-section-header" style="background:linear-gradient(135deg,#1e3a5f 0%,#0f2942 100%)">
+                <span>🔑 <?php esc_html_e( 'CREDENTIALS', 'cloudscale-devtools' ); ?></span>
+                <span class="cs-header-hint"><?php esc_html_e( 'All rotatable secrets in one place — masked by default', 'cloudscale-devtools' ); ?></span>
+            </div>
+            <div class="cs-panel-body" style="display:flex;flex-direction:column;gap:20px;">
+
+            <?php foreach ( $creds as $group ) : ?>
+            <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <span style="font-size:12px;font-weight:700;color:#1e293b;"><?php echo esc_html( $group['group'] ); ?></span>
+                    <a href="<?php echo esc_url( $group['edit'] ); ?>" style="font-size:11px;color:#6366f1;font-weight:600;text-decoration:none;"><?php esc_html_e( 'Edit settings →', 'cloudscale-devtools' ); ?></a>
+                </div>
+                <?php if ( ! empty( $group['hint'] ) ) : ?>
+                <div style="padding:6px 14px 0;font-size:11px;color:#94a3b8;"><?php echo esc_html( $group['hint'] ); ?></div>
+                <?php endif; ?>
+                <table style="width:100%;border-collapse:collapse;">
+                <?php foreach ( $group['fields'] as $f ) :
+                    $cred_idx++;
+                    $val    = (string) ( $f['value'] ?? '' );
+                    $type   = $f['type'] ?? 'secret';
+                    $fid    = 'cs-cred-val-' . $cred_idx;
+                    $is_set = $val !== '';
+                    if ( ! $is_set ) {
+                        $display = '';
+                        $masked  = '';
+                    } elseif ( $type === 'plain' ) {
+                        $display = $val;
+                        $masked  = $val;
+                    } elseif ( $type === 'url' ) {
+                        // Mask only the last path segment token.
+                        $parts   = explode( '/', rtrim( $val, '/' ) );
+                        $last    = array_pop( $parts );
+                        $masked_tok = str_repeat( '•', max( 8, strlen( $last ) - 4 ) ) . substr( $last, -4 );
+                        $display = $val;
+                        $masked  = implode( '/', $parts ) . '/' . $masked_tok;
+                    } else {
+                        $display = $val;
+                        $masked  = str_repeat( '•', min( 24, max( 8, strlen( $val ) - 4 ) ) ) . ( strlen( $val ) > 4 ? substr( $val, -4 ) : '' );
+                    }
+                    $regen_action = $f['regen_action'] ?? '';
+                ?>
+                <tr style="border-top:1px solid #f1f5f9;">
+                    <td style="padding:8px 14px;font-size:12px;color:#64748b;font-weight:600;white-space:nowrap;width:140px;"><?php echo esc_html( $f['label'] ); ?></td>
+                    <td style="padding:8px 14px;">
+                        <?php if ( ! $is_set ) : ?>
+                        <span style="font-size:12px;color:#94a3b8;font-style:italic;"><?php esc_html_e( 'Not set', 'cloudscale-devtools' ); ?></span>
+                        <?php else : ?>
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <code id="<?php echo esc_attr( $fid ); ?>"
+                                  data-real="<?php echo esc_attr( $display ); ?>"
+                                  data-masked="<?php echo esc_attr( $masked ); ?>"
+                                  style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:3px 10px;font-size:11px;word-break:break-all;max-width:420px;"><?php echo esc_html( $type === 'plain' ? $display : $masked ); ?></code>
+                            <?php if ( $type !== 'plain' ) : ?>
+                            <button type="button" class="cs-btn-secondary cs-btn-sm cs-cred-show" data-target="<?php echo esc_attr( $fid ); ?>">👁 <?php esc_html_e( 'Show', 'cloudscale-devtools' ); ?></button>
+                            <?php endif; ?>
+                            <button type="button" class="cs-btn-secondary cs-btn-sm cs-cred-copy" data-target="<?php echo esc_attr( $fid ); ?>">⎘ <?php esc_html_e( 'Copy', 'cloudscale-devtools' ); ?></button>
+                            <?php if ( $regen_action ) : ?>
+                            <button type="button" class="cs-btn-secondary cs-btn-sm cs-cred-regen" data-action="<?php echo esc_attr( $regen_action ); ?>" data-target="<?php echo esc_attr( $fid ); ?>" data-type="<?php echo esc_attr( $type ); ?>" style="color:#b45309;border-color:#fbbf24;">↺ <?php esc_html_e( 'Rotate', 'cloudscale-devtools' ); ?></button>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </table>
+            </div>
+            <?php endforeach; ?>
+
+            <p style="font-size:11px;color:#94a3b8;margin:0;"><?php esc_html_e( 'Secrets are stored in wp_options and never exposed in source code. Rotation buttons regenerate and save the new value server-side — update your .env files immediately after rotating.', 'cloudscale-devtools' ); ?></p>
+            </div>
         </div>
         <?php
     }
@@ -4959,6 +5190,49 @@ class CloudScale_DevTools {
             <?php endif; ?>
 
         </div><!-- /status grid -->
+
+        <!-- ── Recent Security Events ─────────────────────────────────────── -->
+        <?php
+        $home_sec_events = get_option( 'csdt_security_events', [] );
+        $home_sec_events = is_array( $home_sec_events ) ? array_reverse( $home_sec_events ) : [];
+        $home_sec_events = array_slice( $home_sec_events, 0, 8 );
+        if ( ! empty( $home_sec_events ) ) :
+        $login_tab_url = admin_url( 'tools.php?page=' . self::TOOLS_SLUG . '&tab=login' );
+        ?>
+        <div style="margin:0 12px 12px;border:1px solid #fca5a5;border-radius:8px;overflow:hidden;">
+            <div style="background:linear-gradient(135deg,#7f1d1d 0%,#b91c1c 100%);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;">
+                <span style="color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">⚠️ Recent Security Events</span>
+                <a href="<?php echo esc_url( $login_tab_url ); ?>" style="font-size:10px;color:#fca5a5;text-decoration:none;font-weight:600;">Login Security →</a>
+            </div>
+            <div style="background:#fff;padding:6px 8px;display:flex;flex-direction:column;gap:4px;">
+            <?php foreach ( $home_sec_events as $ev ) :
+                $ev_time   = (int) ( $ev['time'] ?? 0 );
+                $ev_type   = (string) ( $ev['type'] ?? '' );
+                $ev_title  = (string) ( $ev['title'] ?? '' );
+                $ev_detail = (string) ( $ev['detail'] ?? '' );
+                $age       = $ev_time ? human_time_diff( $ev_time ) . ' ago' : '';
+                if ( $ev_type === 'downgrade' ) {
+                    $icon = '🔓'; $tx = '#991b1b'; $bg = '#fef2f2'; $bd = '#fca5a5';
+                } elseif ( $ev_type === 'api_attack' ) {
+                    $icon = '🔌'; $tx = '#7c2d12'; $bg = '#fff7ed'; $bd = '#fdba74';
+                } elseif ( $ev_type === 'attack' ) {
+                    $icon = '🎯'; $tx = '#92400e'; $bg = '#fffbeb'; $bd = '#fcd34d';
+                } else {
+                    $icon = '⚠️'; $tx = '#374151'; $bg = '#f9fafb'; $bd = '#e5e7eb';
+                }
+            ?>
+            <div style="display:flex;align-items:flex-start;gap:7px;background:<?php echo esc_attr( $bg ); ?>;border:1px solid <?php echo esc_attr( $bd ); ?>;border-radius:5px;padding:5px 8px;">
+                <span style="font-size:12px;line-height:1.5;flex-shrink:0"><?php echo $icon; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
+                <div style="flex:1;min-width:0">
+                    <span style="font-size:11px;font-weight:700;color:<?php echo esc_attr( $tx ); ?>"><?php echo esc_html( $ev_title ); ?></span>
+                    <?php if ( $ev_detail ) : ?><span style="font-size:10px;color:#6b7280;margin-left:5px"><?php echo esc_html( $ev_detail ); ?></span><?php endif; ?>
+                </div>
+                <?php if ( $age ) : ?><span style="font-size:9px;color:#94a3b8;white-space:nowrap;flex-shrink:0;margin-top:2px"><?php echo esc_html( $age ); ?></span><?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- ── DB Prefix Rollback Banner ──────────────────────────────────── -->
         <?php
@@ -5441,11 +5715,14 @@ class CloudScale_DevTools {
                     <div class="cs-sec-row">
                         <span class="cs-sec-label"><?php esc_html_e( 'ntfy.sh topic:', 'cloudscale-devtools' ); ?></span>
                         <div class="cs-sec-control">
-                            <input type="text" id="cs-notify-ntfy-url" class="cs-text-input"
-                                   placeholder="https://ntfy.sh/your-topic"
-                                   value="<?php echo esc_attr( $notify_ntfy_url ); ?>"
-                                   style="max-width:320px;">
-                            <span class="cs-hint"><?php echo wp_kses( __( 'Optional push notification via <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a>.', 'cloudscale-devtools' ), [ 'a' => [ 'href' => [], 'target' => [], 'rel' => [] ] ] ); ?></span>
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <input type="password" id="cs-notify-ntfy-url" class="cs-text-input"
+                                       placeholder="https://ntfy.sh/your-topic" autocomplete="new-password"
+                                       value="<?php echo esc_attr( $notify_ntfy_url ); ?>"
+                                       style="max-width:320px;">
+                                <button type="button" class="cs-btn-secondary cs-btn-sm cs-pw-toggle" data-target="cs-notify-ntfy-url">👁 <?php esc_html_e( 'Show', 'cloudscale-devtools' ); ?></button>
+                            </div>
+                            <span class="cs-hint"><?php echo wp_kses( __( 'Optional push notification via <a href="https://ntfy.sh" target="_blank" rel="noopener">ntfy.sh</a>. Keep this private — it\'s your notification channel.', 'cloudscale-devtools' ), [ 'a' => [ 'href' => [], 'target' => [], 'rel' => [] ] ] ); ?></span>
                         </div>
                     </div>
                     <div class="cs-sec-row">
