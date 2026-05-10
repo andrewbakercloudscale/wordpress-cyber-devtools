@@ -492,6 +492,27 @@
             btn.textContent = showing ? '👁 Show' : '🔒 Hide';
         });
 
+        // Notification alerts save
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('#cs-alerts-save');
+            if (!btn) return;
+            btn.disabled = true;
+            var data = { action: 'csdt_devtools_save_alerts', nonce: (window.csdtDevtoolsThumbs || {}).nonce || '' };
+            document.querySelectorAll('.cs-alert-toggle').forEach(function(cb) {
+                data[cb.dataset.opt] = cb.checked ? '1' : '0';
+            });
+            var fd = new FormData();
+            Object.keys(data).forEach(function(k) { fd.append(k, data[k]); });
+            fetch(window.ajaxurl || '/wp-admin/admin-ajax.php', { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function() {
+                    btn.disabled = false;
+                    var saved = document.getElementById('cs-alerts-saved');
+                    if (saved) { saved.style.display = ''; setTimeout(function(){ saved.style.display = 'none'; }, 2000); }
+                })
+                .catch(function() { btn.disabled = false; });
+        });
+
         // Credentials panel — show/copy/rotate
         document.addEventListener('click', function(e) {
             var showBtn = e.target.closest('.cs-cred-show');

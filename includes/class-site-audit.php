@@ -864,6 +864,7 @@ bantime  = 86400</pre>
         }
 
         // ntfy.sh push notification
+        if ( get_option( 'csdt_ntfy_scan_result', '1' ) === '1' ) {
         $ntfy_url = get_option( 'csdt_scan_schedule_ntfy_url', '' );
         if ( $ntfy_url ) {
             $priority = $critical > 0 ? 'urgent' : ( $high > 0 ? 'high' : 'default' );
@@ -883,6 +884,7 @@ bantime  = 86400</pre>
                 'body'    => $body,
             ] );
         }
+        } // end csdt_ntfy_scan_result check
     }
 
 

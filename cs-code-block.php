@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.793
+ * Version: 1.9.794
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.793';
+    const VERSION      = '1.9.794';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -424,6 +424,7 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_devtools_scan_history',       [ 'CSDT_Site_Audit', 'ajax_scan_history' ] );
         add_action( 'wp_ajax_csdt_devtools_save_schedule',      [ 'CSDT_Site_Audit', 'ajax_save_schedule' ] );
         add_action( 'wp_ajax_csdt_devtools_save_notify',        [ 'CSDT_Site_Audit', 'ajax_save_notify' ] );
+        add_action( 'wp_ajax_csdt_devtools_save_alerts',        [ __CLASS__, 'ajax_save_alerts' ] );
         add_action( 'wp_ajax_csdt_sec_headers_restore',         [ 'CSDT_Security_Headers', 'ajax_sec_headers_restore' ] );
         add_action( 'wp_ajax_csdt_devtools_quick_fix',          [ 'CSDT_Site_Audit', 'ajax_apply_quick_fix' ] );
         add_action( 'wp_ajax_csdt_db_prefix_preflight',         [ 'CSDT_Site_Audit', 'ajax_db_prefix_preflight' ] );
@@ -5192,6 +5193,28 @@ class CloudScale_DevTools {
         <?php
     }
 
+    // ─── AJAX: save notification alert toggles ───────────────────────────
+
+    public static function ajax_save_alerts(): void {
+        check_ajax_referer( 'csdt_devtools_thumbnails', 'nonce' ); // reuse existing nonce
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized', 403 );
+        }
+        $allowed = [
+            'csdt_ntfy_login_valid_user',
+            'csdt_ntfy_login_invalid_user',
+            'csdt_ntfy_rest_auth_fail',
+            'csdt_ntfy_scan_result',
+            'csdt_ntfy_threat_monitor',
+            'csdt_ntfy_php_errors',
+        ];
+        foreach ( $allowed as $opt ) {
+            $val = isset( $_POST[ $opt ] ) && '1' === sanitize_text_field( wp_unslash( $_POST[ $opt ] ) ) ? '1' : '0';
+            update_option( $opt, $val );
+        }
+        wp_send_json_success();
+    }
+
     // ─── Credentials panel ───────────────────────────────────────────────
 
     private static function render_credentials_panel(): void {
@@ -5372,6 +5395,92 @@ class CloudScale_DevTools {
             <?php endforeach; ?>
 
             <p style="font-size:11px;color:#94a3b8;margin:0;"><?php esc_html_e( 'Secrets are stored in wp_options and never exposed in source code. Rotation buttons regenerate and save the new value server-side — update your .env files immediately after rotating.', 'cloudscale-devtools' ); ?></p>
+
+            <!-- ── Notification Alerts ──────────────────────────────────── -->
+            <?php
+            $ntfy_set = ! empty( get_option( 'csdt_scan_schedule_ntfy_url', '' ) );
+            $alerts = [
+                [
+                    'group' => '🔐 Security Controls',
+                    'hint'  => __( 'These always fire — they cannot be silenced because a disabled security control is a critical event.', 'cloudscale-devtools' ),
+                    'items' => [
+                        [ 'label' => __( 'Security control downgraded (hide login off, brute force off, 2FA off)', 'cloudscale-devtools' ), 'always' => true ],
+                    ],
+                ],
+                [
+                    'group' => '🎯 Login Attacks',
+                    'hint'  => '',
+                    'items' => [
+                        [ 'label' => __( 'Failed login — valid (known) username targeted', 'cloudscale-devtools' ), 'opt' => 'csdt_ntfy_login_valid_user',   'default' => '0', 'id' => 'ca-ntfy-valid' ],
+                        [ 'label' => __( 'Failed login — unknown username attempted', 'cloudscale-devtools' ),         'opt' => 'csdt_ntfy_login_invalid_user', 'default' => '0', 'id' => 'ca-ntfy-invalid' ],
+                        [ 'label' => __( 'Account locked after N failed attempts', 'cloudscale-devtools' ),             'always' => true ],
+                        [ 'label' => __( 'IP auto-blocked after N failures / hour', 'cloudscale-devtools' ),            'always' => true ],
+                    ],
+                ],
+                [
+                    'group' => '🔌 API Attacks',
+                    'hint'  => '',
+                    'items' => [
+                        [ 'label' => __( 'REST API auth failure (application password brute-force)', 'cloudscale-devtools' ), 'opt' => 'csdt_ntfy_rest_auth_fail', 'default' => '1', 'id' => 'ca-ntfy-rest-fail' ],
+                        [ 'label' => __( 'Test Session API locked after 5 bad attempts', 'cloudscale-devtools' ),               'always' => true ],
+                    ],
+                ],
+                [
+                    'group' => '🔍 Scans & Monitoring',
+                    'hint'  => '',
+                    'items' => [
+                        [ 'label' => __( 'Scheduled AI security scan result', 'cloudscale-devtools' ), 'opt' => 'csdt_ntfy_scan_result',  'default' => '1', 'id' => 'ca-ntfy-scan' ],
+                        [ 'label' => __( 'Threat monitor — file change / new admin / probe spike', 'cloudscale-devtools' ), 'opt' => 'csdt_ntfy_threat_monitor', 'default' => '1', 'id' => 'ca-ntfy-threat' ],
+                        [ 'label' => __( 'PHP error monitor — new fatal errors detected', 'cloudscale-devtools' ), 'opt' => 'csdt_ntfy_php_errors', 'default' => '1', 'id' => 'ca-ntfy-php-err' ],
+                    ],
+                ],
+            ];
+            ?>
+            <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-top:20px;">
+                <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <span style="font-size:12px;font-weight:700;color:#1e293b;">🔔 <?php esc_html_e( 'Notification Alerts', 'cloudscale-devtools' ); ?></span>
+                    <?php if ( ! $ntfy_set ) : ?>
+                    <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:8px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">
+                        ⚠ <?php esc_html_e( 'ntfy not configured — alerts will not fire', 'cloudscale-devtools' ); ?>
+                    </span>
+                    <?php else : ?>
+                    <span style="font-size:10px;color:#16a34a;font-weight:600;">✓ ntfy configured</span>
+                    <?php endif; ?>
+                </div>
+                <div style="background:#fff;padding:12px 16px;display:flex;flex-direction:column;gap:16px;">
+                    <?php foreach ( $alerts as $agroup ) : ?>
+                    <div>
+                        <div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;"><?php echo esc_html( $agroup['group'] ); ?></div>
+                        <?php if ( $agroup['hint'] ) : ?>
+                        <p style="font-size:11px;color:#94a3b8;margin:0 0 6px;"><?php echo esc_html( $agroup['hint'] ); ?></p>
+                        <?php endif; ?>
+                        <div style="display:flex;flex-direction:column;gap:5px;">
+                        <?php foreach ( $agroup['items'] as $item ) :
+                            if ( ! empty( $item['always'] ) ) : ?>
+                            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#64748b;">
+                                <span style="width:16px;height:16px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:3px;font-size:9px;font-weight:700;color:#94a3b8;">🔒</span>
+                                <?php echo esc_html( $item['label'] ); ?>
+                                <span style="font-size:9px;padding:1px 5px;border-radius:6px;background:#f1f5f9;color:#94a3b8;border:1px solid #e2e8f0;white-space:nowrap;"><?php esc_html_e( 'always on', 'cloudscale-devtools' ); ?></span>
+                            </div>
+                            <?php else :
+                                $val = get_option( $item['opt'], $item['default'] ) === '1';
+                            ?>
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#374151;">
+                                <input type="checkbox" class="cs-alert-toggle" data-opt="<?php echo esc_attr( $item['opt'] ); ?>" id="<?php echo esc_attr( $item['id'] ); ?>" <?php checked( $val ); ?> style="width:14px;height:14px;">
+                                <?php echo esc_html( $item['label'] ); ?>
+                            </label>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                    <div style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid #f1f5f9;">
+                        <button type="button" class="cs-btn-primary cs-btn-sm" id="cs-alerts-save">💾 <?php esc_html_e( 'Save Alert Settings', 'cloudscale-devtools' ); ?></button>
+                        <span id="cs-alerts-saved" style="display:none;font-size:12px;font-weight:600;color:#16a34a;">✓ <?php esc_html_e( 'Saved', 'cloudscale-devtools' ); ?></span>
+                    </div>
+                </div>
+            </div>
+
             </div>
         </div>
         <?php

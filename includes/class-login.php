@@ -2148,7 +2148,9 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $body .= "Reason:    {$reason} [{$error_code}]\n";
         $body .= "Agent:     {$ua}";
 
-        self::send_ntfy( 'REST API auth failure', $body, 'high', 'rotating_light' );
+        if ( get_option( 'csdt_ntfy_rest_auth_fail', '1' ) === '1' ) {
+            self::send_ntfy( 'REST API auth failure', $body, 'high', 'rotating_light' );
+        }
     }
 
     /**
