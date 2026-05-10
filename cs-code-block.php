@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.769
+ * Version: 1.9.770
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.769';
+    const VERSION      = '1.9.770';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4786,44 +4786,38 @@ class CloudScale_DevTools {
         </div>
 
         <!-- ── Failed Login Attempts ─────────────────────────────────── -->
-        <?php if ( ! empty( $bf_widget_rows ) ) : ?>
-        <div class="cs-dw-section">🎯 <?php esc_html_e( 'Failed Login Attempts', 'cloudscale-devtools' ); ?>
-            <span style="font-weight:400;color:#94a3b8;font-size:10px;margin-left:4px;"><?php echo esc_html( $failed_today ); ?> today<?php echo $failed_7d > $failed_today ? ' · ' . esc_html( $failed_7d ) . ' / 7d' : ''; ?></span>
-        </div>
-        <div style="max-height:170px;overflow-y:auto;margin-bottom:10px;border:1px solid #e2e8f0;border-radius:6px;">
-            <table style="width:100%;border-collapse:collapse;font-size:11px;">
-                <thead><tr style="background:#f8fafc;position:sticky;top:0;">
-                    <th style="text-align:left;padding:4px 8px;color:#6b7280;font-weight:600;border-bottom:1px solid #e2e8f0;"><?php esc_html_e( 'When', 'cloudscale-devtools' ); ?></th>
-                    <th style="text-align:left;padding:4px 8px;color:#6b7280;font-weight:600;border-bottom:1px solid #e2e8f0;"><?php esc_html_e( 'Username', 'cloudscale-devtools' ); ?></th>
-                    <th style="text-align:left;padding:4px 8px;color:#6b7280;font-weight:600;border-bottom:1px solid #e2e8f0;"><?php esc_html_e( 'IP / Country', 'cloudscale-devtools' ); ?></th>
-                    <th style="text-align:right;padding:4px 8px;color:#6b7280;font-weight:600;border-bottom:1px solid #e2e8f0;"><?php esc_html_e( 'Today', 'cloudscale-devtools' ); ?></th>
-                </tr></thead>
-                <tbody>
-                <?php foreach ( $bf_widget_rows as $i => $row ) :
-                    $row_ts    = (int) $row['time'];
-                    $row_usr   = $row['user'] ?: '—';
-                    $row_ip    = $row['ip'];
-                    $row_cc    = $row['cc'];
-                    $row_age   = $row_ts ? human_time_diff( $row_ts ) . ' ago' : '—';
-                    $row_today = (int) ( $bf_ip_today[ $row_ip ] ?? 0 );
-                    $row_bg    = $i % 2 === 0 ? '#fff' : '#f8fafc';
-                    $is_blocked = isset( $blocklist[ $row_ip ] );
-                ?>
-                <tr style="background:<?php echo esc_attr( $row_bg ); ?>;border-top:1px solid #f1f5f9;">
-                    <td style="padding:4px 8px;color:#94a3b8;white-space:nowrap;"><?php echo esc_html( $row_age ); ?></td>
-                    <td style="padding:4px 8px;color:#374151;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?php echo esc_html( $row_usr ); ?></td>
-                    <td style="padding:4px 8px;color:#374151;">
-                        <?php echo esc_html( $row_ip ); ?>
-                        <?php if ( $row_cc ) : ?><br><span style="color:#94a3b8;"><?php echo esc_html( $row_cc ); ?></span><?php endif; ?>
-                        <?php if ( $is_blocked ) : ?><span style="font-size:9px;font-weight:700;padding:1px 4px;background:#dcfce7;color:#15803d;border-radius:4px;margin-left:3px;">blocked</span><?php endif; ?>
-                    </td>
-                    <td style="padding:4px 8px;text-align:right;font-weight:700;color:<?php echo $row_today > 0 ? '#dc2626' : '#94a3b8'; ?>;">
-                        <?php echo $row_today > 0 ? esc_html( $row_today ) : '—'; ?>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+        <?php if ( ! empty( $bf_widget_rows ) ) :
+            $latest        = $bf_widget_rows[0];
+            $latest_age    = $latest['time'] ? human_time_diff( $latest['time'] ) . ' ago' : '';
+            $latest_ip     = $latest['ip'];
+            $latest_cc     = $latest['cc'];
+            $latest_usr    = $latest['user'] ?: '';
+            $latest_today  = (int) ( $bf_ip_today[ $latest_ip ] ?? 0 );
+            $is_blocked    = isset( $blocklist[ $latest_ip ] );
+        ?>
+        <div class="cs-dw-section">🎯 <?php esc_html_e( 'Failed Login Attempts', 'cloudscale-devtools' ); ?></div>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;">
+            <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:6px 9px;display:flex;align-items:flex-start;gap:7px;flex-shrink:0;">
+                <span style="font-size:13px;flex-shrink:0;line-height:1.4">🎯</span>
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:11px;font-weight:700;color:#9a3412;line-height:1.3;display:flex;align-items:center;gap:5px;">
+                        <?php esc_html_e( 'Failed login attempt', 'cloudscale-devtools' ); ?>
+                        <?php if ( $failed_today > 0 ) : ?>
+                        <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;background:#fdba74;color:#9a3412;white-space:nowrap;"><?php echo esc_html( $failed_today ); ?> today</span>
+                        <?php endif; ?>
+                        <?php if ( $is_blocked ) : ?>
+                        <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;background:#dcfce7;color:#15803d;white-space:nowrap;">blocked</span>
+                        <?php endif; ?>
+                    </div>
+                    <div style="font-size:10px;color:#64748b;margin-top:1px;">
+                        <?php if ( $latest_usr ) : ?><?php esc_html_e( 'Username:', 'cloudscale-devtools' ); ?> <?php echo esc_html( $latest_usr ); ?> &nbsp;<?php endif; ?>
+                        IP: <?php echo esc_html( $latest_ip ); ?><?php echo $latest_cc ? ' · ' . esc_html( $latest_cc ) : ''; ?>
+                    </div>
+                </div>
+                <?php if ( $latest_age ) : ?>
+                <span style="font-size:9px;color:#94a3b8;white-space:nowrap;flex-shrink:0;margin-top:2px"><?php echo esc_html( $latest_age ); ?></span>
+                <?php endif; ?>
+            </div>
         </div>
         <?php endif; ?>
 
