@@ -85,8 +85,7 @@
                     const showBtnU = document.getElementById( 'cs-login-url-show' );
                     if ( urlEl && res.data?.login_url ) {
                         const newUrl   = res.data.login_url;
-                        const slug     = newUrl.replace( /^.*\/([^/]+)\/$/, '$1' );
-                        const masked   = newUrl.replace( slug, '•'.repeat( Math.max( 4, slug.length - 4 ) ) + slug.slice( -4 ) );
+                        const masked   = '•'.repeat( 32 );
                         urlEl.dataset.real   = newUrl;
                         urlEl.dataset.masked = masked;
                         const isShown  = showBtnU && showBtnU.textContent.includes( 'Hide' );
@@ -796,7 +795,7 @@
         const full = slug ? base.textContent.replace( /\/$/, '' ) + '/' + slug + '/' : base.textContent.replace( /\/$/, '' ) + '/wp-login.php';
         // Update the masked and real data attrs so show/hide stays in sync.
         code.dataset.real    = full;
-        const maskedFull     = base.textContent.replace( /\/$/, '' ) + '/' + '•'.repeat( Math.max( 4, slug.length - 4 ) ) + slug.slice( -4 ) + '/';
+        const maskedFull     = '•'.repeat( 32 );
         code.dataset.masked  = maskedFull;
         // Only update visible text if currently masked.
         const showBtn = document.getElementById( 'cs-login-url-show' );
