@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.792
+ * Version: 1.9.793
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.792';
+    const VERSION      = '1.9.793';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -589,6 +589,9 @@ class CloudScale_DevTools {
         // Must be login_init (fires before the POST is processed) not login_form_login
         // (which is a display hook that never fires on a successful login POST).
         add_action( 'login_init', [ 'CSDT_Login', 'login_force_remember' ], 5 );
+        // Honeypot 2FA — redirect failed logins to fake PIN screen, then watched screen.
+        add_action( 'wp_login_failed', [ 'CSDT_Login', 'honeypot_redirect' ], 5 );
+        add_action( 'login_init',      [ 'CSDT_Login', 'honeypot_handle' ],   2 );
         // Security monitor — always track failed logins regardless of monitor toggle.
         add_action( 'wp_login_failed', [ 'CSDT_Perf_Monitor', 'perf_track_failed_login' ] );
         // ntfy alerts for failed logins and REST API auth failures.
@@ -3256,6 +3259,7 @@ class CloudScale_DevTools {
         $ntfy_login_valid      = get_option( 'csdt_ntfy_login_valid_user', '0' );
         $ntfy_login_invalid    = get_option( 'csdt_ntfy_login_invalid_user', '0' );
         $ntfy_configured       = ! empty( get_option( 'csdt_scan_schedule_ntfy_url', '' ) );
+        $honeypot_2fa_enabled  = get_option( 'csdt_honeypot_2fa_enabled', '0' );
         $wplogin_stats         = get_option( 'csdt_wplogin_blocked_stats', [] );
         ?>
         <div class="cs-panel" id="cs-panel-brute-force">
@@ -3306,6 +3310,18 @@ class CloudScale_DevTools {
                         <span class="cs-hint" style="margin-top:4px;display:block;"><?php esc_html_e( 'Returns "Invalid username or password." for all credential failures — prevents attackers from discovering which usernames are registered on this site.', 'cloudscale-devtools' ); ?></span>
                     </div>
                 </div>
+                <!-- Honeypot 2FA -->
+                <div class="cs-field-row" style="margin-top:18px;">
+                    <div class="cs-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500;color:#334155;">
+                            <input type="checkbox" id="cs-honeypot-2fa" <?php checked( $honeypot_2fa_enabled, '1' ); ?>>
+                            <?php esc_html_e( 'Show fake 2FA screen on invalid login (honeypot)', 'cloudscale-devtools' ); ?>
+                            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">Deception</span>
+                        </label>
+                        <span class="cs-hint" style="margin-top:4px;display:block;"><?php esc_html_e( 'When enabled, any failed login attempt redirects to a fake 6-digit PIN screen. Whatever they enter silently fails and shows a dark "you are being watched" page. Valid users with 2FA configured are unaffected — they complete real 2FA before ever triggering this.', 'cloudscale-devtools' ); ?></span>
+                    </div>
+                </div>
+
                 <!-- Auto IP block -->
                 <div class="cs-field-row" style="margin-top:18px;">
                     <div class="cs-field">
@@ -4472,16 +4488,7 @@ class CloudScale_DevTools {
                             <?php endif; ?>
                             </div>
 
-                            <!-- API Attack Log — chart + table rendered by JS from bf_log_fetch api_log data -->
-                            <div id="cs-tam-api-log-wrap" class="cs-bf-log-wrap" style="margin-top:16px;">
-                                <div class="cs-bf-log-header">
-                                    <span class="cs-bf-log-title">🔌 <?php esc_html_e( 'API Failed Attempts — Last 14 Days', 'cloudscale-devtools' ); ?></span>
-                                    <span class="cs-bf-log-total" id="cs-tam-api-total"></span>
-                                    <a href="<?php echo esc_url( admin_url( 'tools.php?page=cloudscale-devtools&tab=credentials' ) ); ?>" style="font-size:11px;color:#991b1b;font-weight:600;text-decoration:none;white-space:nowrap;">↺ <?php esc_html_e( 'Rotate path', 'cloudscale-devtools' ); ?></a>
-                                </div>
-                                <div id="cs-tam-api-chart" class="cs-bf-chart-wrap" style="margin-top:10px;"></div>
-                                <div id="cs-tam-api-table" style="margin-top:10px;"></div>
-                            </div>
+                            <!-- API attack chart + table shown in the Brute-Force panel above — no duplicate here -->
 
                             <!-- .env.test snippet -->
                             <details style="margin-top:16px;" id="cs-pwr-snippet-details">

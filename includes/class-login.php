@@ -1313,6 +1313,9 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         update_option( 'csdt_devtools_enum_protect',              $bf_enum_protect );
         update_option( 'csdt_devtools_bf_auto_block_threshold',   (string) $bf_auto_block );
 
+        $honeypot = isset( $_POST['honeypot_2fa_enabled'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['honeypot_2fa_enabled'] ) ) ? '1' : '0';
+        update_option( 'csdt_honeypot_2fa_enabled', $honeypot );
+
         // Grace logins
         $grace_logins = isset( $_POST['grace_logins'] ) ? (int) sanitize_text_field( wp_unslash( $_POST['grace_logins'] ) ) : 0;
         if ( $grace_logins < 0 || $grace_logins > 10 ) { $grace_logins = 0; }
@@ -1756,6 +1759,149 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
                 WP_Session_Tokens::get_instance( $user_id )->destroy_all();
             }
         }
+    }
+
+    // ── Honeypot 2FA — fake 2FA screen on invalid credentials ────────────────
+    //
+    // When enabled, any failed login (wrong username OR wrong password) redirects
+    // to a fake 6-digit PIN screen instead of showing a login error. Whatever the
+    // attacker types is silently rejected and they land on the dark "being watched"
+    // screen. Real accounts with 2FA are unaffected — they go through the real 2FA
+    // flow before ever reaching wp_login_failed.
+
+    private const HONEYPOT_ACTION = 'csdt_honeypot_2fa';
+
+    /**
+     * Hooked to `wp_login_failed`. Redirects failed logins to the honeypot 2FA screen.
+     */
+    public static function honeypot_redirect( string $username ): void {
+        if ( get_option( 'csdt_honeypot_2fa_enabled', '0' ) !== '1' ) {
+            return;
+        }
+        // Don't double-intercept real 2FA flows.
+        $action = isset( $_REQUEST['action'] ) ? sanitize_key( $_REQUEST['action'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if ( $action === 'csdt_devtools_2fa' || $action === self::HONEYPOT_ACTION ) {
+            return;
+        }
+        $redirect_to = isset( $_POST['redirect_to'] ) ? esc_url_raw( wp_unslash( $_POST['redirect_to'] ) ) : admin_url(); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        $url = add_query_arg( [
+            'action'       => self::HONEYPOT_ACTION,
+            'redirect_to'  => rawurlencode( $redirect_to ),
+        ], wp_login_url() );
+        wp_safe_redirect( $url );
+        exit;
+    }
+
+    /**
+     * Hooked to `login_init`. Handles GET (display) and POST (always-fail) for the honeypot screen.
+     */
+    public static function honeypot_handle(): void {
+        $action = isset( $_REQUEST['action'] ) ? sanitize_key( $_REQUEST['action'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if ( $action !== self::HONEYPOT_ACTION ) {
+            return;
+        }
+
+        // POST — attacker submitted the fake PIN.
+        if ( 'POST' === $_SERVER['REQUEST_METHOD'] ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+            $ip = self::get_client_ip();
+            $cc = $ip ? CSDT_Geo::get_country( $ip ) : '';
+            self::record_security_event( 'attack', 'Honeypot 2FA triggered', "IP: {$ip}" . ( $cc ? " · {$cc}" : '' ) );
+            // Show the dark "being watched" screen — same HTML as the blocked probe screen.
+            self::honeypot_render_watched( $ip );
+            exit;
+        }
+
+        // GET — show the fake 2FA PIN entry form.
+        self::honeypot_render_pin_form();
+        exit;
+    }
+
+    /** Render the fake 6-digit PIN form using WP's login chrome. */
+    private static function honeypot_render_pin_form(): void {
+        login_header( __( 'Two-Factor Authentication', 'cloudscale-devtools' ), '', null );
+        ?>
+        <form name="honeypot_2fa_form" id="honeypot_2fa_form" action="" method="post">
+            <p style="text-align:center;font-size:48px;margin:0 0 8px">📱</p>
+            <p style="text-align:center;margin:0 0 20px;color:#555;font-size:13px;line-height:1.5">
+                <?php esc_html_e( 'Enter the 6-digit code from your authenticator app to continue.', 'cloudscale-devtools' ); ?>
+            </p>
+            <p>
+                <label for="csdt_honeypot_pin"><?php esc_html_e( 'Authentication Code', 'cloudscale-devtools' ); ?></label>
+                <input type="text" name="csdt_honeypot_pin" id="csdt_honeypot_pin" class="input"
+                       value="" size="20" maxlength="6"
+                       inputmode="numeric" autocomplete="one-time-code"
+                       placeholder="000000" autofocus
+                       style="text-align:center;font-size:22px;letter-spacing:6px">
+            </p>
+            <input type="hidden" name="action" value="<?php echo esc_attr( self::HONEYPOT_ACTION ); ?>">
+            <?php if ( isset( $_GET['redirect_to'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+            <input type="hidden" name="redirect_to" value="<?php echo esc_attr( esc_url_raw( wp_unslash( $_GET['redirect_to'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>">
+            <?php endif; ?>
+            <p class="submit">
+                <input type="submit" name="wp-submit" id="wp-submit" class="button button-primary button-large" value="<?php esc_attr_e( 'Verify', 'cloudscale-devtools' ); ?>">
+            </p>
+        </form>
+        <p style="text-align:center;margin-top:16px">
+            <a href="<?php echo esc_url( wp_login_url() ); ?>"><?php esc_html_e( '← Back to login', 'cloudscale-devtools' ); ?></a>
+        </p>
+        <?php
+        login_footer();
+    }
+
+    /** Render the dark "your site is being watched" terminal screen. */
+    private static function honeypot_render_watched( string $ip ): void {
+        $site_name = esc_html( wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES ) );
+        nocache_headers();
+        status_header( 403 );
+        header( 'Content-Type: text/html; charset=UTF-8' );
+        // phpcs:disable WordPress.Security.EscapeOutput.OutputNotEscaped
+        echo '<!DOCTYPE html><html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Access Protected</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f172a;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+.card{text-align:center;max-width:460px;padding:48px 40px;background:#1e293b;border:1px solid #334155;border-radius:16px;box-shadow:0 25px 60px rgba(0,0,0,.5);}
+.shield{width:80px;height:80px;margin:0 auto 28px;}
+.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#f87171;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:20px;padding:4px 12px;margin-bottom:20px;}
+h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.3;}
+.site-name{font-size:13px;color:#94a3b8;margin-bottom:28px;}
+.divider{height:1px;background:#475569;margin:24px 0;}
+.protected-by{font-size:12px;color:#94a3b8;margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em;}
+.brand{font-size:17px;font-weight:700;color:#f1f5f9;text-decoration:none;}
+.brand span{color:#ef4444;}
+.tracking{margin-top:20px;font-size:12px;color:#cbd5e1;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-radius:6px;padding:10px 14px;line-height:1.7;}
+.tracking strong{color:#fca5a5;}
+</style>
+</head>
+<body>
+<div class="card">
+  <svg class="shield" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="sg" x1="40" y1="8" x2="40" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f87171"/><stop offset="100%" stop-color="#b91c1c"/>
+    </linearGradient></defs>
+    <path d="M40 8 L68 20 L68 42 C68 57 55 68 40 72 C25 68 12 57 12 42 L12 20 Z" fill="url(#sg)" opacity=".15"/>
+    <path d="M40 8 L68 20 L68 42 C68 57 55 68 40 72 C25 68 12 57 12 42 L12 20 Z" stroke="#ef4444" stroke-width="2" fill="none"/>
+    <path d="M30 40 L37 47 L52 32" stroke="#f87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <div class="badge">Security Alert</div>
+  <h1>Unauthorised access attempt</h1>
+  <p class="site-name">' . $site_name . '</p>
+  <div class="divider"></div>
+  <p class="protected-by">This site is secured by</p>
+  <a href="https://andrewbaker.ninja" target="_blank" rel="noopener noreferrer" class="brand">
+    CloudScale <span>Cyber</span> and Devtools
+  </a>
+  <div class="tracking">
+    &#x26A0; This authentication attempt has been logged.<br>
+    <strong>IP ' . esc_html( $ip ) . ' is now being tracked.</strong>
+  </div>
+</div>
+</body></html>';
+        // phpcs:enable
     }
 
     // ── IP Blocklist ─────────────────────────────────────────────────────────

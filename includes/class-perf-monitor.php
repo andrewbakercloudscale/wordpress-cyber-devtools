@@ -1190,7 +1190,18 @@ class CSDT_Perf_Monitor {
         }
         $ip      = self::get_client_ip();
         $country = CSDT_Geo::get_country( $ip );
-        $log[]   = [ time(), sanitize_user( $username, true ), $ip, $country ];
+
+        // If WP passed an empty username (REST API / application-password path),
+        // try PHP_AUTH_USER which holds the Basic Auth username they sent.
+        $logged_user = $username;
+        if ( '' === $logged_user && ! empty( $_SERVER['PHP_AUTH_USER'] ) ) {
+            $logged_user = sanitize_user( wp_unslash( $_SERVER['PHP_AUTH_USER'] ), true );
+        }
+        if ( '' === $logged_user ) {
+            $logged_user = '[REST API]';
+        }
+
+        $log[]   = [ time(), $logged_user, $ip, $country ];
         update_option( 'csdt_devtools_bf_log', $log, false );
 
         // Per-country 14-day rolling count for the map.

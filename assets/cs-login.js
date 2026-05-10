@@ -70,6 +70,7 @@
             ntfy_login_valid_user:    document.getElementById( 'cs-ntfy-login-valid' )?.checked ? '1' : '0',
             ntfy_login_invalid_user:  document.getElementById( 'cs-ntfy-login-invalid' )?.checked ? '1' : '0',
             bf_auto_block_threshold:  document.getElementById( 'cs-bf-auto-block' )?.value || '10',
+            honeypot_2fa_enabled:     document.getElementById( 'cs-honeypot-2fa' )?.checked ? '1' : '0',
         };
     }
 
