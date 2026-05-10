@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.807
+ * Version: 1.9.809
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.807';
+    const VERSION      = '1.9.809';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -1600,6 +1600,30 @@ class CloudScale_DevTools {
             // Thumbnails-tab-specific CSS — injected as inline style to avoid an
             // extra HTTP request and keep the render method free of <style> tags.
             wp_add_inline_style( 'csdt-admin-tabs', CSDT_Perf_Monitor::get_thumbnails_admin_css() );
+        }
+
+        if ( $active_tab === 'credentials' ) {
+            // Credentials tab needs cs-plugin-stack.js for Show/Copy/Rotate/Save-alerts buttons.
+            wp_enqueue_script(
+                'csdt-optimizer',
+                plugins_url( 'assets/cs-plugin-stack.js', __FILE__ ),
+                [],
+                self::VERSION,
+                true
+            );
+            wp_localize_script( 'csdt-optimizer', 'csdtOptimizer', [
+                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                'nonce'   => wp_create_nonce( CloudScale_DevTools::OPTIMIZER_NONCE ),
+                'baseUrl' => admin_url( 'tools.php?page=' . self::TOOLS_SLUG ),
+                'hasAi'   => CSDT_AI_Dispatcher::has_key(),
+            ] );
+            // Also provide login nonce (used by regen handlers) and thumbnails nonce (alerts save).
+            wp_add_inline_script( 'csdt-optimizer',
+                'window.csdtDevtoolsLogin = window.csdtDevtoolsLogin || { nonce: ' . wp_json_encode( wp_create_nonce( CloudScale_DevTools::LOGIN_NONCE ) ) . ', ajaxUrl: ' . wp_json_encode( admin_url( 'admin-ajax.php' ) ) . ' };'
+                . 'window.csdtDevtoolsThumbs = window.csdtDevtoolsThumbs || { nonce: ' . wp_json_encode( wp_create_nonce( 'csdt_devtools_thumbnails' ) ) . ', ajaxUrl: ' . wp_json_encode( admin_url( 'admin-ajax.php' ) ) . ' };'
+                . 'window.csdtTestAccounts = window.csdtTestAccounts || { nonce: ' . wp_json_encode( wp_create_nonce( 'csdt_devtools_login_nonce' ) ) . ', ajaxUrl: ' . wp_json_encode( admin_url( 'admin-ajax.php' ) ) . ' };',
+                'before'
+            );
         }
 
         if ( $active_tab === 'optimizer' ) {
@@ -5196,7 +5220,7 @@ class CloudScale_DevTools {
     // ─── AJAX: save notification alert toggles ───────────────────────────
 
     public static function ajax_save_alerts(): void {
-        check_ajax_referer( 'csdt_devtools_thumbnails', 'nonce' ); // reuse existing nonce
+        check_ajax_referer( 'csdt_devtools_thumbnails', 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized', 403 );
         }
@@ -5395,6 +5419,92 @@ class CloudScale_DevTools {
             <?php endforeach; ?>
 
             <p style="font-size:11px;color:#94a3b8;margin:0;"><?php esc_html_e( 'Secrets are stored in wp_options and never exposed in source code. Rotation buttons regenerate and save the new value server-side — update your .env files immediately after rotating.', 'cloudscale-devtools' ); ?></p>
+            <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline handlers for credentials panel buttons ?>
+            <script>
+            (function() {
+                var AJAX  = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
+                var NONCE_LOGIN = <?php echo wp_json_encode( wp_create_nonce( CloudScale_DevTools::LOGIN_NONCE ) ); ?>;
+                var NONCE_THUMBS = <?php echo wp_json_encode( wp_create_nonce( 'csdt_devtools_thumbnails' ) ); ?>;
+
+                document.addEventListener('click', function(e) {
+                    // Show/Hide
+                    var showBtn = e.target.closest('.cs-cred-show');
+                    if (showBtn) {
+                        var code = document.getElementById(showBtn.getAttribute('data-target'));
+                        if (!code) return;
+                        var shown = showBtn.textContent.includes('Hide') || showBtn.textContent.includes('🔒');
+                        code.textContent = shown ? (code.dataset.masked || '') : (code.dataset.real || '');
+                        showBtn.textContent = shown ? '👁 Show' : '🔒 Hide';
+                        return;
+                    }
+                    // Copy
+                    var copyBtn = e.target.closest('.cs-cred-copy');
+                    if (copyBtn) {
+                        var code2 = document.getElementById(copyBtn.getAttribute('data-target'));
+                        if (!code2) return;
+                        navigator.clipboard.writeText(code2.dataset.real || '').then(function() {
+                            var orig = copyBtn.textContent;
+                            copyBtn.textContent = '✓ Copied';
+                            setTimeout(function() { copyBtn.textContent = orig; }, 1500);
+                        });
+                        return;
+                    }
+                    // Rotate
+                    var regenBtn = e.target.closest('.cs-cred-regen');
+                    if (regenBtn) {
+                        if (!confirm('Rotate this credential? You must update all .env files and scripts that use it.')) return;
+                        var action = regenBtn.getAttribute('data-action');
+                        var target = regenBtn.getAttribute('data-target');
+                        var ftype  = regenBtn.getAttribute('data-type');
+                        var code3  = document.getElementById(target);
+                        regenBtn.disabled = true;
+                        regenBtn.textContent = '⏳';
+                        var fd = new FormData();
+                        fd.append('action', action);
+                        fd.append('nonce',  NONCE_LOGIN);
+                        fetch(AJAX, { method: 'POST', body: fd })
+                            .then(function(r) { return r.json(); })
+                            .then(function(res) {
+                                regenBtn.disabled = false;
+                                regenBtn.textContent = '↺ Rotate';
+                                if (res.success && code3) {
+                                    var newVal = res.data.secret || res.data.session_url || '';
+                                    if (newVal) {
+                                        var masked = newVal.length > 8
+                                            ? '•'.repeat(Math.min(24, newVal.length - 4)) + newVal.slice(-4)
+                                            : newVal;
+                                        code3.dataset.real   = newVal;
+                                        code3.dataset.masked = masked;
+                                        code3.textContent    = masked;
+                                        // flash row green
+                                        var tr = code3.closest('tr');
+                                        if (tr) { tr.style.background = '#f0fdf4'; setTimeout(function() { tr.style.background = ''; }, 2000); }
+                                    }
+                                }
+                            })
+                            .catch(function() { regenBtn.disabled = false; regenBtn.textContent = '↺ Rotate'; });
+                        return;
+                    }
+                    // Save alert settings
+                    var alertSave = e.target.closest('#cs-alerts-save');
+                    if (alertSave) {
+                        alertSave.disabled = true;
+                        var data = { action: 'csdt_devtools_save_alerts', nonce: NONCE_THUMBS };
+                        document.querySelectorAll('.cs-alert-toggle').forEach(function(cb) { data[cb.dataset.opt] = cb.checked ? '1' : '0'; });
+                        var fd2 = new FormData();
+                        Object.keys(data).forEach(function(k) { fd2.append(k, data[k]); });
+                        fetch(AJAX, { method: 'POST', body: fd2 })
+                            .then(function(r) { return r.json(); })
+                            .then(function() {
+                                alertSave.disabled = false;
+                                var saved = document.getElementById('cs-alerts-saved');
+                                if (saved) { saved.style.display = ''; setTimeout(function(){ saved.style.display = 'none'; }, 2000); }
+                            })
+                            .catch(function() { alertSave.disabled = false; });
+                    }
+                });
+            }());
+            </script>
 
             <!-- ── Notification Alerts ──────────────────────────────────── -->
             <?php
