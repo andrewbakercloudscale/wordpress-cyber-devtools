@@ -1,6 +1,6 @@
 /**
  * Verifies the featured image on single posts is NOT force-cropped.
- * The fix (v1.9.767) removed aspect-ratio:1200/630 + object-fit:cover from
+ * The fix (v1.9.768) removed aspect-ratio:1200/630 + object-fit:cover from
  * .single .wp-post-image. This test confirms the CSS is gone and the full
  * image height is visible (natural ratio, no clip).
  *
