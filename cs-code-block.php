@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.762
+ * Version: 1.9.763
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.762';
+    const VERSION      = '1.9.763';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -3166,11 +3166,12 @@ class CloudScale_DevTools {
                         <label class="cs-label" for="cs-login-slug"><?php esc_html_e( 'Custom Login Path:', 'cloudscale-devtools' ); ?></label>
                         <div class="cs-slug-row">
                             <span class="cs-slug-base"><?php echo esc_html( trailingslashit( home_url() ) ); ?></span>
-                            <input type="text" id="cs-login-slug" class="cs-input cs-slug-input"
+                            <input type="password" id="cs-login-slug" class="cs-input cs-slug-input"
                                    value="<?php echo esc_attr( $slug ); ?>"
                                    placeholder="my-secret-login"
-                                   maxlength="60" autocomplete="off" spellcheck="false">
-                            <button type="button" id="cs-login-slug-random" title="<?php esc_attr_e( 'Generate a random, unguessable login path', 'cloudscale-devtools' ); ?>" style="margin-left:8px;padding:5px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;">🎲 <?php esc_html_e( 'Randomise', 'cloudscale-devtools' ); ?></button>
+                                   maxlength="60" autocomplete="new-password" spellcheck="false">
+                            <button type="button" id="cs-login-slug-show" style="padding:5px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;">👁 <?php esc_html_e( 'Show', 'cloudscale-devtools' ); ?></button>
+                            <button type="button" id="cs-login-slug-random" title="<?php esc_attr_e( 'Generate a random, unguessable login path', 'cloudscale-devtools' ); ?>" style="padding:5px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;">🎲 <?php esc_html_e( 'Randomise', 'cloudscale-devtools' ); ?></button>
                         </div>
                         <span class="cs-hint"><?php esc_html_e( 'Letters, numbers, and hyphens only. Save this URL — you will need it to log in.', 'cloudscale-devtools' ); ?></span>
                         <span id="cs-slug-weak-warn" style="display:none;margin-top:4px;font-size:12px;font-weight:600;color:#92400e;">⚠ <?php esc_html_e( 'This looks guessable. Use the Randomise button for a secure path.', 'cloudscale-devtools' ); ?></span>
@@ -4179,9 +4180,8 @@ class CloudScale_DevTools {
                     <?php
                     $session_base   = rest_url( 'csdt/v1/test-session-' );
                     $logout_base    = rest_url( 'csdt/v1/test-logout-' );
-                    $masked_tok     = str_repeat( '•', 24 ) . substr( $path_token, -4 );
-                    $masked_sess    = $session_base . $masked_tok;
-                    $masked_logout  = $logout_base  . $masked_tok;
+                    $masked_sess   = str_repeat( '•', 32 );
+                    $masked_logout = str_repeat( '•', 32 );
                     ?>
                     <div class="cs-sec-row" style="margin-top:8px;">
                         <span class="cs-sec-label"><?php esc_html_e( 'Session URL:', 'cloudscale-devtools' ); ?></span>
@@ -4951,12 +4951,8 @@ class CloudScale_DevTools {
                         $display = $val;
                         $masked  = $val;
                     } elseif ( $type === 'url' ) {
-                        // Mask only the last path segment token.
-                        $parts   = explode( '/', rtrim( $val, '/' ) );
-                        $last    = array_pop( $parts );
-                        $masked_tok = str_repeat( '•', max( 8, strlen( $last ) - 4 ) ) . substr( $last, -4 );
                         $display = $val;
-                        $masked  = implode( '/', $parts ) . '/' . $masked_tok;
+                        $masked  = str_repeat( '•', 32 );
                     } else {
                         $display = $val;
                         $masked  = str_repeat( '•', min( 24, max( 8, strlen( $val ) - 4 ) ) ) . ( strlen( $val ) > 4 ? substr( $val, -4 ) : '' );

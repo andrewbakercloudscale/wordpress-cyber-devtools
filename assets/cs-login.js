@@ -747,6 +747,19 @@
         } );
     }
 
+    // ── Login slug show/hide ─────────────────────────────────────────────
+
+    ( function () {
+        const showBtn = document.getElementById( 'cs-login-slug-show' );
+        const inp     = document.getElementById( 'cs-login-slug' );
+        if ( ! showBtn || ! inp ) return;
+        showBtn.addEventListener( 'click', function () {
+            const showing = inp.type === 'text';
+            inp.type = showing ? 'password' : 'text';
+            showBtn.textContent = showing ? '👁 Show' : '🔒 Hide';
+        } );
+    } )();
+
     // ── Login URL show/hide ──────────────────────────────────────────────
 
     ( function () {
