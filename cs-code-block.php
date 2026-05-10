@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.776
+ * Version: 1.9.777
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.776';
+    const VERSION      = '1.9.777';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4825,7 +4825,7 @@ class CloudScale_DevTools {
         ?>
         <div class="cs-dw-section">🎯 <?php esc_html_e( 'Failed Login Attempts', 'cloudscale-devtools' ); ?></div>
         <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;">
-            <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:6px 9px;display:flex;align-items:flex-start;gap:7px;flex-shrink:0;">
+            <a href="<?php echo esc_url( $base_url . '&tab=login' ); ?>" style="display:flex;align-items:flex-start;gap:7px;flex-shrink:0;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;padding:6px 9px;text-decoration:none;cursor:pointer;" title="<?php esc_attr_e( 'Go to Login Security', 'cloudscale-devtools' ); ?>">
                 <span style="font-size:13px;flex-shrink:0;line-height:1.4">🎯</span>
                 <div style="flex:1;min-width:0">
                     <div style="font-size:11px;font-weight:700;color:#9a3412;line-height:1.3;display:flex;align-items:center;gap:5px;">
@@ -4861,7 +4861,7 @@ class CloudScale_DevTools {
                 <?php if ( $latest_age ) : ?>
                 <span style="font-size:9px;color:#94a3b8;white-space:nowrap;flex-shrink:0;margin-top:2px"><?php echo esc_html( $latest_age ); ?></span>
                 <?php endif; ?>
-            </div>
+            </a>
             <?php if ( $compromised_count > 0 ) : ?>
             <div style="margin-top:6px;">
                 <button type="button"
@@ -4928,15 +4928,27 @@ class CloudScale_DevTools {
                 $today_n   = (int) ( $today_counts[ $ev_type ] ?? 0 );
                 if ( $ev_type === 'downgrade' ) {
                     $icon = '🔓'; $bg = '#fef2f2'; $border = '#fca5a5'; $tx = '#991b1b';
+                    $ev_href = $base_url . '&tab=login';
+                    $ev_hint = __( 'Go to Login Security', 'cloudscale-devtools' );
                 } elseif ( $ev_type === 'attack' ) {
                     $icon = '🎯'; $bg = '#fff7ed'; $border = '#fdba74'; $tx = '#9a3412';
+                    $ev_href = $base_url . '&tab=login';
+                    $ev_hint = __( 'Go to Login Security', 'cloudscale-devtools' );
                 } elseif ( $ev_type === 'api_attack' ) {
                     $icon = '🔌'; $bg = '#fef2f2'; $border = '#fca5a5'; $tx = '#991b1b';
-                } else {
+                    $ev_href = $base_url . '&tab=login#cs-panel-test-accounts';
+                    $ev_hint = __( 'Go to Test Account Manager', 'cloudscale-devtools' );
+                } elseif ( $ev_type === 'rest_fail' ) {
                     $icon = '🔌'; $bg = '#fefce8'; $border = '#fde047'; $tx = '#854d0e';
+                    $ev_href = $base_url . '&tab=login#cs-panel-test-accounts';
+                    $ev_hint = __( 'Go to Test Account Manager', 'cloudscale-devtools' );
+                } else {
+                    $icon = '⚠️'; $bg = '#f9fafb'; $border = '#e5e7eb'; $tx = '#374151';
+                    $ev_href = $base_url . '&tab=login';
+                    $ev_hint = __( 'Go to Login Security', 'cloudscale-devtools' );
                 }
             ?>
-            <div style="background:<?php echo esc_attr( $bg ); ?>;border:1px solid <?php echo esc_attr( $border ); ?>;border-radius:6px;padding:6px 9px;display:flex;align-items:flex-start;gap:7px;flex-shrink:0;">
+            <a href="<?php echo esc_url( $ev_href ); ?>" title="<?php echo esc_attr( $ev_hint ); ?>" style="display:flex;align-items:flex-start;gap:7px;flex-shrink:0;background:<?php echo esc_attr( $bg ); ?>;border:1px solid <?php echo esc_attr( $border ); ?>;border-radius:6px;padding:6px 9px;text-decoration:none;cursor:pointer;">
                 <span style="font-size:13px;flex-shrink:0;line-height:1.4"><?php echo $icon; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                 <div style="flex:1;min-width:0">
                     <div style="font-size:11px;font-weight:700;color:<?php echo esc_attr( $tx ); ?>;line-height:1.3;display:flex;align-items:center;gap:5px;">
@@ -4952,7 +4964,7 @@ class CloudScale_DevTools {
                 <?php if ( $age ) : ?>
                 <span style="font-size:9px;color:#94a3b8;white-space:nowrap;flex-shrink:0;margin-top:2px"><?php echo esc_html( $age ); ?></span>
                 <?php endif; ?>
-            </div>
+            </a>
             <?php endforeach; ?>
         </div>
         <?php endif; ?>
