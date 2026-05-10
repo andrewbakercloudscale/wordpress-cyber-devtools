@@ -261,6 +261,27 @@
                     });
                     buildPreview();
                 }
+                // Clear the violation log so stale entries don't reappear when re-running audit.
+                var fdClear = new FormData();
+                fdClear.append('action', 'csdt_devtools_csp_violations_clear');
+                fdClear.append('nonce',  csdtVulnScan.nonce);
+                fetch(csdtVulnScan.ajaxUrl, { method: 'POST', body: fdClear }).catch(function(){});
+
+                // Update audit body to prompt saving + re-browsing.
+                var auditBody = document.getElementById('cs-csp-audit-body');
+                if (auditBody) {
+                    var notice = document.createElement('div');
+                    notice.style.cssText = 'background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;font-size:12px;color:#15803d;margin-bottom:8px;';
+                    notice.innerHTML = '<strong>✅ Fix applied.</strong> '
+                        + 'Violation log cleared. '
+                        + '<strong>Next:</strong> click <strong>Save Settings</strong> below to write the updated CSP to your headers, '
+                        + 'then browse your site, then click <strong>Run Site Audit</strong> again to confirm.';
+                    auditBody.insertBefore(notice, auditBody.firstChild);
+                    // Scroll save button into view as a visual hint.
+                    var saveBtn = document.getElementById('cs-csp-save-btn');
+                    if (saveBtn) setTimeout(function() { saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); saveBtn.style.outline = '3px solid #16a34a'; setTimeout(function(){ saveBtn.style.outline = ''; }, 3000); }, 500);
+                }
+
                 // Refresh Fixes Applied panel
                 var fd2 = new FormData();
                 fd2.append('action', 'csdt_devtools_csp_fixes_get');
@@ -1169,7 +1190,7 @@
                             html += '</div>';
                         } else if (svc) {
                             var svcKey   = svc; // string key like 'google_analytics'
-                            var svcLabel = (serviceLabels && serviceLabels[svc]) ? serviceLabels[svc] : svc;
+                            var svcLabel = (violSvcLabels && violSvcLabels[svc]) ? violSvcLabels[svc] : svc;
                             html += '<div style="font-size:11px;color:#166534;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
                                 + '<span>✅ <strong>' + escH(svcLabel) + '</strong> — tick it in the services list above.</span>'
                                 + '<button type="button" class="cs-fix-btn" style="' + fixBtnStyle + '" data-fix-type="service" data-fix-value="' + escH(svcKey) + '">⚡ Add ' + escH(svcLabel) + '</button>'
