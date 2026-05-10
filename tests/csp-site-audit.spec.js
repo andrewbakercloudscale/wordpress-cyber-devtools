@@ -155,3 +155,72 @@ test('CSP audit calls violations_get and shows results', async ({ browser }) => 
 
     await ctx.close();
 });
+
+test('CSP audit fix buttons fire the apply_fix AJAX action', async ({ browser }) => {
+    const sess = await getAdminSession();
+    const ctx  = await browser.newContext({ ignoreHTTPSErrors: true });
+    await injectCookies(ctx, sess);
+    const page = await ctx.newPage();
+
+    const jsErrors = [];
+    page.on('pageerror', e => jsErrors.push(e.message));
+
+    await page.goto(HEADERS_TAB, { waitUntil: 'domcontentloaded', timeout: 20000 });
+
+    // Run the audit.
+    await page.locator('#cs-csp-audit-btn').click();
+    await expect(page.locator('#cs-csp-audit-btn'), 'Button re-enables after fetch').toBeEnabled({ timeout: 15000 });
+
+    // If there are no violations, skip (nothing to fix).
+    const bodyText = await page.locator('#cs-csp-audit-body').textContent();
+    if (bodyText.includes('log is empty') || bodyText.includes('all from known')) {
+        console.log('⏭ No unexpected violations — skipping fix button test.');
+        await ctx.close();
+        return;
+    }
+
+    // Find a fix button.
+    const fixBtn = page.locator('.cs-fix-btn').first();
+    const fixCount = await fixBtn.count();
+    if (fixCount === 0) {
+        console.log('⏭ No fix buttons rendered — skipping.');
+        await ctx.close();
+        return;
+    }
+
+    // Intercept the AJAX call to verify it fires (without actually applying the fix).
+    let fixActionCalled = false;
+    let fixPayload = '';
+    await page.route('**/wp-admin/admin-ajax.php', async (route, request) => {
+        const body = request.postData() || '';
+        if (request.method() === 'POST' && body.includes('csdt_devtools_csp_apply_fix')) {
+            fixActionCalled = true;
+            fixPayload = body;
+            // Fulfil with fake success so no real change is made.
+            await route.fulfill({
+                status: 200, contentType: 'application/json',
+                body: JSON.stringify({ success: true, data: { already_applied: false } }),
+            });
+        } else {
+            await route.continue();
+        }
+    });
+
+    const btnText = await fixBtn.textContent();
+    console.log('Clicking fix button:', btnText.trim());
+    await fixBtn.click();
+
+    // Give AJAX time to fire.
+    await page.waitForTimeout(1500);
+
+    console.log('fix action called:', fixActionCalled);
+    console.log('fix payload:', fixPayload.slice(0, 200));
+
+    expect(fixActionCalled, 'Fix button must call csdt_devtools_csp_apply_fix AJAX action').toBe(true);
+    // FormData serialisation varies — just verify the action fired with some payload.
+    expect(fixPayload.length, 'Fix payload must be non-empty').toBeGreaterThan(0);
+    expect(jsErrors, 'No JS errors when clicking fix').toHaveLength(0);
+
+    console.log('✅ Fix button fired AJAX correctly — no real change made (intercepted).');
+    await ctx.close();
+});

@@ -1015,6 +1015,15 @@
         if (e.detail && e.detail.tab === 'headers') csdtCspInit();
     });
 
+    // ── Global delegation for .cs-fix-btn — covers both violation log AND audit panel ──
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.cs-fix-btn');
+        if (!btn) return;
+        // Don't double-fire if already handled by the querySelectorAll listener on violTable.
+        // applyViolationFix is idempotent (disables the button immediately).
+        if (!btn.disabled) applyViolationFix(btn);
+    });
+
     // ── CSP Site Audit ────────────────────────────────────────────────────
     // Loads key pages in hidden iframes, collects securitypolicyviolation
     // events, and reports results inline in the panel.

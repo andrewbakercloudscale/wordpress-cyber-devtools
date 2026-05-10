@@ -416,7 +416,7 @@ helpLib.run({
         { id: 'ssh-monitor',label: 'SSH Brute-Force Monitor',file: 'panel-ssh-monitor.png', tabSelector: 'a[href*="tab=login"]',   elementSelector: '#cs-panel-ssh-monitor',
           intro: 'Reads your server\'s auth.log every 60 seconds to count SSH failed login attempts. When the count exceeds your threshold in a rolling window, it fires an instant alert via email and push notification. Works alongside fail2ban - this plugin detects and alerts; fail2ban does the blocking.',
           altText: 'WordPress SSH brute force monitor reading auth.log with email and ntfy.sh push notifications' },
-        { id: 'security',   label: 'AI Cyber Audit',        file: 'panel-security.png',    tabSelector: 'a[href*="tab=security"]', elementSelector: '#cs-vuln-results',
+        { id: 'security',   label: 'AI Cyber Audit',        file: 'panel-security.png',    tabSelector: 'a[href*="tab=security"]', elementSelector: '#cs-panel-ai-cyber-audit',
           intro: 'Uses frontier AI - Anthropic Claude or Google Gemini - to analyse your entire WordPress installation and return a prioritised, scored security report in under 60 seconds. Unlike signature-based scanners, the AI reasons from first principles: it reads your actual configuration and code, identifies risk combinations no database can match, and gives you specific fix steps for your exact setup.',
           altText: 'WordPress AI security audit showing a perfect score with Claude 4 and Gemini 2.5 Pro on a free security plugin',
           jsBeforeShot: () => {
