@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.777
+ * Version: 1.9.778
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.777';
+    const VERSION      = '1.9.778';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4591,30 +4591,49 @@ class CloudScale_DevTools {
             if ( count( $bf_widget_rows ) >= 10 ) break;
         }
 
-        // Find unique usernames that were targeted — include deleted accounts (they were
-        // real when attacked). Check WP for current users to show email; mark deleted ones.
-        $targeted_users = [];
+        // Categorise tried usernames: valid (active WP account), deleted (existed, now gone),
+        // invalid (never existed — bots guessing common names).
+        $valid_users   = [];
+        $deleted_users = [];
+        $invalid_count = 0;
+        $seen_users    = [];
         foreach ( array_reverse( $bf_log ) as $entry ) {
             $usr = (string) ( $entry[1] ?? $entry['username'] ?? '' );
-            if ( ! $usr || isset( $targeted_users[ $usr ] ) ) { continue; }
+            if ( ! $usr || isset( $seen_users[ $usr ] ) ) { continue; }
+            $seen_users[ $usr ] = true;
             $u = get_user_by( 'login', $usr );
             if ( ! $u ) { $u = get_user_by( 'email', $usr ); }
             if ( $u ) {
-                $targeted_users[ $usr ] = [
+                $valid_users[] = [
                     'login'      => $u->user_login,
                     'email_mask' => preg_replace( '/(?<=.).(?=.*@)/u', '•', $u->user_email ),
-                    'deleted'    => false,
                 ];
             } else {
-                // Username was tried but account no longer exists — was deleted after the attack.
-                $targeted_users[ $usr ] = [
-                    'login'   => $usr,
-                    'email_mask' => '',
-                    'deleted' => true,
-                ];
+                // Heuristic: if username looks like a real WP login (alphanumeric, no random
+                // strings) we flag as deleted; pure noise goes to invalid.
+                // Simple rule: previously appeared in WP user list is unknowable, so treat all
+                // non-existing accounts with > 3 chars that aren't obvious random strings as deleted.
+                // For now: anything tried is either valid or we split on whether it looks like
+                // a plausible human username (no hex-like strings, not purely numeric).
+                $is_plausible = strlen( $usr ) >= 4
+                    && ! preg_match( '/^[0-9a-f]{8,}$/i', $usr )
+                    && ! preg_match( '/^\d+$/', $usr );
+                if ( $is_plausible ) {
+                    $deleted_users[] = [ 'login' => $usr ];
+                } else {
+                    $invalid_count++;
+                }
             }
         }
-        $compromised_count = count( $targeted_users );
+        // invalid_count = unique non-empty tried usernames that matched neither valid nor deleted.
+        $invalid_count = count( $seen_users ) - count( $valid_users ) - count( $deleted_users );
+        $invalid_count = max( 0, $invalid_count );
+
+        // Build combined targeted list: valid first, deleted second.
+        $targeted_users    = [];
+        foreach ( $valid_users   as $u ) { $targeted_users[] = $u + [ 'deleted' => false ]; }
+        foreach ( $deleted_users as $u ) { $targeted_users[] = $u + [ 'email_mask' => '', 'deleted' => true ]; }
+        $compromised_count = count( $valid_users ) + count( $deleted_users );
 
         $blocklist      = get_option( 'csdt_ip_blocklist', [] );
         $blocked_count  = is_array( $blocklist ) ? count( $blocklist ) : 0;
@@ -4883,7 +4902,12 @@ class CloudScale_DevTools {
                         <?php endif; ?>
                     </div>
                     <?php endforeach; ?>
-                    <div style="font-size:9px;color:#94a3b8;margin-top:4px;"><?php esc_html_e( 'These are real accounts that were targeted. Consider changing their passwords.', 'cloudscale-devtools' ); ?></div>
+                    <?php if ( $invalid_count > 0 ) : ?>
+                    <div style="font-size:10px;color:#6b7280;padding:4px 0;border-top:1px solid #fca5a5;margin-top:4px;">
+                        + <?php echo esc_html( $invalid_count ); ?> <?php esc_html_e( 'invalid username attempts (bots guessing common names)', 'cloudscale-devtools' ); ?>
+                    </div>
+                    <?php endif; ?>
+                    <div style="font-size:9px;color:#94a3b8;margin-top:4px;"><?php esc_html_e( 'Real accounts targeted: consider changing their passwords.', 'cloudscale-devtools' ); ?></div>
                 </div>
             </div>
             <?php endif; ?>
