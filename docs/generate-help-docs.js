@@ -470,7 +470,17 @@ helpLib.run({
           altText: 'WordPress AI site auditor scanning SEO, content, performance, and database health with prioritised findings' },
         { id: 'threat-monitor', label: 'Threat Monitor',    file: 'panel-threat-monitor.png', tabSelector: 'a[href*="tab=security"]', elementSelector: '#cs-panel-threat-monitor',
           intro: 'Runs three passive background checks every 5 minutes: file integrity monitoring (detects unexpected changes to WordPress core files), new administrator alerts (fires the instant an admin account is created or promoted), and web probe detection (counts requests to sensitive endpoints and alerts on sudden spikes).',
-          altText: 'WordPress threat monitor showing file integrity checking, new admin alerts, and web probe detection' },
+          altText: 'WordPress threat monitor showing file integrity checking, new admin alerts, and web probe detection',
+          jsBeforeShot: () => {
+            // Replace any red alert divs (which show real usernames/timestamps) with the clean green status
+            var tm = document.getElementById('cs-panel-threat-monitor');
+            if (!tm) return;
+            tm.querySelectorAll('div[style*="color:#dc2626"]').forEach(function(el) {
+                el.style.color = '#16a34a';
+                el.style.fontWeight = '600';
+                el.textContent = '✓ No new admin accounts detected.';
+            });
+          } },
         { id: 'code-block', label: 'Code Block',             file: 'panel-code-block.png',  tabSelector: 'a[href*="tab=debug"]', elementSelector: '#cs-panel-code-settings',
           intro: 'Syntax-highlighted code blocks powered by highlight.js, running entirely on your own server with zero CDN calls. Supports 190+ languages and 14 professional colour themes - completely free, with no impact on your Core Web Vitals score.',
           altText: 'WordPress syntax-highlighted code block settings with 190 languages, 14 themes, no CDN, completely free' },

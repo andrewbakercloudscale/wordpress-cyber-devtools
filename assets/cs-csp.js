@@ -1148,30 +1148,42 @@
                         }
                         html += '</div>';
 
-                        // What it is + how to fix
+                        // What it is + actionable fix button
+                        var fixBtnStyle = 'font-size:11px;font-weight:700;padding:4px 12px;border-radius:5px;border:none;cursor:pointer;background:#16a34a;color:#fff;margin-top:6px;';
                         if (special) {
-                            html += '<div style="font-size:11px;color:#0369a1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
-                                + '<strong>ℹ️ What this is:</strong> ' + escH(special.note || '')
-                                + ( special.fix ? '<br><strong>Fix:</strong> ' + special.fix : '' )
-                                + '</div>';
+                            html += '<div style="font-size:11px;color:#0369a1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:8px 10px;margin-bottom:6px;">'
+                                + '<strong>ℹ️ ' + escH(special.note || '') + '</strong>';
+                            if (special.fix) {
+                                // special.fix may contain a button — render it directly
+                                html += '<br>' + special.fix;
+                            }
+                            html += '</div>';
                         } else if (svc) {
-                            html += '<div style="font-size:11px;color:#166534;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
-                                + '<strong>✅ Service identified: ' + escH(svc.label || svc) + '</strong><br>'
-                                + '<strong>Fix:</strong> Tick <strong>' + escH(svc.label || svc) + '</strong> in the list above, then click Save Settings.'
+                            var svcKey   = svc; // string key like 'google_analytics'
+                            var svcLabel = (serviceLabels && serviceLabels[svc]) ? serviceLabels[svc] : svc;
+                            html += '<div style="font-size:11px;color:#166534;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+                                + '<span>✅ <strong>' + escH(svcLabel) + '</strong> — tick it in the services list above.</span>'
+                                + '<button type="button" class="cs-fix-btn" style="' + fixBtnStyle + '" data-fix-type="service" data-fix-value="' + escH(svcKey) + '">⚡ Add ' + escH(svcLabel) + '</button>'
                                 + '</div>';
                         } else if (isInline) {
-                            html += '<div style="font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
-                                + '<strong>⚠️ Inline script/style blocked.</strong><br>'
-                                + '<strong>Fix:</strong> Add <code>\'unsafe-inline\'</code> to your Custom Directives field for ' + escH(dir) + ', or switch to nonce-based CSP.'
+                            html += '<div style="font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+                                + '<span>⚠️ Inline script/style — needs <code>\'unsafe-inline\'</code> in ' + escH(dir) + '.</span>'
+                                + '<button type="button" class="cs-fix-btn" style="' + fixBtnStyle + 'background:#d97706;" data-fix-type="custom" data-fix-value="\'unsafe-inline\'" data-fix-directive="' + escH(dir) + '">⚡ Add \'unsafe-inline\'</button>'
                                 + '</div>';
                         } else if (blocked.indexOf(siteOrigin) === 0) {
-                            html += '<div style="font-size:11px;color:#7c3aed;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
-                                + '<strong>🔌 Your own site is blocking itself.</strong><br>'
-                                + '<strong>Fix:</strong> Add <code>\'self\'</code> to ' + escH(dir) + ' in Custom Directives, or check if a plugin is adding a conflicting header.'
+                            // When strict-dynamic is active, 'self' is ignored — must allowlist the exact path.
+                            // Extract just the path prefix (e.g. /cdn-cgi/) for the fix.
+                            var fixOriginSelf = extractOrigin(blocked) || siteOrigin;
+                            html += '<div style="font-size:11px;color:#7c3aed;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:4px;padding:8px 10px;margin-bottom:6px;">'
+                                + '<span>🔌 <strong>Your own domain is being blocked.</strong> If nonces/strict-dynamic are enabled, \'self\' is ignored — you must allowlist the exact origin.</span>'
+                                + '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">'
+                                + '<button type="button" class="cs-fix-btn" style="' + fixBtnStyle + 'background:#7c3aed;" data-fix-type="custom" data-fix-value="' + escH(fixOriginSelf) + '" data-fix-directive="' + escH(dir) + '">⚡ Allowlist ' + escH(fixOriginSelf) + '</button>'
+                                + '</div>'
                                 + '</div>';
                         } else {
-                            html += '<div style="font-size:11px;color:#374151;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
-                                + '<strong>Fix:</strong> Add <code>' + escH(origin) + '</code> to the Custom Directives field: <code>' + escH(dir) + ' ' + escH(origin) + '</code>'
+                            html += '<div style="font-size:11px;color:#374151;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+                                + '<span>Add <code>' + escH(origin) + '</code> to <strong>' + escH(dir) + '</strong>.</span>'
+                                + '<button type="button" class="cs-fix-btn" style="' + fixBtnStyle + '" data-fix-type="custom" data-fix-value="' + escH(origin) + '" data-fix-directive="' + escH(dir) + '">⚡ Apply Fix</button>'
                                 + '</div>';
                         }
 
