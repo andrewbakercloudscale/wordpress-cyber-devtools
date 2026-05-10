@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.772
+ * Version: 1.9.773
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.772';
+    const VERSION      = '1.9.773';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4563,7 +4563,7 @@ class CloudScale_DevTools {
         $failed_7d       = 0;
         $cutoff_7d       = time() - 7 * DAY_IN_SECONDS;
         foreach ( $bf_log as $entry ) {
-            $ts = (int) ( $entry['time'] ?? 0 );
+            $ts = (int) ( $entry[0] ?? $entry['time'] ?? 0 );
             if ( gmdate( 'Y-m-d', $ts ) === $today_str ) { $failed_today++; }
             if ( $ts >= $cutoff_7d )                      { $failed_7d++; }
         }
@@ -4591,7 +4591,7 @@ class CloudScale_DevTools {
         $blocklist      = get_option( 'csdt_ip_blocklist', [] );
         $blocked_count  = is_array( $blocklist ) ? count( $blocklist ) : 0;
         $probe_stats    = get_option( 'csdt_wplogin_blocked_stats', [] );
-        $probes_today   = (int) ( $probe_stats[ $today_str ]['count'] ?? 0 );
+        $probes_today   = (int) ( $probe_stats['daily'][ $today_str ] ?? 0 );
         $session_dur    = get_option( 'csdt_devtools_session_duration', 'default' );
 
         // API attack count (today, from security events log).
