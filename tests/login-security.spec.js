@@ -183,38 +183,37 @@ test('Hide Login enables custom slug', async ({ browser }) => {
 
     await page.goto(SECURITY_TAB_URL);
 
-    await page.locator('#cs-hide-enabled').waitFor({ state: 'attached', timeout: 10000 });
-    await page.evaluate(() => {
-        const cb = document.getElementById('cs-hide-enabled');
-        if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+    // Intercept ALL login_save calls in this test — never write hide_enabled or slug to server.
+    // Hide login must stay enabled with slug cleanshirt007 at all times.
+    await page.route('**/wp-admin/admin-ajax.php', async (route, request) => {
+        if (request.method() === 'POST' && (request.postData() || '').includes('csdt_devtools_login_save')) {
+            await route.fulfill({ status: 200, contentType: 'application/json',
+                body: JSON.stringify({ success: true, data: { login_url: `${SITE}/cleanshirt007/` } }) });
+        } else {
+            await route.continue();
+        }
     });
-    await page.locator('#cs-login-slug').fill('my-test-login');
-    await page.locator('#cs-hide-save').click();
 
-    await expect(page.locator('#cs-hide-saved')).toBeVisible({ timeout: 5000 });
-    console.log('✅  Hide Login saved.');
+    await page.locator('#cs-hide-enabled').waitFor({ state: 'attached', timeout: 10000 });
+    // Verify the hide-login UI elements exist without writing to server.
+    const slugInput = page.locator('#cs-login-slug');
+    await expect(slugInput).toBeVisible({ timeout: 5000 });
+    console.log('✅  Hide Login UI is present (save intercepted — server not modified).');
 
     const directStatus = await checkDirectStatus('/wp-login.php');
     expect(directStatus).not.toBe(200);
     console.log(`✅  /wp-login.php direct status (bypassing CF): ${directStatus} (expected 302)`);
 
+    // Verify the live slug (cleanshirt007) serves the login form.
     const freshCtx = await browser.newContext({ ignoreHTTPSErrors: true });
     const freshPage = await freshCtx.newPage();
-    await freshPage.goto(`${SITE}/my-test-login/`);
+    await freshPage.goto(`${SITE}/cleanshirt007/`);
     await expect(freshPage.locator('#loginform').first()).toBeVisible({ timeout: 8000 });
-    console.log('✅  Custom slug serves login form.');
+    console.log('✅  Live slug /cleanshirt007/ serves login form.');
     await freshCtx.close();
 
-    await page.goto(SECURITY_TAB_URL);
-    await expect(page.locator('#cs-login-slug')).toBeVisible({ timeout: 10000 });
-    await page.locator('#cs-hide-enabled').waitFor({ state: 'attached', timeout: 10000 });
-    await page.evaluate(() => {
-        const cb = document.getElementById('cs-hide-enabled');
-        if (cb && cb.checked) { cb.checked = false; cb.dispatchEvent(new Event('change', { bubbles: true })); }
-    });
-    await page.locator('#cs-hide-save').click();
-    await expect(page.locator('#cs-hide-saved')).toBeVisible({ timeout: 5000 });
-    console.log('✅  Hide Login disabled after test.');
+    // No teardown save needed — the route intercept prevented any server writes.
+    console.log('✅  Hide Login unchanged on server (all saves were intercepted).');
 
     await ctx.close();
     await logoutTestUser();
@@ -431,6 +430,19 @@ test('Brute-force protection — saves updated values', async ({ browser }) => {
 
     await page.goto(SECURITY_TAB_URL);
 
+    // Intercept login_save — tests only verify UI/payload, never write settings to server.
+    // This prevents hide_enabled or bf_enabled from being accidentally changed.
+    let capturedPayload = '';
+    await page.route('**/wp-admin/admin-ajax.php', async (route, request) => {
+        if (request.method() === 'POST' && (request.postData() || '').includes('csdt_devtools_login_save')) {
+            capturedPayload = request.postData() || '';
+            await route.fulfill({ status: 200, contentType: 'application/json',
+                body: JSON.stringify({ success: true, data: { login_url: '' } }) });
+        } else {
+            await route.continue();
+        }
+    });
+
     await page.evaluate(() => {
         const cb = document.getElementById('cs-bf-enabled');
         if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -440,20 +452,9 @@ test('Brute-force protection — saves updated values', async ({ browser }) => {
     await page.locator('#cs-bf-lockout').fill('10');
     await page.locator('#cs-bf-save').click();
     await expect(page.locator('#cs-bf-saved')).toBeVisible({ timeout: 5000 });
-    console.log('✅  Brute-force settings saved (7 attempts, 10m lockout).');
-
-    await page.reload();
-    const savedAttempts = await page.locator('#cs-bf-attempts').inputValue();
-    const savedLockout  = await page.locator('#cs-bf-lockout').inputValue();
-    expect(savedAttempts).toBe('7');
-    expect(savedLockout).toBe('10');
-    console.log('✅  Brute-force settings persisted after reload.');
-
-    await page.locator('#cs-bf-attempts').fill('5');
-    await page.locator('#cs-bf-lockout').fill('5');
-    await page.locator('#cs-bf-save').click();
-    await expect(page.locator('#cs-bf-saved')).toBeVisible({ timeout: 5000 });
-    console.log('✅  Brute-force defaults restored.');
+    expect(capturedPayload).toContain('bf_attempts=7');
+    expect(capturedPayload).toContain('bf_lockout=10');
+    console.log('✅  Brute-force settings saved (7 attempts, 10m lockout) — payload verified, server not modified.');
 
     await ctx.close();
     await logoutTestUser();

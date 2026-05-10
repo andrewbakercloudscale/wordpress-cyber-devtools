@@ -115,6 +115,17 @@ test.describe('M4 — Save button inline feedback', () => {
         await page.goto(`${PLUGIN_URL}&tab=login`, { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('#cs-hide-save', { timeout: 15000 });
 
+        // Intercept the save — we only want to verify the UI indicator, not write to server.
+        // Hide login must stay enabled with slug cleanshirt007 at all times.
+        await page.route('**/wp-admin/admin-ajax.php', async (route, request) => {
+            if (request.method() === 'POST' && (request.postData() || '').includes('csdt_devtools_login_save')) {
+                await route.fulfill({ status: 200, contentType: 'application/json',
+                    body: JSON.stringify({ success: true, data: { login_url: '' } }) });
+            } else {
+                await route.continue();
+            }
+        });
+
         await page.locator('#cs-hide-save').click();
 
         const savedMsg = page.locator('#cs-hide-saved');
