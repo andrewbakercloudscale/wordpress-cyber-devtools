@@ -625,13 +625,12 @@
                 const showBf      = !document.getElementById( 'cs-map-layer-bf' )      || document.getElementById( 'cs-map-layer-bf' ).checked;
                 const showBlocked = !document.getElementById( 'cs-map-layer-blocked' ) || document.getElementById( 'cs-map-layer-blocked' ).checked;
                 const showApi     = !document.getElementById( 'cs-map-layer-api' )     || document.getElementById( 'cs-map-layer-api' ).checked;
-                if ( Object.keys( d.bf ).length > 0 || Object.keys( d.blocked ).length > 0 || Object.keys( d.api ).length > 0 ) {
-                    renderBfGeoMap(
-                        showBf      ? d.bf      : {},
-                        showBlocked ? d.blocked : {},
-                        showApi     ? d.api     : {}
-                    );
-                }
+                // Always render (even with empty data) so the map tiles initialise.
+                renderBfGeoMap(
+                    showBf      ? ( d.bf      || {} ) : {},
+                    showBlocked ? ( d.blocked || {} ) : {},
+                    showApi     ? ( d.api     || {} ) : {}
+                );
             }
 
             applyMapLayers();
