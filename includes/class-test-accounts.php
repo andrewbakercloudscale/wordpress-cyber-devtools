@@ -374,7 +374,7 @@ class CSDT_Test_Accounts {
         if ( ! $ntfy_url ) { return; }
         $site    = (string) get_option( 'siteurl', '' );
         $host    = $site ? wp_parse_url( $site, PHP_URL_HOST ) : '';
-        $title   = ( $host ? "[{$host}] " : '' ) . 'Security Alert';
+        $title   = '[CS Cyber] ' . ( $host ? "[{$host}] " : '' ) . 'Security Alert';
         $headers = [ 'Title' => $title, 'Priority' => 'urgent', 'Tags' => 'rotating_light' ];
         $tok     = get_option( 'csdt_scan_schedule_ntfy_token', '' );
         if ( $tok ) { $headers['Authorization'] = 'Bearer ' . $tok; }

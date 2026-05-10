@@ -1850,7 +1850,7 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $site    = (string) get_option( 'siteurl', '' );
         $host    = $site ? wp_parse_url( $site, PHP_URL_HOST ) : '';
         $headers = [
-            'Title'    => ( $host ? "[{$host}] " : '' ) . $title,
+            'Title'    => '[CS Cyber] ' . ( $host ? "[{$host}] " : '' ) . $title,
             'Priority' => $priority,
             'Tags'     => $tags,
         ];

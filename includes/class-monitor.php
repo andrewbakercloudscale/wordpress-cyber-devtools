@@ -217,7 +217,7 @@ class CSDT_Monitor {
         $ntfy_url = get_option( 'csdt_scan_schedule_ntfy_url', '' );
         if ( $ntfy_url ) {
             $headers = [
-                'Title'    => $subject,
+                'Title'    => '[CS Cyber] ' . $subject,
                 'Priority' => 'urgent',
                 'Tags'     => 'rotating_light,computer',
                 'Click'    => $admin_url,
@@ -352,7 +352,7 @@ class CSDT_Monitor {
         $ntfy_url = get_option( 'csdt_scan_schedule_ntfy_url', '' );
         if ( $ntfy_url ) {
             $headers = [
-                'Title'    => $subject,
+                'Title'    => '[CS Cyber] ' . $subject,
                 'Priority' => $priority,
                 'Tags'     => $tags,
                 'Click'    => $debug_url,

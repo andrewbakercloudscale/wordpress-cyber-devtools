@@ -240,7 +240,7 @@ class CSDT_Threat_Monitor {
         }
         $ntfy_url = get_option( 'csdt_scan_schedule_ntfy_url', '' );
         if ( $ntfy_url ) {
-            $headers = [ 'Title' => $subject, 'Priority' => $priority, 'Tags' => $tags, 'Click' => $click_url ];
+            $headers = [ 'Title' => '[CS Cyber] ' . $subject, 'Priority' => $priority, 'Tags' => $tags, 'Click' => $click_url ];
             $ntfy_tok = get_option( 'csdt_scan_schedule_ntfy_token', '' );
             if ( $ntfy_tok ) {
                 $headers['Authorization'] = 'Bearer ' . $ntfy_tok;

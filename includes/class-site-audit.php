@@ -868,7 +868,7 @@ bantime  = 86400</pre>
         if ( $ntfy_url ) {
             $priority = $critical > 0 ? 'urgent' : ( $high > 0 ? 'high' : 'default' );
             $headers  = [
-                'Title'    => $subject,
+                'Title'    => '[CS Cyber] ' . $subject,
                 'Priority' => $priority,
                 'Tags'     => $score >= 75 ? 'white_check_mark' : ( $score >= 55 ? 'warning' : 'rotating_light' ),
                 'Click'    => $admin_url,
