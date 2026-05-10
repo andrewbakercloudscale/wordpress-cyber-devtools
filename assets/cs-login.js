@@ -690,8 +690,9 @@
                 banner.appendChild( msg );
                 bfLogWrap.insertBefore( banner, bfLogWrap.firstChild );
             }
-        } ).catch( () => {
-            if ( bfTableWrap ) bfTableWrap.innerHTML = '<div class="cs-bf-empty">Could not load log.</div>';
+        } ).catch( ( err ) => {
+            console.error( '[CS Login] bf_log_fetch error:', err );
+            if ( bfTableWrap ) bfTableWrap.innerHTML = '<div class="cs-bf-empty">Could not load log: ' + ( err && err.message ? err.message : String( err ) ) + '</div>';
         } );
     }
 
@@ -929,7 +930,7 @@
                     <th style="text-align:left;padding:5px 8px;color:#6b7280;font-weight:600;">IP / Country</th>
                 </tr></thead><tbody>`;
             rows.forEach( function ( entry ) {
-                const age    = formatAge( Math.floor( ( now * 1000 - entry[0] * 1000 ) / 1000 ) );
+                const age    = fmtAgo( now - entry[0] );
                 const title  = escHtml( entry[1] || '' );
                 const ip     = entry[2] || '';
                 const cc     = escHtml( entry[3] || '' );
