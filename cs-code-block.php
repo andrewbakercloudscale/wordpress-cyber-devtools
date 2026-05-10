@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.780
+ * Version: 1.9.781
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.780';
+    const VERSION      = '1.9.781';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -3532,10 +3532,22 @@ class CloudScale_DevTools {
                     <div style="margin-top:22px;border-top:1px solid #e8edf5;padding-top:20px;">
                         <div class="cs-bf-log-header">
                             <span class="cs-bf-log-title">🌍 <?php esc_html_e( 'Attack Origins', 'cloudscale-devtools' ); ?></span>
-                            <span style="display:flex;align-items:center;gap:12px;font-size:11px;">
-                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;opacity:0.8;"></span><?php esc_html_e( 'Failed Logins', 'cloudscale-devtools' ); ?></span>
-                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;opacity:0.8;"></span><?php esc_html_e( 'Blocked Probes', 'cloudscale-devtools' ); ?></span>
-                                <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#7c3aed;display:inline-block;opacity:0.8;"></span><?php esc_html_e( 'API Attacks', 'cloudscale-devtools' ); ?></span>
+                            <span style="display:flex;align-items:center;gap:10px;font-size:11px;flex-wrap:wrap;">
+                                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+                                    <input type="checkbox" id="cs-map-layer-bf" checked style="accent-color:#f59e0b;width:13px;height:13px;">
+                                    <span style="width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;opacity:0.8;flex-shrink:0;"></span>
+                                    <?php esc_html_e( 'Failed Logins', 'cloudscale-devtools' ); ?>
+                                </label>
+                                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+                                    <input type="checkbox" id="cs-map-layer-blocked" checked style="accent-color:#dc2626;width:13px;height:13px;">
+                                    <span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block;opacity:0.8;flex-shrink:0;"></span>
+                                    <?php esc_html_e( 'Blocked Probes', 'cloudscale-devtools' ); ?>
+                                </label>
+                                <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none;">
+                                    <input type="checkbox" id="cs-map-layer-api" checked style="accent-color:#7c3aed;width:13px;height:13px;">
+                                    <span style="width:10px;height:10px;border-radius:50%;background:#7c3aed;display:inline-block;opacity:0.8;flex-shrink:0;"></span>
+                                    <?php esc_html_e( 'API Attacks', 'cloudscale-devtools' ); ?>
+                                </label>
                             </span>
                         </div>
                         <div id="cs-bf-geo-map" style="height:280px;border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;background:#e8f4f4;margin-top:8px;"></div>

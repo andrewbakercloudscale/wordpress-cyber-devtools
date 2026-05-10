@@ -612,9 +612,38 @@
             }
 
             const countriesBlocked = ( window.csdtDevtoolsLogin || {} ).countriesBlocked || {};
-            if ( Object.keys( countries_bf || {} ).length > 0 || Object.keys( countriesBlocked ).length > 0 || Object.keys( countries_api || {} ).length > 0 ) {
-                renderBfGeoMap( countries_bf || {}, countriesBlocked, countries_api || {} );
+
+            // Store for checkbox re-render.
+            window._csdtMapData = {
+                bf:      countries_bf      || {},
+                blocked: countriesBlocked  || {},
+                api:     countries_api     || {},
+            };
+
+            function applyMapLayers() {
+                const d       = window._csdtMapData || {};
+                const showBf      = !document.getElementById( 'cs-map-layer-bf' )      || document.getElementById( 'cs-map-layer-bf' ).checked;
+                const showBlocked = !document.getElementById( 'cs-map-layer-blocked' ) || document.getElementById( 'cs-map-layer-blocked' ).checked;
+                const showApi     = !document.getElementById( 'cs-map-layer-api' )     || document.getElementById( 'cs-map-layer-api' ).checked;
+                if ( Object.keys( d.bf ).length > 0 || Object.keys( d.blocked ).length > 0 || Object.keys( d.api ).length > 0 ) {
+                    renderBfGeoMap(
+                        showBf      ? d.bf      : {},
+                        showBlocked ? d.blocked : {},
+                        showApi     ? d.api     : {}
+                    );
+                }
             }
+
+            applyMapLayers();
+
+            // Wire checkboxes (use event delegation in case panel was injected by tab router).
+            [ 'cs-map-layer-bf', 'cs-map-layer-blocked', 'cs-map-layer-api' ].forEach( function ( id ) {
+                const cb = document.getElementById( id );
+                if ( cb && ! cb._mapLayerWired ) {
+                    cb._mapLayerWired = true;
+                    cb.addEventListener( 'change', applyMapLayers );
+                }
+            } );
 
             // Fix it CTA — shown when there are active failed logins and Hide Login is not yet enabled.
             const hideLoginEnabled = ( window.csdtDevtoolsLogin || {} ).hideLoginEnabled;
