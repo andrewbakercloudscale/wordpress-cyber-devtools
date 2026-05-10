@@ -289,6 +289,15 @@ class CSDT_CSP {
                 </button>
             </div>
 
+            <!-- ── Site Audit Results — immediately below the button ──────── -->
+            <div id="cs-csp-audit-wrap" style="display:none;margin-bottom:18px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                <div style="background:#1e3a8a;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                    <span style="color:#fff;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;">🔍 <?php esc_html_e( 'CSP Site Audit', 'cloudscale-devtools' ); ?></span>
+                    <span id="cs-csp-audit-status" style="font-size:11px;color:#93c5fd;"></span>
+                </div>
+                <div id="cs-csp-audit-body" style="background:#fff;padding:12px 14px;font-size:12px;"></div>
+            </div>
+
             <!-- Quick-start guide — hidden once CSP is enabled -->
             <?php if ( ! $csp_on ) : ?>
             <div id="cs-csp-quickstart" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 16px;margin-bottom:16px;">
@@ -392,16 +401,7 @@ class CSDT_CSP {
                 <?php endif; ?>
             </div>
 
-            <!-- ── Site Audit Results ─────────────────────────────────── -->
-            <div id="cs-csp-audit-wrap" style="display:none;margin-top:16px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-                <div style="background:#1e3a8a;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-                    <span style="color:#fff;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;">🔍 <?php esc_html_e( 'CSP Site Audit', 'cloudscale-devtools' ); ?></span>
-                    <span id="cs-csp-audit-status" style="font-size:11px;color:#93c5fd;"></span>
-                </div>
-                <div id="cs-csp-audit-body" style="background:#fff;padding:12px 14px;font-size:12px;"></div>
-            </div>
-            <!-- hidden iframes for CSP probe — injected and removed by JS -->
-            <div id="cs-csp-audit-frames" style="position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;"></div>
+            <!-- audit results moved above to sit directly below the button -->
 
             <?php if ( ! empty( $csp_history ) ) : ?>
             <!-- ── Change History ─────────────────────────────────────── -->

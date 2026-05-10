@@ -351,23 +351,25 @@ class CSDT_Monitor {
         remove_filter( 'wp_mail_content_type', [ 'CSDT_Login', 'email_content_type_html' ] );
 
         // ntfy.sh
-        if ( get_option( 'csdt_ntfy_php_errors', '1' ) === '1' ) { $ntfy_url = get_option( 'csdt_scan_schedule_ntfy_url', '' );
-        if ( $ntfy_url ) {
-            $headers = [
-                'Title'    => '[CS Cyber] ' . $subject,
-                'Priority' => $priority,
-                'Tags'     => $tags,
-                'Click'    => $debug_url,
-            ];
-            $ntfy_tok = get_option( 'csdt_scan_schedule_ntfy_token', '' );
-            if ( $ntfy_tok ) {
-                $headers['Authorization'] = 'Bearer ' . $ntfy_tok;
+        if ( get_option( 'csdt_ntfy_php_errors', '1' ) === '1' ) {
+            $ntfy_url = get_option( 'csdt_scan_schedule_ntfy_url', '' );
+            if ( $ntfy_url ) {
+                $headers = [
+                    'Title'    => '[CS Cyber] ' . $subject,
+                    'Priority' => $priority,
+                    'Tags'     => $tags,
+                    'Click'    => $debug_url,
+                ];
+                $ntfy_tok = get_option( 'csdt_scan_schedule_ntfy_token', '' );
+                if ( $ntfy_tok ) {
+                    $headers['Authorization'] = 'Bearer ' . $ntfy_tok;
+                }
+                wp_remote_post( $ntfy_url, [
+                    'timeout' => 10,
+                    'headers' => $headers,
+                    'body'    => $excerpt,
+                ] );
             }
-            wp_remote_post( $ntfy_url, [
-                'timeout' => 10,
-                'headers' => $headers,
-                'body'    => $excerpt,
-            ] );
         }
 
         update_option( 'csdt_php_error_monitor_last_trigger', [

@@ -1066,6 +1066,7 @@
         }
 
         auditWrap.style.display = '';
+        auditWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         auditBody.innerHTML = '<div style="color:#64748b;font-size:12px;padding:8px 0;">⏳ Reading violation log…</div>';
         if (auditStatus) auditStatus.textContent = 'Reading log…';
         if (auditBtn) { auditBtn.disabled = true; auditBtn.textContent = '⏳ Loading…'; }
@@ -1075,22 +1076,25 @@
                 if (auditBtn) { auditBtn.disabled = false; auditBtn.textContent = '🔍 Run Site Audit'; }
 
                 var violations = (resp.success && Array.isArray(resp.data)) ? resp.data : [];
+                var siteOrigin = window.location.origin;
+
+                // Normalise: stored as {blocked, directive, page} — map to consistent names.
+                violations = violations.map(function(v) {
+                    return {
+                        blocked:   v.blocked    || v.blocked_uri || '',
+                        directive: v.directive  || v.effective_directive || '',
+                        page:      v.page       || '',
+                        source:    v.source     || v.source_file || '',
+                        line:      v.line       || v.line_number || 0,
+                    };
+                });
 
                 // Filter out expected/known third-party services.
-                var unexpected = violations.filter(function(v) {
-                    return !isExpected(v.blocked_uri || '');
-                });
+                var unexpected = violations.filter(function(v) { return !isExpected(v.blocked || ''); });
+                var expected   = violations.filter(function(v) { return  isExpected(v.blocked || ''); });
 
-                // Group unexpected by page.
-                var byPage = {};
-                unexpected.forEach(function(v) {
-                    var pg = v.page || 'Unknown page';
-                    if (!byPage[pg]) byPage[pg] = [];
-                    byPage[pg].push(v);
-                });
-
-                var pageCount = Object.keys(byPage).length;
-                if (auditStatus) auditStatus.textContent = violations.length + ' total violations · ' + unexpected.length + ' unexpected';
+                var pageCount = Object.keys(unexpected.reduce(function(acc, v) { acc[v.page||'?'] = 1; return acc; }, {})).length;
+                if (auditStatus) auditStatus.textContent = violations.length + ' total · ' + unexpected.length + ' unexpected';
 
                 var html = '';
 
@@ -1098,42 +1102,94 @@
                     if (violations.length === 0) {
                         html = '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:12px 14px;font-size:13px;color:#0369a1;margin-bottom:8px;">'
                             + '<strong>ℹ️ Violation log is empty.</strong><br>'
-                            + '<span style="font-size:12px;">The CSP violation log is populated automatically as real visitors browse your site with <strong>Report-Only</strong> mode active. '
-                            + 'Browse your site normally, then come back and click Run Site Audit to see results.</span>'
+                            + '<span style="font-size:12px;">Enable CSP in <strong>Report-Only</strong> mode, browse your site for a few minutes, then click Run Site Audit again.</span>'
                             + '</div>';
                     } else {
                         html = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;font-weight:700;color:#15803d;margin-bottom:8px;">'
-                            + '✅ ' + violations.length + ' violation' + (violations.length !== 1 ? 's' : '') + ' logged — all from known third-party services. No unexpected violations.</div>';
+                            + '✅ ' + violations.length + ' violation' + (violations.length !== 1 ? 's' : '') + ' — all from known third-party services. Safe to switch to Enforce.</div>';
                     }
                 } else {
-                    html = '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:10px;">'
-                        + '<strong>⚠️ ' + unexpected.length + ' unexpected CSP violation' + (unexpected.length !== 1 ? 's' : '') + ' on ' + pageCount + ' page' + (pageCount !== 1 ? 's' : '') + '.</strong> '
-                        + 'Add the affected services to your allowlist above, save, then browse those pages again.'
+                    // Group by blocked resource+directive so each unique issue appears once with all affected pages.
+                    var byResource = {};
+                    unexpected.forEach(function(v) {
+                        var key = (v.blocked || '(inline/eval)') + '||' + v.directive;
+                        if (!byResource[key]) {
+                            byResource[key] = { blocked: v.blocked, directive: v.directive, pages: [] };
+                        }
+                        if (v.page && byResource[key].pages.indexOf(v.page) === -1) {
+                            byResource[key].pages.push(v.page);
+                        }
+                    });
+
+                    html = '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;font-size:12px;color:#92400e;margin-bottom:12px;">'
+                        + '<strong>⚠️ ' + Object.keys(byResource).length + ' blocked resource' + (Object.keys(byResource).length !== 1 ? 's' : '') + ' across ' + pageCount + ' page' + (pageCount !== 1 ? 's' : '') + '.</strong><br>'
+                        + 'Each row below is a unique blocked resource. Fix each one by adding the domain to your allowlist (or use the Add button), then save and browse again.'
                         + '</div>';
+
+                    Object.keys(byResource).forEach(function(key) {
+                        var item    = byResource[key];
+                        var blocked = item.blocked || '';
+                        var dir     = item.directive || '';
+                        var svc     = suggestService(blocked);
+                        var special = specialCaseViolation(blocked, dir, siteOrigin);
+                        var origin  = extractOrigin(blocked) || blocked;
+                        var isInline = (!blocked || blocked === 'inline' || blocked === 'eval' || blocked === '\'unsafe-inline\'');
+                        var shortBlocked = blocked.length > 80 ? blocked.slice(0, 77) + '…' : blocked;
+
+                        html += '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;margin-bottom:8px;">';
+
+                        // Header row: directive + resource
+                        html += '<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px;">';
+                        html += '<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#fde68a;color:#92400e;white-space:nowrap;">' + escH(dir) + '</span>';
+                        if (isInline) {
+                            html += '<span style="font-size:12px;color:#374151;font-weight:600;">Inline script or style (\'unsafe-inline\')</span>';
+                        } else {
+                            html += '<span style="font-size:12px;color:#374151;font-weight:600;word-break:break-all;">' + escH(shortBlocked) + '</span>';
+                        }
+                        html += '</div>';
+
+                        // What it is + how to fix
+                        if (special) {
+                            html += '<div style="font-size:11px;color:#0369a1;background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
+                                + '<strong>ℹ️ What this is:</strong> ' + escH(special.note || '')
+                                + ( special.fix ? '<br><strong>Fix:</strong> ' + special.fix : '' )
+                                + '</div>';
+                        } else if (svc) {
+                            html += '<div style="font-size:11px;color:#166534;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
+                                + '<strong>✅ Service identified: ' + escH(svc.label || svc) + '</strong><br>'
+                                + '<strong>Fix:</strong> Tick <strong>' + escH(svc.label || svc) + '</strong> in the list above, then click Save Settings.'
+                                + '</div>';
+                        } else if (isInline) {
+                            html += '<div style="font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
+                                + '<strong>⚠️ Inline script/style blocked.</strong><br>'
+                                + '<strong>Fix:</strong> Add <code>\'unsafe-inline\'</code> to your Custom Directives field for ' + escH(dir) + ', or switch to nonce-based CSP.'
+                                + '</div>';
+                        } else if (blocked.indexOf(siteOrigin) === 0) {
+                            html += '<div style="font-size:11px;color:#7c3aed;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
+                                + '<strong>🔌 Your own site is blocking itself.</strong><br>'
+                                + '<strong>Fix:</strong> Add <code>\'self\'</code> to ' + escH(dir) + ' in Custom Directives, or check if a plugin is adding a conflicting header.'
+                                + '</div>';
+                        } else {
+                            html += '<div style="font-size:11px;color:#374151;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:6px 10px;margin-bottom:6px;">'
+                                + '<strong>Fix:</strong> Add <code>' + escH(origin) + '</code> to the Custom Directives field: <code>' + escH(dir) + ' ' + escH(origin) + '</code>'
+                                + '</div>';
+                        }
+
+                        // Affected pages
+                        if (item.pages.length > 0) {
+                            html += '<div style="font-size:10px;color:#6b7280;margin-top:4px;">Seen on: ';
+                            html += item.pages.slice(0, 3).map(function(pg) {
+                                var short = pg.replace(/^https?:\/\/[^/]+/, '').slice(0, 50) || '/';
+                                return '<a href="' + escH(pg) + '" target="_blank" rel="noopener" style="color:#6366f1;text-decoration:none;">' + escH(short) + '</a>';
+                            }).join(', ');
+                            if (item.pages.length > 3) html += ' + ' + (item.pages.length - 3) + ' more';
+                            html += '</div>';
+                        }
+
+                        html += '</div>';
+                    });
                 }
 
-                // Render per-page sections for unexpected violations.
-                Object.keys(byPage).forEach(function(pg) {
-                    var viols = byPage[pg];
-                    var shortPg = pg.replace(/^https?:\/\/[^/]+/, '').slice(0, 60) || '/';
-                    html += '<div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:8px 12px;margin-bottom:8px;">';
-                    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">';
-                    html += '<span style="font-weight:700;color:#92400e;">⚠️ ' + escH(shortPg) + '</span>';
-                    html += '<a href="' + escH(pg) + '" target="_blank" rel="noopener" style="font-size:10px;color:#6366f1;text-decoration:none;">Open ↗</a>';
-                    html += '</div>';
-                    html += '<table style="width:100%;border-collapse:collapse;font-size:11px;">';
-                    html += '<tr style="background:rgba(0,0,0,.04);"><th style="text-align:left;padding:3px 6px;color:#6b7280;">Directive</th><th style="text-align:left;padding:3px 6px;color:#6b7280;">Blocked resource</th></tr>';
-                    viols.forEach(function(v) {
-                        html += '<tr style="border-top:1px solid rgba(0,0,0,.06);">';
-                        html += '<td style="padding:3px 6px;font-weight:600;color:#b45309;white-space:nowrap;">' + escH(v.effective_directive || v.directive || '') + '</td>';
-                        html += '<td style="padding:3px 6px;word-break:break-all;color:#374151;">' + escH(v.blocked_uri || '') + '</td>';
-                        html += '</tr>';
-                    });
-                    html += '</table></div>';
-                });
-
-                // Also show a summary of filtered-out expected violations.
-                var expected = violations.filter(function(v) { return isExpected(v.blocked_uri || ''); });
                 if (expected.length > 0) {
                     html += '<p style="font-size:10px;color:#94a3b8;margin:8px 0 0;">' + expected.length + ' violation' + (expected.length !== 1 ? 's' : '') + ' from known third-party services (Google, Cloudflare, YouTube etc.) filtered out.</p>';
                 }
