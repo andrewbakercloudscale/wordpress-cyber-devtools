@@ -2139,10 +2139,9 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
             : '';
 
         // Generic reason only — never reveal whether the username exists or not.
-        // The specific WP error code (incorrect_password vs invalid_username) confirms
-        // account existence, so we suppress it entirely.
-        $error_code = $error->get_error_code();
-        $reason     = 'Authentication failed';
+        // Suppressing the WP error code (incorrect_password vs invalid_username)
+        // prevents account enumeration via the notification channel.
+        $reason = 'Authentication failed';
 
         // User agent (truncated).
         $ua = isset( $_SERVER['HTTP_USER_AGENT'] )
@@ -2160,7 +2159,7 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $body .= "Auth type: {$auth_type}\n";
         $body .= "Username:  " . ( $tried_user ?: '(none)' ) . "\n";
         $body .= "IP:        {$ip}" . ( $cc ? " · {$cc}" : '' ) . "\n";
-        $body .= "Reason:    {$reason} [{$error_code}]\n";
+        $body .= "Reason:    {$reason}\n";
         $body .= "Agent:     {$ua}";
 
         if ( get_option( 'csdt_ntfy_rest_auth_fail', '1' ) === '1' ) {
