@@ -76,23 +76,27 @@ class CSDT_CSP {
         // style-src must NOT use nonces: CSP3 ignores 'unsafe-inline' when a nonce is present,
         // which breaks all style="" attributes site-wide. Instead, allow the hljs CDN host directly.
         $d = [
-            'default-src' => [ "'self'" ],
-            'script-src'  => $script_src,
-            'style-src'   => [ "'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com' ],
-            'img-src'     => [ "'self'", 'data:', 'https:' ],
-            'font-src'    => [ "'self'", 'data:' ],
-            'connect-src' => [ "'self'" ],
-            'frame-src'   => [ "'self'" ],
-            'object-src'  => [ "'none'" ],
-            'base-uri'    => [ "'self'" ],
-            'form-action' => [ "'self'" ],
+            'default-src'     => [ "'self'" ],
+            'script-src'      => $script_src,
+            // script-src-elem (CSP3) is checked independently — always include 'self' so WP's
+            // own scripts (wp-includes, theme JS) are never blocked when a service map adds this.
+            'script-src-elem' => array_merge( [ "'self'" ], $use_nonces ? [ "'nonce-" . self::get_csp_nonce() . "'", "'strict-dynamic'" ] : [ "'unsafe-inline'" ] ),
+            'style-src'       => [ "'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com' ],
+            'img-src'         => [ "'self'", 'data:', 'https:' ],
+            'font-src'        => [ "'self'", 'data:' ],
+            'connect-src'     => [ "'self'" ],
+            'frame-src'       => [ "'self'" ],
+            'object-src'      => [ "'none'" ],
+            'base-uri'        => [ "'self'" ],
+            'form-action'     => [ "'self'" ],
         ];
 
         $map = [
             'google_analytics'    => [
-                'script-src'  => [ 'https://www.googletagmanager.com', 'https://www.google-analytics.com' ],
-                'img-src'     => [ 'https://www.google-analytics.com', 'https://www.googletagmanager.com' ],
-                'connect-src' => [ 'https://www.google-analytics.com', 'https://analytics.google.com', 'https://stats.g.doubleclick.net', 'https://region1.google-analytics.com' ],
+                'script-src'      => [ 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://ssl.google-analytics.com' ],
+                'script-src-elem' => [ 'https://www.googletagmanager.com', 'https://www.google-analytics.com', 'https://ssl.google-analytics.com' ],
+                'img-src'         => [ 'https://www.google-analytics.com', 'https://www.googletagmanager.com', 'https://ssl.google-analytics.com' ],
+                'connect-src'     => [ 'https://www.google-analytics.com', 'https://analytics.google.com', 'https://stats.g.doubleclick.net', 'https://region1.google-analytics.com', 'https://www.googletagmanager.com', 'https://region1.analytics.google.com' ],
             ],
             'google_adsense'      => [
                 'script-src'      => [ 'https://*.googlesyndication.com', 'https://*.googletagservices.com', 'https://*.googleadservices.com', 'https://adservice.google.com', 'https://fundingchoicesmessages.google.com' ],
@@ -104,12 +108,20 @@ class CSDT_CSP {
                 'connect-src'     => [ 'https://*.googlesyndication.com', 'https://*.googletagservices.com', 'https://adservice.google.com', 'https://ep1.adtrafficquality.google', 'https://ep2.adtrafficquality.google', 'https://fundingchoicesmessages.google.com', 'https://csi.gstatic.com' ],
             ],
             'google_fonts'        => [
-                'style-src'   => [ 'https://fonts.googleapis.com' ],
-                'font-src'    => [ 'https://fonts.gstatic.com' ],
+                'style-src'       => [ 'https://fonts.googleapis.com' ],
+                // style-src-elem for inline style sheets injected by Google Fonts.
+                'style-src-elem'  => [ 'https://fonts.googleapis.com' ],
+                'font-src'        => [ 'https://fonts.gstatic.com' ],
+                // Variable fonts fetch via connect-src in some browsers.
+                'connect-src'     => [ 'https://fonts.googleapis.com', 'https://fonts.gstatic.com' ],
             ],
             'google_tag_manager'  => [
-                'script-src'  => [ 'https://www.googletagmanager.com' ],
-                'img-src'     => [ 'https://www.googletagmanager.com' ],
+                'script-src'      => [ 'https://www.googletagmanager.com', 'https://tagmanager.google.com' ],
+                'script-src-elem' => [ 'https://www.googletagmanager.com', 'https://tagmanager.google.com' ],
+                'img-src'         => [ 'https://www.googletagmanager.com', 'https://ssl.gstatic.com', 'https://www.gstatic.com' ],
+                'connect-src'     => [ 'https://www.googletagmanager.com', 'https://tagmanager.google.com' ],
+                'style-src'       => [ 'https://tagmanager.google.com', 'https://fonts.googleapis.com' ],
+                'font-src'        => [ 'https://fonts.gstatic.com', 'data:' ],
             ],
             'cloudflare_insights' => [
                 'script-src'  => [ 'https://static.cloudflareinsights.com' ],
@@ -121,8 +133,10 @@ class CSDT_CSP {
                 'connect-src' => [ 'https://www.facebook.com' ],
             ],
             'recaptcha'           => [
-                'script-src'  => [ 'https://www.google.com', 'https://www.gstatic.com' ],
-                'frame-src'   => [ 'https://www.google.com' ],
+                'script-src'      => [ 'https://www.google.com', 'https://www.gstatic.com', 'https://recaptcha.google.com' ],
+                'script-src-elem' => [ 'https://www.google.com', 'https://www.gstatic.com', 'https://recaptcha.google.com' ],
+                'frame-src'       => [ 'https://www.google.com', 'https://recaptcha.google.com' ],
+                'connect-src'     => [ 'https://www.google.com' ],
             ],
             'youtube'             => [
                 'frame-src'   => [ 'https://www.youtube.com', 'https://www.youtube-nocookie.com' ],
