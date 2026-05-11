@@ -1058,6 +1058,9 @@
     var EXPECTED = [
         /googletagmanager\.com/,
         /googlesyndication\.com/,
+        /fundingchoicesmessages\.google/,
+        /googleadservices\.com/,
+        /adtrafficquality\.google/,
         /adsbygoogle/,
         /cloudflareinsights\.com/,
         /recaptcha/,

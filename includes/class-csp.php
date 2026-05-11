@@ -95,10 +95,13 @@ class CSDT_CSP {
                 'connect-src' => [ 'https://www.google-analytics.com', 'https://analytics.google.com', 'https://stats.g.doubleclick.net', 'https://region1.google-analytics.com' ],
             ],
             'google_adsense'      => [
-                'script-src'  => [ 'https://*.googlesyndication.com', 'https://*.googletagservices.com', 'https://*.googleadservices.com', 'https://adservice.google.com', 'https://fundingchoicesmessages.google.com' ],
-                'frame-src'   => [ 'blob:', 'https://*.googlesyndication.com', 'https://*.safeframe.googlesyndication.com', 'https://googleads.g.doubleclick.net', 'https://ep2.adtrafficquality.google' ],
-                'img-src'     => [ 'https://*.googlesyndication.com', 'https://googleads.g.doubleclick.net' ],
-                'connect-src' => [ 'https://*.googlesyndication.com', 'https://*.googletagservices.com', 'https://adservice.google.com', 'https://ep1.adtrafficquality.google', 'https://ep2.adtrafficquality.google', 'https://fundingchoicesmessages.google.com', 'https://csi.gstatic.com' ],
+                'script-src'      => [ 'https://*.googlesyndication.com', 'https://*.googletagservices.com', 'https://*.googleadservices.com', 'https://adservice.google.com', 'https://fundingchoicesmessages.google.com' ],
+                // script-src-elem is a CSP3 directive that browsers check separately from script-src.
+                // fundingchoicesmessages.google.com (Google consent/funding choices) uses it.
+                'script-src-elem' => [ 'https://*.googlesyndication.com', 'https://*.googletagservices.com', 'https://*.googleadservices.com', 'https://adservice.google.com', 'https://fundingchoicesmessages.google.com' ],
+                'frame-src'       => [ 'blob:', 'https://*.googlesyndication.com', 'https://*.safeframe.googlesyndication.com', 'https://googleads.g.doubleclick.net', 'https://ep2.adtrafficquality.google' ],
+                'img-src'         => [ 'https://*.googlesyndication.com', 'https://googleads.g.doubleclick.net' ],
+                'connect-src'     => [ 'https://*.googlesyndication.com', 'https://*.googletagservices.com', 'https://adservice.google.com', 'https://ep1.adtrafficquality.google', 'https://ep2.adtrafficquality.google', 'https://fundingchoicesmessages.google.com', 'https://csi.gstatic.com' ],
             ],
             'google_fonts'        => [
                 'style-src'   => [ 'https://fonts.googleapis.com' ],
