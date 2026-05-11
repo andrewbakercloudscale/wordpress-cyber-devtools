@@ -1337,10 +1337,15 @@
                         title: 'OPcache memory at ' + oc.mem_pct + '% — ' + oc.used_mb + 'MB used',
                         detail: 'Cache close to full. Increase opcache.memory_consumption in php.ini before it triggers OOM restarts.', plugin: '' });
                 }
-                if (oc.hit_rate < 85 && oc.cached_scripts > 10) {
+                var ocTotal = oc.total_requests || 0;
+                if (oc.hit_rate < 85 && ocTotal > 200) {
                     issuesList.push({ sev: 'warning', tab: 'summary',
                         title: 'Low OPcache hit rate: ' + oc.hit_rate + '% — PHP files recompiled frequently',
-                        detail: 'Memory may be too small for all cached scripts, or a plugin is invalidating the cache on every request.', plugin: '' });
+                        detail: 'Memory may be too small for all cached scripts, or a plugin is invalidating the cache on every request. (' + ocTotal + ' requests sampled)', plugin: '' });
+                } else if (oc.hit_rate < 85 && ocTotal > 0) {
+                    issuesList.push({ sev: 'info', tab: 'summary',
+                        title: 'OPcache warming up: ' + oc.hit_rate + '% hit rate (' + ocTotal + ' requests so far)',
+                        detail: 'Hit rate is low because the cache is still filling after a recent restart. It will reach 95%+ after a few hundred requests.', plugin: '' });
                 }
             }
         }

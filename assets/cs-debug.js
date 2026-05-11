@@ -764,6 +764,57 @@
         }
     } )();
 
+    // ── APCu extension install ────────────────────────────────────────────────
+    ( function () {
+        var btn = document.getElementById( 'csdt-apcu-install-btn' );
+        var msg = document.getElementById( 'csdt-obj-cache-msg' );
+        if ( ! btn ) { return; }
+
+        btn.addEventListener( 'click', function () {
+            btn.disabled = true;
+            btn.textContent = 'Installing…';
+            if ( msg ) { msg.textContent = ''; msg.style.color = ''; }
+
+            var fd = new FormData();
+            fd.append( 'action', 'csdt_install_apcu' );
+            fd.append( 'nonce',  csdtDebug.objCacheNonce );
+
+            fetch( csdtDebug.ajaxUrl, { method: 'POST', body: fd } )
+                .then( function ( r ) { return r.json(); } )
+                .then( function ( resp ) {
+                    btn.disabled = false;
+                    btn.textContent = '⚙ Install APCu Extension';
+                    if ( resp.success ) {
+                        if ( resp.data.reloaded ) {
+                            window.location.reload();
+                        } else if ( msg ) {
+                            msg.textContent = '✓ ' + resp.data.message;
+                            msg.style.color = '#d97706';
+                        }
+                        return;
+                    }
+                    var errData = resp.data || {};
+                    var errMsg  = errData.message || 'Failed.';
+                    var manCmd  = errData.manual_cmd || '';
+                    if ( msg ) {
+                        msg.style.color = '#dc2626';
+                        if ( manCmd ) {
+                            msg.innerHTML = '❌ Permission denied — run in terminal: ' +
+                                '<code style="background:#fef2f2;padding:2px 6px;border-radius:3px;font-size:11px;user-select:all;">' +
+                                manCmd.replace( /</g, '&lt;' ) + '</code>';
+                        } else {
+                            msg.textContent = '❌ ' + errMsg;
+                        }
+                    }
+                } )
+                .catch( function () {
+                    btn.disabled = false;
+                    btn.textContent = '⚙ Install APCu Extension';
+                    if ( msg ) { msg.textContent = '❌ Request failed.'; msg.style.color = '#dc2626'; }
+                } );
+        } );
+    } )();
+
     // ── Object cache toggle ───────────────────────────────────────────────────
     ( function () {
         var btn = document.getElementById( 'csdt-obj-cache-btn' );

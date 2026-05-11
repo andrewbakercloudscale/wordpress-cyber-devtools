@@ -1,4 +1,5 @@
 <?php
+// CSDT_APCU_AVAILABLE — CloudScale DevTools APCu drop-in (do not remove this marker)
 /**
  * APCu Object Cache Drop-in for WordPress
  *

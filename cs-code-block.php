@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.833
+ * Version: 1.9.839
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.833';
+    const VERSION      = '1.9.839';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -330,6 +330,7 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_devtools_save_theme_setting',  [ 'CSDT_Code_Migrator', 'ajax_save_theme_setting' ] );
         add_action( 'wp_ajax_csdt_devtools_save_perf_monitor',   [ 'CSDT_Code_Migrator', 'ajax_save_perf_monitor' ] );
         add_action( 'wp_ajax_csdt_object_cache_toggle',           [ 'CSDT_Code_Migrator', 'ajax_object_cache_toggle' ] );
+        add_action( 'wp_ajax_csdt_install_apcu',                  [ 'CSDT_Code_Migrator', 'ajax_install_apcu' ] );
 
         // Login security AJAX
         add_action( 'wp_ajax_csdt_devtools_login_save',          [ 'CSDT_Login', 'ajax_login_save' ] );
@@ -1924,7 +1925,7 @@ class CloudScale_DevTools {
         ?>
         <button type="button" id="<?php echo esc_attr( $btn_id ); ?>"
             data-cs-modal-open="<?php echo esc_attr( $modal_id ); ?>"
-            style="background:#fff!important;border:1px solid rgba(255,255,255,0.6)!important;border-radius:5px!important;color:#1e40af!important;font-size:12px!important;font-weight:700!important;padding:5px 14px!important;cursor:pointer!important;margin-left:auto!important;flex-shrink:0!important;display:block!important;box-shadow:none!important;text-shadow:none!important;text-transform:none!important;letter-spacing:normal!important;line-height:1.4!important">
+            style="background:rgba(255,255,255,0.15)!important;border:1px solid rgba(255,255,255,0.5)!important;border-radius:5px!important;color:#fff!important;font-size:12px!important;font-weight:600!important;padding:5px 14px!important;cursor:pointer!important;margin-left:auto!important;flex-shrink:0!important;display:block!important;box-shadow:none!important;text-shadow:none!important;text-transform:none!important;letter-spacing:normal!important;line-height:1.4!important;backdrop-filter:blur(4px)!important">
             Explain&hellip;
         </button>
         <div id="<?php echo esc_attr( $modal_id ); ?>"
@@ -2232,6 +2233,11 @@ class CloudScale_DevTools {
             <div class="cs-section-header" style="background:linear-gradient(90deg,#0f4c75 0%,#1b6ca8 100%);border-left:3px solid #38bdf8;">
                 <span>⚡ <?php esc_html_e( 'CS Monitor', 'cloudscale-devtools' ); ?></span>
                 <span class="cs-header-hint"><?php esc_html_e( 'Frontend performance overlay panel', 'cloudscale-devtools' ); ?></span>
+                <?php self::render_explain_btn( 'cs-monitor', 'CS Monitor', [
+                    [ 'name' => 'What is CS Monitor?',     'rec' => 'Info',        'html' => 'CS Monitor is a floating overlay panel visible only to admins. It appears on every page of your site and tracks DB queries, HTTP requests, PHP errors, and hook counts in real time — without affecting other users.' ],
+                    [ 'name' => 'N+1 DB query detection', 'rec' => 'Info',        'html' => 'CS Monitor groups SQL queries by normalised pattern and flags any pattern that fires 3 or more times on a single page load as a potential N+1 issue. WP core patterns (options, post counts, site icon) are downgraded to info — they are eliminated by installing the persistent object cache below.' ],
+                    [ 'name' => 'When to disable',        'rec' => 'Recommended', 'html' => 'Leave CS Monitor <strong>on during development and debugging</strong>. Turn it off on production pages that are publicly visited or performance-benchmarked, as the overlay JS adds a small overhead and its query tracking touches the same request lifecycle you are measuring.' ],
+                ] ); ?>
             </div>
             <div class="cs-panel-body" style="padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
                 <label style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;min-width:200px;">
@@ -2265,6 +2271,13 @@ class CloudScale_DevTools {
             <div class="cs-section-header" style="background:linear-gradient(90deg,#134e4a 0%,#0f766e 100%);border-left:3px solid #2dd4bf;">
                 <span>🗄️ <?php esc_html_e( 'Object Cache', 'cloudscale-devtools' ); ?></span>
                 <span class="cs-header-hint"><?php esc_html_e( 'Persistent in-memory cache — eliminates WP core N+1 DB patterns', 'cloudscale-devtools' ); ?></span>
+                <?php self::render_explain_btn( 'object-cache', 'Object Cache', [
+                    [ 'name' => 'What does Install do?',   'rec' => 'Info',        'html' => 'Clicking <strong>Install APCu cache</strong> copies a WordPress object cache drop-in to <code>wp-content/object-cache.php</code>. WordPress automatically loads this file on every request and uses it to store database results (options, users, post counts) in PHP shared memory (APCu) between requests — eliminating repeated identical DB queries across page loads.' ],
+                    [ 'name' => 'APCu requirement',        'rec' => 'Required',    'html' => 'APCu is a PHP extension that provides shared memory within the PHP-FPM process pool. If the extension is not loaded, the drop-in falls back to in-request-only caching (no persistence between requests). To install APCu in the Docker container, run: <code>bash wordpress-cyber-devtools/install-object-cache.sh</code> from the repo root. This installs the extension, restarts the container, and copies the drop-in in one step.' ],
+                    [ 'name' => 'WP core N+1 patterns',   'rec' => 'Info',        'html' => 'WordPress core makes repeated DB calls for options, user data, post counts, and the site icon on every page load. These cannot be fixed in plugin code — they are inside WP core itself. A persistent object cache is the correct solution: WordPress checks the cache before hitting the DB, so the same record is only fetched once per cache lifetime.' ],
+                    [ 'name' => 'Redis / Memcached',       'rec' => 'Info',        'html' => 'If your site already has Redis or Memcached installed, their drop-in will be detected automatically and this panel will show its status instead of the Install button. APCu is a simpler alternative — no external service, no TCP overhead, works entirely within PHP shared memory.' ],
+                    [ 'name' => 'Removing the drop-in',   'rec' => 'Info',        'html' => 'The <strong>Remove</strong> button deletes <code>wp-content/object-cache.php</code> only when it is our own drop-in. Third-party drop-ins (Redis, Memcached) must be removed manually to prevent accidental data loss.' ],
+                ] ); ?>
             </div>
             <div class="cs-panel-body" style="padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
                 <!-- Status badge -->
@@ -2298,6 +2311,15 @@ class CloudScale_DevTools {
                                 <?php echo ! $oc_apcu ? 'title="' . esc_attr__( 'APCu is not loaded — the drop-in will install but caching will be in-memory only until APCu is enabled', 'cloudscale-devtools' ) . '"' : ''; ?>>
                             ⬇ <?php esc_html_e( 'Install APCu cache', 'cloudscale-devtools' ); ?>
                         </button>
+                    <?php elseif ( $oc_type === 'ours' && ! $oc_apcu ) : ?>
+                        <button type="button" id="csdt-apcu-install-btn"
+                                class="cs-btn-primary cs-btn-sm">
+                            ⚙ <?php esc_html_e( 'Install APCu Extension', 'cloudscale-devtools' ); ?>
+                        </button>
+                        <button type="button" id="csdt-obj-cache-btn" data-action="uninstall"
+                                class="cs-btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;">
+                            ✕ <?php esc_html_e( 'Remove', 'cloudscale-devtools' ); ?>
+                        </button>
                     <?php elseif ( $oc_type === 'ours' ) : ?>
                         <button type="button" id="csdt-obj-cache-btn" data-action="uninstall"
                                 class="cs-btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;">
@@ -2325,6 +2347,11 @@ class CloudScale_DevTools {
             <div class="cs-section-header" style="background:linear-gradient(90deg,#1e3a5f 0%,#1d4ed8 100%);border-left:3px solid #60a5fa;">
                 <span>🔔 <?php esc_html_e( 'Error Monitoring', 'cloudscale-devtools' ); ?></span>
                 <span class="cs-header-hint"><?php esc_html_e( 'PHP error alerting and PHP-FPM saturation monitoring', 'cloudscale-devtools' ); ?></span>
+                <?php self::render_explain_btn( 'error-monitoring', 'Error Monitoring', [
+                    [ 'name' => 'PHP Error Alerting',          'rec' => 'Info',        'html' => 'Monitors the PHP error log inside the Docker container for errors at or above the configured threshold (Notice / Warning / Fatal). When a new matching error appears it sends an email alert to the WordPress admin address. The log is polled on a WP-Cron schedule — no persistent daemon required.' ],
+                    [ 'name' => 'PHP-FPM Saturation Monitor',  'rec' => 'Info',        'html' => 'Tracks PHP-FPM worker pool utilisation by reading <code>php-fpm status</code> inside the container. When active workers approach the pool maximum (configurable threshold), an alert is sent before the site starts queuing requests. High saturation causes slow page loads even when DB and server CPU are healthy.' ],
+                    [ 'name' => 'Alert threshold',             'rec' => 'Recommended', 'html' => 'Set the PHP error threshold to <strong>Warning</strong> for production sites. <em>Notice</em> produces too much noise from WP core and plugins. <em>Fatal</em> is too late — by the time a fatal fires, users are already seeing errors. Warning catches deprecation chains and resource issues before they escalate.' ],
+                ] ); ?>
             </div>
             <div style="padding:24px;">
                 <!-- PHP Error Alerting settings -->

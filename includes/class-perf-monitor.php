@@ -999,15 +999,18 @@ class CSDT_Perf_Monitor {
                 $oc_free_mb    = round( ( (float) ( $oc['memory_usage']['free_memory']   ?? 0 ) ) / 1048576, 1 );
                 $oc_wasted_mb  = round( ( (float) ( $oc['memory_usage']['wasted_memory'] ?? 0 ) ) / 1048576, 1 );
                 $oc_total_mb   = $oc_used_mb + $oc_free_mb + $oc_wasted_mb;
+                $oc_hits   = (int) ( $oc['opcache_statistics']['hits']   ?? 0 );
+                $oc_misses = (int) ( $oc['opcache_statistics']['misses'] ?? 0 );
                 $opcache = [
-                    'enabled'        => true,
-                    'hit_rate'       => round( (float) ( $oc['opcache_statistics']['opcache_hit_rate']   ?? 0 ), 1 ),
-                    'used_mb'        => $oc_used_mb,
-                    'free_mb'        => $oc_free_mb,
-                    'wasted_mb'      => $oc_wasted_mb,
-                    'mem_pct'        => $oc_total_mb > 0 ? (int) round( $oc_used_mb / $oc_total_mb * 100 ) : 0,
-                    'oom_restarts'   => (int) ( $oc['opcache_statistics']['oom_restarts']       ?? 0 ),
-                    'cached_scripts' => (int) ( $oc['opcache_statistics']['num_cached_scripts'] ?? 0 ),
+                    'enabled'         => true,
+                    'hit_rate'        => round( (float) ( $oc['opcache_statistics']['opcache_hit_rate']   ?? 0 ), 1 ),
+                    'used_mb'         => $oc_used_mb,
+                    'free_mb'         => $oc_free_mb,
+                    'wasted_mb'       => $oc_wasted_mb,
+                    'mem_pct'         => $oc_total_mb > 0 ? (int) round( $oc_used_mb / $oc_total_mb * 100 ) : 0,
+                    'oom_restarts'    => (int) ( $oc['opcache_statistics']['oom_restarts']       ?? 0 ),
+                    'cached_scripts'  => (int) ( $oc['opcache_statistics']['num_cached_scripts'] ?? 0 ),
+                    'total_requests'  => $oc_hits + $oc_misses,
                 ];
             }
         }

@@ -646,6 +646,12 @@ class CSDT_Security_Headers {
                     🔍 <?php esc_html_e( 'Scan Headers Now', 'cloudscale-devtools' ); ?>
                 </button>
                 <span id="cs-csp-scan-spinner" style="display:none;font-size:12px;color:rgba(255,255,255,.6)"><?php esc_html_e( 'Scanning…', 'cloudscale-devtools' ); ?></span>
+                <?php CSDT_Code_Block::render_explain_btn( 'header-scan', 'Header Security Scan', [
+                    [ 'name' => 'What is scanned?',    'rec' => 'Info',        'html' => 'Scans the homepage and the last 10 published posts and pages by making real HTTP requests from the server. It checks every response for: missing security headers (CSP, HSTS, X-Frame-Options, etc.), duplicate headers caused by plugin conflicts, and insecure header values.' ],
+                    [ 'name' => 'Grade system',        'rec' => 'Info',        'html' => 'Pages are graded A+ through F based on the presence and quality of security headers. The grade shown in the panel header is from the most recent scan. An A+ requires CSP, HSTS, X-Content-Type-Options, X-Frame-Options, and Referrer-Policy — all correctly configured.' ],
+                    [ 'name' => 'CSP conflicts',       'rec' => 'Warning',     'html' => 'Duplicate <code>Content-Security-Policy</code> headers are a common problem when multiple plugins each set their own CSP. Browsers apply the most restrictive policy when duplicates exist, which can silently break scripts and styles. Use the <strong>Headers</strong> panel to consolidate all CSP directives into a single header managed by this plugin.' ],
+                    [ 'name' => 'When to re-scan',     'rec' => 'Recommended', 'html' => 'Re-scan after installing or updating any plugin that modifies HTTP response headers, after changing CSP or HSTS settings in the Headers tab, and after any CDN or reverse-proxy configuration change. The scan runs server-side so it captures headers exactly as browsers receive them.' ],
+                ] ); ?>
             </span>
         </div>
         <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 6px 6px;padding:16px 20px;margin-bottom:20px">
