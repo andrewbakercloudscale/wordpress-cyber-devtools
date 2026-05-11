@@ -81,6 +81,8 @@ class CSDT_CSP {
             // script-src-elem (CSP3) is checked independently — always include 'self' so WP's
             // own scripts (wp-includes, theme JS) are never blocked when a service map adds this.
             'script-src-elem' => array_merge( [ "'self'" ], $use_nonces ? [ "'nonce-" . self::get_csp_nonce() . "'", "'strict-dynamic'" ] : [ "'unsafe-inline'" ] ),
+            // style-src-elem must also include 'self' so theme stylesheets are never blocked.
+            'style-src-elem'  => [ "'self'", "'unsafe-inline'" ],
             'style-src'       => [ "'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com' ],
             'img-src'         => [ "'self'", 'data:', 'https:' ],
             'font-src'        => [ "'self'", 'data:' ],
@@ -190,9 +192,27 @@ class CSDT_CSP {
             }
         }
 
+        // Merge custom directives INTO the $d array so there are no duplicate directives.
+        // A duplicate directive causes browsers to use the most-restrictive one, breaking 'self'.
+        if ( $custom ) {
+            foreach ( preg_split( '/\r?\n/', trim( $custom ) ) as $line ) {
+                $line = trim( $line );
+                if ( ! $line ) { continue; }
+                $tokens = preg_split( '/\s+/', $line, 2 );
+                $cdir   = sanitize_key( $tokens[0] ?? '' );
+                $cvals  = isset( $tokens[1] ) ? preg_split( '/\s+/', trim( $tokens[1] ) ) : [];
+                if ( ! $cdir || empty( $cvals ) ) { continue; }
+                if ( ! isset( $d[ $cdir ] ) ) { $d[ $cdir ] = []; }
+                foreach ( $cvals as $cv ) {
+                    if ( $cv && ! in_array( $cv, $d[ $cdir ], true ) ) {
+                        $d[ $cdir ][] = $cv;
+                    }
+                }
+            }
+        }
+
         $parts = [];
         foreach ( $d as $dir => $vals ) { $parts[] = $dir . ' ' . implode( ' ', $vals ); }
-        if ( $custom ) { $parts[] = $custom; }
         return implode( '; ', $parts );
     }
 
