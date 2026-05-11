@@ -101,6 +101,21 @@
             var msg = e.reason && (e.reason.message || String(e.reason)) || 'Unhandled rejection';
             pushEditorLog({ type:'jserr', detail:'Promise rejection: ' + msg });
         });
+
+        // ── CSP violation listener — flash the monitor on any blocked resource ──
+        // CSP issues are hard to spot; make them impossible to miss.
+        document.addEventListener('securitypolicyviolation', function (e) {
+            var blocked = e.blockedURI || '(inline)';
+            var dir     = e.effectiveDirective || e.violatedDirective || '';
+            var src     = e.sourceFile ? e.sourceFile.replace(/^https?:\/\/[^/]+\//, '') + ':' + e.lineNumber : '';
+            var disp    = e.disposition === 'report' ? '[report-only] ' : '';
+            pushEditorLog({
+                type:   'jserr',
+                detail: disp + 'CSP blocked: ' + blocked + (dir ? ' (' + dir + ')' : '') +
+                        ' — go to Headers tab → CSP to fix',
+                file:   src,
+            });
+        });
     })();
 
     function pushEditorLog(entry) {
@@ -119,6 +134,11 @@
                 toggleBtn.classList.remove('cs-monitor-flash');
                 void toggleBtn.offsetWidth; // reflow to restart animation
                 toggleBtn.classList.add('cs-monitor-flash');
+                // Remove class when animation ends so clicks are never blocked.
+                toggleBtn.addEventListener('animationend', function onFlashEnd() {
+                    toggleBtn.classList.remove('cs-monitor-flash');
+                    toggleBtn.removeEventListener('animationend', onFlashEnd);
+                });
             } else {
                 pendingFlash = true;
             }
@@ -175,6 +195,10 @@
         if (pendingFlash && toggleBtn) {
             pendingFlash = false;
             toggleBtn.classList.add('cs-monitor-flash');
+            toggleBtn.addEventListener('animationend', function onFlashEnd2() {
+                toggleBtn.classList.remove('cs-monitor-flash');
+                toggleBtn.removeEventListener('animationend', onFlashEnd2);
+            });
         }
 
         if (!panel) return;
