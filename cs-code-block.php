@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.812
+ * Version: 1.9.813
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.812';
+    const VERSION      = '1.9.813';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -458,6 +458,7 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_regen_test_secret',            [ 'CSDT_Test_Accounts', 'ajax_regen_test_secret' ] );
         add_action( 'wp_ajax_csdt_regen_path_token',             [ 'CSDT_Test_Accounts', 'ajax_regen_path_token' ] );
         add_action( 'wp_ajax_csdt_rename_test_user',             [ 'CSDT_Test_Accounts', 'ajax_rename_test_user' ] );
+        add_action( 'wp_ajax_csdt_rename_wp_user',               [ __CLASS__, 'ajax_rename_wp_user' ] );
         add_action( 'wp_ajax_csdt_toggle_block_basic_auth',      [ 'CSDT_Test_Accounts', 'ajax_toggle_block_basic_auth' ] );
         add_action( 'rest_api_init',                             [ 'CSDT_Test_Accounts', 'register_rest_routes' ] );
         self::cron_action( 'csdt_scheduled_scan',                [ 'CSDT_Site_Audit', 'run_scheduled_scan' ] );
@@ -3288,6 +3289,64 @@ class CloudScale_DevTools {
         $honeypot_2fa_enabled  = get_option( 'csdt_honeypot_2fa_enabled', '0' );
         $wplogin_stats         = get_option( 'csdt_wplogin_blocked_stats', [] );
         ?>
+        <!-- ── Rename WordPress User ─────────────────────────────────── -->
+        <div class="cs-panel" id="cs-panel-rename-user">
+            <div class="cs-section-header" style="background:linear-gradient(135deg,#1e3a5f 0%,#0f2942 100%)">
+                <span>✏️ <?php esc_html_e( 'RENAME WP USER', 'cloudscale-devtools' ); ?></span>
+                <span class="cs-header-hint"><?php esc_html_e( 'Change the WordPress username of any account — use after a compromise', 'cloudscale-devtools' ); ?></span>
+            </div>
+            <div class="cs-panel-body">
+                <div class="cs-field-row">
+                    <div class="cs-field">
+                        <label class="cs-label" for="cs-rename-current"><?php esc_html_e( 'Current username:', 'cloudscale-devtools' ); ?></label>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <input type="text" id="cs-rename-current" class="cs-input" placeholder="e.g. admin007"
+                                   maxlength="60" autocomplete="off" spellcheck="false" style="max-width:220px;">
+                            <span style="font-size:12px;color:#94a3b8;"><?php esc_html_e( '→', 'cloudscale-devtools' ); ?></span>
+                            <input type="text" id="cs-rename-new" class="cs-input" placeholder="new-username"
+                                   maxlength="60" autocomplete="off" spellcheck="false" style="max-width:220px;">
+                            <button type="button" class="cs-btn-primary" id="cs-rename-submit">✏️ <?php esc_html_e( 'Rename', 'cloudscale-devtools' ); ?></button>
+                        </div>
+                        <span class="cs-hint" style="margin-top:6px;display:block;"><?php esc_html_e( 'Changes the wp_users.user_login column directly. All active sessions for the account are terminated immediately. Works for any WordPress account — not just test accounts.', 'cloudscale-devtools' ); ?></span>
+                        <div id="cs-rename-msg" style="display:none;margin-top:8px;font-size:13px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript ?>
+        <script>
+        (function() {
+            var submitBtn = document.getElementById('cs-rename-submit');
+            if (!submitBtn) return;
+            submitBtn.addEventListener('click', function() {
+                var current = (document.getElementById('cs-rename-current') || {}).value.trim();
+                var newName = (document.getElementById('cs-rename-new') || {}).value.trim();
+                var msgEl   = document.getElementById('cs-rename-msg');
+                if (!current || !newName) { if (msgEl) { msgEl.style.cssText = 'display:block;color:#dc2626;'; msgEl.textContent = 'Both fields are required.'; } return; }
+                if (newName === current) { if (msgEl) { msgEl.style.cssText = 'display:block;color:#dc2626;'; msgEl.textContent = 'New username is the same as current.'; } return; }
+                submitBtn.disabled = true; submitBtn.textContent = '⏳';
+                var fd = new FormData();
+                fd.append('action', 'csdt_rename_wp_user');
+                fd.append('nonce',  <?php echo wp_json_encode( wp_create_nonce( CloudScale_DevTools::LOGIN_NONCE ) ); ?>);
+                fd.append('current_login', current);
+                fd.append('new_login',     newName);
+                fetch(<?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>, { method: 'POST', body: fd })
+                    .then(function(r) { return r.json(); })
+                    .then(function(res) {
+                        submitBtn.disabled = false; submitBtn.textContent = '✏️ Rename';
+                        if (res.success) {
+                            if (msgEl) { msgEl.style.cssText = 'display:block;color:#166534;'; msgEl.textContent = '✓ Renamed "' + current + '" → "' + newName + '". All sessions terminated.'; }
+                            document.getElementById('cs-rename-current').value = '';
+                            document.getElementById('cs-rename-new').value = '';
+                        } else {
+                            if (msgEl) { msgEl.style.cssText = 'display:block;color:#dc2626;'; msgEl.textContent = '✗ ' + (res.data || 'Error'); }
+                        }
+                    })
+                    .catch(function() { submitBtn.disabled = false; submitBtn.textContent = '✏️ Rename'; });
+            });
+        }());
+        </script>
+
         <div class="cs-panel" id="cs-panel-brute-force">
             <div class="cs-section-header cs-section-header-red">
                 <span>🔒 BRUTE-FORCE PROTECTION</span>
@@ -5247,6 +5306,64 @@ class CloudScale_DevTools {
         wp_send_json_success();
     }
 
+    // ─── AJAX: rename any WP user login ──────────────────────────────────
+
+    public static function ajax_rename_wp_user(): void {
+        check_ajax_referer( CloudScale_DevTools::LOGIN_NONCE, 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized', 403 );
+        }
+
+        $current_login = isset( $_POST['current_login'] ) ? sanitize_user( wp_unslash( $_POST['current_login'] ), true ) : '';
+        $new_login     = isset( $_POST['new_login'] )     ? sanitize_user( wp_unslash( $_POST['new_login'] ),     true ) : '';
+
+        if ( ! $current_login || ! $new_login ) {
+            wp_send_json_error( __( 'Both fields are required.', 'cloudscale-devtools' ) );
+        }
+        if ( strlen( $new_login ) < 3 ) {
+            wp_send_json_error( __( 'New username must be at least 3 characters.', 'cloudscale-devtools' ) );
+        }
+        $user = get_user_by( 'login', $current_login );
+        if ( ! $user ) {
+            wp_send_json_error( sprintf( __( 'No user found with username "%s".', 'cloudscale-devtools' ), $current_login ) );
+        }
+        if ( username_exists( $new_login ) ) {
+            wp_send_json_error( __( 'That username is already taken.', 'cloudscale-devtools' ) );
+        }
+
+        global $wpdb;
+        $updated = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+            $wpdb->users,
+            [ 'user_login' => $new_login ],
+            [ 'ID'         => $user->ID ],
+            [ '%s' ],
+            [ '%d' ]
+        );
+        if ( $updated === false ) {
+            wp_send_json_error( __( 'Database error — could not rename user.', 'cloudscale-devtools' ) );
+        }
+
+        wp_update_user( [
+            'ID'            => $user->ID,
+            'display_name'  => $new_login,
+            'user_nicename' => sanitize_title( $new_login ),
+        ] );
+
+        // Terminate all sessions so they must log in again with the new username.
+        WP_Session_Tokens::get_instance( $user->ID )->destroy_all();
+
+        CSDT_Login::record_security_event(
+            'downgrade',
+            "Username renamed: '{$current_login}' → '{$new_login}'",
+            'By: ' . wp_get_current_user()->user_login
+        );
+
+        wp_send_json_success( [
+            'old_login' => $current_login,
+            'new_login' => $new_login,
+        ] );
+    }
+
     // ─── Credentials panel ───────────────────────────────────────────────
 
     private static function render_credentials_panel(): void {
@@ -5282,7 +5399,7 @@ class CloudScale_DevTools {
             [
                 'group'  => '🔔 ntfy.sh',
                 'hint'   => __( 'Change the topic path to immediately stop receiving alerts on the old channel.', 'cloudscale-devtools' ),
-                'edit'   => $base . '&tab=security',
+                'edit'   => $base . '&tab=security#cs-notify-ntfy-url',
                 'fields' => [
                     [
                         'label'  => __( 'Topic URL', 'cloudscale-devtools' ),
@@ -5299,7 +5416,7 @@ class CloudScale_DevTools {
             [
                 'group'  => '☁️ Cloudflare',
                 'hint'   => __( 'Rotate the API Token if it is compromised — the Zone ID is not a secret but is listed here for convenience.', 'cloudscale-devtools' ),
-                'edit'   => $base . '&tab=debug',
+                'edit'   => $base . '&tab=debug#cs-panel-uptime-monitor',
                 'fields' => [
                     [
                         'label'  => __( 'Zone ID', 'cloudscale-devtools' ),
@@ -5316,7 +5433,7 @@ class CloudScale_DevTools {
             [
                 'group'  => '🤖 AI API Keys',
                 'hint'   => __( 'Used for security scans, image generation, and prompt writing.', 'cloudscale-devtools' ),
-                'edit'   => $base . '&tab=security',
+                'edit'   => $base . '&tab=security#cs-sec-api-key',
                 'fields' => [
                     [
                         'label'  => 'OpenAI',
@@ -5372,7 +5489,7 @@ class CloudScale_DevTools {
             <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
                 <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
                     <span style="font-size:12px;font-weight:700;color:#1e293b;"><?php echo esc_html( $group['group'] ); ?></span>
-                    <a href="<?php echo esc_url( $group['edit'] ); ?>" style="font-size:11px;color:#6366f1;font-weight:600;text-decoration:none;"><?php esc_html_e( 'Edit settings →', 'cloudscale-devtools' ); ?></a>
+                    <a href="<?php echo esc_url( $group['edit'] ); ?>" style="font-size:11px;color:#6366f1;font-weight:600;text-decoration:none;" onclick="setTimeout(function(){var h=location.hash;if(h){var el=document.querySelector(h);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}},400);"><?php esc_html_e( 'Edit settings →', 'cloudscale-devtools' ); ?></a>
                 </div>
                 <?php if ( ! empty( $group['hint'] ) ) : ?>
                 <div style="padding:6px 14px 0;font-size:11px;color:#94a3b8;"><?php echo esc_html( $group['hint'] ); ?></div>
