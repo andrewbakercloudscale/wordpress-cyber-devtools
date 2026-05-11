@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.839
+ * Version: 1.9.842
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.839';
+    const VERSION      = '1.9.842';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -390,6 +390,12 @@ class CloudScale_DevTools {
         add_action( 'admin_notices',   [ 'CSDT_Thumbnails', 'social_format_admin_notice' ] );
         // Serve platform-specific og:image based on crawler User-Agent.
         add_action( 'wp_head', [ 'CSDT_Thumbnails', 'output_crawler_og_image' ], 1 );
+        if ( get_option( 'csdt_ads_dedup', '0' ) === '1' ) {
+            add_action( 'wp_head', [ __CLASS__, 'output_ads_dedup_script' ], 1 );
+        }
+        if ( get_option( 'csdt_crossorigin_scripts', '0' ) === '1' ) {
+            add_filter( 'script_loader_tag', [ __CLASS__, 'add_crossorigin_to_external_scripts' ], 10, 3 );
+        }
         add_action( 'wp_ajax_csdt_devtools_social_cf_test',     [ 'CSDT_Thumbnails', 'ajax_social_cf_test' ] );
         add_action( 'wp_ajax_csdt_devtools_cf_purge',           [ 'CSDT_Thumbnails', 'ajax_cf_purge' ] );
         add_action( 'wp_ajax_csdt_devtools_cf_save',            [ 'CSDT_Thumbnails', 'ajax_cf_save' ] );
@@ -5869,6 +5875,37 @@ class CloudScale_DevTools {
 
             </div>
         </div>
+        <?php
+    }
+
+    public static function add_crossorigin_to_external_scripts( string $tag, string $handle, string $src ): string {
+        if ( ! preg_match( '#^https?://#i', $src ) ) {
+            return $tag;
+        }
+        $site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+        $src_host  = wp_parse_url( $src, PHP_URL_HOST );
+        if ( $site_host && $src_host && $site_host === $src_host ) {
+            return $tag;
+        }
+        if ( strpos( $tag, 'crossorigin' ) !== false ) {
+            return $tag;
+        }
+        return str_replace( ' src=', ' crossorigin="anonymous" src=', $tag );
+    }
+
+    public static function output_ads_dedup_script(): void {
+        ?>
+<script>
+(function(){
+    window.adsbygoogle=window.adsbygoogle||[];
+    var _orig=window.adsbygoogle.push.bind(window.adsbygoogle);
+    var _pageLevelDone=false;
+    window.adsbygoogle.push=function(o){
+        if(o&&o.enable_page_level_ads){if(_pageLevelDone)return;_pageLevelDone=true;}
+        return _orig(o);
+    };
+}());
+</script>
         <?php
     }
 

@@ -1469,9 +1469,18 @@
                     title: 'Editor request failed — ' + (e.method||'GET') + ' ' + path + ' → ' + e.status,
                     detail: e.detail ? e.detail.slice(0,100) : '', plugin: '' });
             } else if (e.type === 'jserr') {
-                issuesList.push({ sev: 'critical', tab: 'editor',
-                    title: 'JS Error — ' + (e.detail||'').slice(0,120),
-                    detail: e.file || '', plugin: '' });
+                var isCrossOrigin = /^script error\./i.test(e.detail || '');
+                issuesList.push({
+                    sev:    isCrossOrigin ? 'info' : 'critical',
+                    tab:    'editor',
+                    title:  isCrossOrigin
+                        ? 'Script error. (cross-origin — details hidden by browser; check DevTools console)'
+                        : 'JS Error — ' + (e.detail||'').slice(0,120),
+                    detail: isCrossOrigin
+                        ? 'Add crossorigin="anonymous" to the offending <script> tag if the CDN sends CORS headers. Use Site Audit → crossorigin check to find missing attributes.'
+                        : (e.file || ''),
+                    plugin: ''
+                });
             }
         });
 

@@ -576,6 +576,75 @@ class CSDT_Site_Audit {
                     'risk'      => $count > 0 ? 'low' : null,
                 ];
             } )(),
+            ( function () {
+                $already_fixed = get_option( 'csdt_ads_dedup', '0' ) === '1';
+                if ( $already_fixed ) {
+                    return [
+                        'id'        => 'ads_dedup',
+                        'title'     => 'AdSense duplicate push guard active',
+                        'detail'    => 'A deduplication patch is injected before AdSense loads, preventing the "Only one enable_page_level_ads allowed per page" TagError.',
+                        'fixed'     => true,
+                        'fix_label' => 'Already fixed',
+                    ];
+                }
+                // Detect duplicate enable_page_level_ads in the home page HTML.
+                $cache_key = 'csdt_home_html_ads_check';
+                $count = get_transient( $cache_key );
+                if ( false === $count ) {
+                    $resp  = wp_remote_get( home_url( '/' ), [ 'timeout' => 6, 'sslverify' => false ] );
+                    $body  = is_wp_error( $resp ) ? '' : (string) wp_remote_retrieve_body( $resp );
+                    $count = (int) substr_count( $body, 'enable_page_level_ads' );
+                    set_transient( $cache_key, $count, 5 * MINUTE_IN_SECONDS );
+                }
+                $detected = (int) $count > 1;
+                return [
+                    'id'        => 'ads_dedup',
+                    'title'     => $detected
+                        ? 'Duplicate AdSense push detected — "enable_page_level_ads" called ' . $count . ' times'
+                        : 'No duplicate AdSense push detected',
+                    'detail'    => $detected
+                        ? 'Multiple calls to adsbygoogle.push({ enable_page_level_ads: true }) cause a TagError in the browser console and may prevent ads from loading. Usually caused by two plugins or widgets both initialising Auto Ads.'
+                        : 'Only one enable_page_level_ads call found on the home page.',
+                    'fixed'     => ! $detected,
+                    'fix_label' => 'Fix Duplicate Push',
+                    'risk'      => $detected ? 'medium' : null,
+                ];
+            } )(),
+            ( function () {
+                $cache_key = 'csdt_crossorigin_check';
+                $missing   = get_transient( $cache_key );
+                if ( false === $missing ) {
+                    $resp = wp_remote_get( home_url( '/' ), [ 'timeout' => 6, 'sslverify' => false ] );
+                    $body = is_wp_error( $resp ) ? '' : (string) wp_remote_retrieve_body( $resp );
+                    $missing = [];
+                    if ( $body ) {
+                        preg_match_all( '/<script[^>]+src=["\']([^"\']+)["\'][^>]*>/i', $body, $m );
+                        $home_host = (string) wp_parse_url( home_url(), PHP_URL_HOST );
+                        foreach ( $m[0] as $i => $tag ) {
+                            $src  = $m[1][ $i ];
+                            $host = (string) wp_parse_url( $src, PHP_URL_HOST );
+                            if ( $host && $host !== $home_host && stripos( $tag, 'crossorigin' ) === false ) {
+                                $missing[] = $src;
+                            }
+                        }
+                        $missing = array_values( array_unique( $missing ) );
+                    }
+                    set_transient( $cache_key, $missing, 5 * MINUTE_IN_SECONDS );
+                }
+                $count = count( (array) $missing );
+                return [
+                    'id'        => 'crossorigin_scripts',
+                    'title'     => $count > 0
+                        ? $count . ' third-party script' . ( $count === 1 ? '' : 's' ) . ' missing crossorigin="anonymous"'
+                        : 'All third-party scripts have crossorigin attribute',
+                    'detail'    => $count > 0
+                        ? 'Without crossorigin="anonymous", JS errors from these scripts show as opaque "Script error." with no stack trace. The CDN must also send Access-Control-Allow-Origin: * for this to work. Scripts: ' . implode( ', ', array_slice( (array) $missing, 0, 3 ) ) . ( $count > 3 ? ' …' : '' )
+                        : 'No third-party scripts are missing crossorigin attributes on the home page.',
+                    'fixed'     => $count === 0,
+                    'fix_label' => 'Add crossorigin via wp_script_attributes',
+                    'risk'      => $count > 0 ? 'low' : null,
+                ];
+            } )(),
         ];
     }
     // ── Editor Debug Panel ────────────────────────────────────────────────────
@@ -1192,6 +1261,22 @@ bantime  = 86400</pre>
                     'message' => $removed > 0
                         ? sprintf( 'Removed %d orphaned cron hook%s.', $removed, $removed === 1 ? '' : 's' )
                         : 'No orphaned hooks found.',
+                ] );
+                return;
+            case 'crossorigin_scripts':
+                update_option( 'csdt_crossorigin_scripts', '1' );
+                delete_transient( 'csdt_crossorigin_check' );
+                wp_send_json_success( [
+                    'fixes'   => self::get_quick_fixes(),
+                    'message' => 'crossorigin="anonymous" will now be added to all enqueued third-party scripts via the script_loader_tag filter.',
+                ] );
+                return;
+            case 'ads_dedup':
+                update_option( 'csdt_ads_dedup', '1' );
+                delete_transient( 'csdt_home_html_ads_check' );
+                wp_send_json_success( [
+                    'fixes'   => self::get_quick_fixes(),
+                    'message' => 'AdSense deduplication patch enabled — duplicate push calls will be silently dropped on every page load.',
                 ] );
                 return;
             default:
