@@ -3254,6 +3254,8 @@
             editorFailCount = 0;
             n1Patterns     = {};
             if (editorBadgeEl) editorBadgeEl.textContent = '';
+            // Reset meta counts so badges show 0 after clear.
+            if (meta) { meta.query_count = 0; meta.query_total_ms = 0; meta.http_count = 0; }
             computeN1Patterns();
             computeIssues();
             applyFilters();

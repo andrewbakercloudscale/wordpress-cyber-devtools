@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.831
+ * Version: 1.9.832
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.831';
+    const VERSION      = '1.9.832';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -4894,6 +4894,33 @@ class CloudScale_DevTools {
             }
         }
 
+        // Pre-fetch all users in two batch queries instead of one per unique username.
+        $all_bf_names = [];
+        foreach ( $bf_log as $e ) {
+            $n = (string) ( $e[1] ?? $e['username'] ?? '' );
+            if ( $n ) { $all_bf_names[ $n ] = true; }
+        }
+        $all_bf_names = array_keys( $all_bf_names );
+
+        $bf_user_map = []; // username => WP_User|false
+        if ( $all_bf_names ) {
+            foreach ( get_users( [ 'login__in' => $all_bf_names, 'number' => -1 ] ) as $found_u ) {
+                $bf_user_map[ $found_u->user_login ] = $found_u;
+            }
+            $need_email = array_values( array_filter( $all_bf_names, fn( $n ) => ! isset( $bf_user_map[ $n ] ) ) );
+            if ( $need_email ) {
+                global $wpdb;
+                $fmt = implode( ',', array_fill( 0, count( $need_email ), '%s' ) );
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.DirectDatabaseQuery
+                foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT ID, user_email FROM {$wpdb->users} WHERE user_email IN ({$fmt})", $need_email ) ) as $row ) {
+                    $bf_user_map[ $row->user_email ] = get_userdata( $row->ID );
+                }
+            }
+            foreach ( $all_bf_names as $n ) {
+                if ( ! isset( $bf_user_map[ $n ] ) ) { $bf_user_map[ $n ] = false; }
+            }
+        }
+
         $valid_users   = [];
         $deleted_users = [];
         $seen_users    = [];
@@ -4901,8 +4928,7 @@ class CloudScale_DevTools {
             $usr = (string) ( $entry[1] ?? $entry['username'] ?? '' );
             if ( ! $usr || isset( $seen_users[ $usr ] ) ) { continue; }
             $seen_users[ $usr ] = true;
-            $u = get_user_by( 'login', $usr );
-            if ( ! $u ) { $u = get_user_by( 'email', $usr ); }
+            $u = $bf_user_map[ $usr ] ?? false;
             if ( $u ) {
                 $valid_users[ $usr ] = [
                     'login'      => $u->user_login,
