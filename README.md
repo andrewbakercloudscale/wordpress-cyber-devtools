@@ -1,6 +1,6 @@
 # CloudScale Cyber and Devtools
 
-![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-blue) ![PHP](https://img.shields.io/badge/PHP-7.4%2B-purple) ![License](https://img.shields.io/badge/License-GPLv2-green)
+![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-blue) ![PHP](https://img.shields.io/badge/PHP-8.1%2B-purple) ![License](https://img.shields.io/badge/License-GPLv2-green) ![Version](https://img.shields.io/badge/Version-1.9.824-orange)
 
 **AI-powered WordPress security auditing, one-click hardening, and a full developer toolkit — free, zero-dependency, everything runs on your server.**
 
