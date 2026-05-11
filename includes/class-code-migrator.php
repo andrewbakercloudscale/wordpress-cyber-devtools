@@ -76,6 +76,75 @@ class CSDT_Code_Migrator {
         wp_send_json_success( [ 'perf_enabled' => $enabled ] );
     }
 
+    // ── Object cache toggle ───────────────────────────────────────────────────
+
+    public static function get_object_cache_status(): array {
+        $drop_in = WP_CONTENT_DIR . '/object-cache.php';
+        $apcu_ok = extension_loaded( 'apcu' );
+
+        if ( ! file_exists( $drop_in ) ) {
+            return [ 'type' => 'none', 'label' => 'Not installed', 'apcu_ok' => $apcu_ok ];
+        }
+
+        $head = (string) file_get_contents( $drop_in, false, null, 0, 512 );
+
+        if ( false !== strpos( $head, 'CSDT_APCU_AVAILABLE' ) ) {
+            return [ 'type' => 'ours', 'label' => 'APCu (CloudScale)', 'apcu_ok' => $apcu_ok ];
+        }
+        if ( false !== stripos( $head, 'redis' ) ) {
+            return [ 'type' => 'redis', 'label' => 'Redis', 'apcu_ok' => $apcu_ok ];
+        }
+        if ( false !== stripos( $head, 'memcached' ) ) {
+            return [ 'type' => 'memcached', 'label' => 'Memcached', 'apcu_ok' => $apcu_ok ];
+        }
+        return [ 'type' => 'other', 'label' => 'Third-party drop-in', 'apcu_ok' => $apcu_ok ];
+    }
+
+    public static function ajax_object_cache_toggle(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Forbidden', 403 );
+        }
+        if ( ! check_ajax_referer( 'csdt_object_cache_nonce', 'nonce', false ) ) {
+            wp_send_json_error( 'Bad nonce', 403 );
+        }
+
+        $action   = sanitize_key( wp_unslash( $_POST['action_type'] ?? '' ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+        $drop_in  = WP_CONTENT_DIR . '/object-cache.php';
+        $src_file = __DIR__ . '/../lib/object-cache.php';
+
+        if ( 'install' === $action ) {
+            if ( ! file_exists( $src_file ) ) {
+                wp_send_json_error( 'Source file missing from plugin lib/ directory.' );
+            }
+            if ( file_exists( $drop_in ) ) {
+                $head = (string) file_get_contents( $drop_in, false, null, 0, 512 );
+                if ( false === strpos( $head, 'CSDT_APCU_AVAILABLE' ) ) {
+                    wp_send_json_error( 'A third-party object cache is already installed. Remove it before installing ours.' );
+                }
+            }
+            if ( ! @copy( $src_file, $drop_in ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+                wp_send_json_error( 'Could not write wp-content/object-cache.php — check directory permissions.' );
+            }
+            wp_send_json_success( self::get_object_cache_status() );
+        }
+
+        if ( 'uninstall' === $action ) {
+            if ( ! file_exists( $drop_in ) ) {
+                wp_send_json_success( self::get_object_cache_status() );
+            }
+            $head = (string) file_get_contents( $drop_in, false, null, 0, 512 );
+            if ( false === strpos( $head, 'CSDT_APCU_AVAILABLE' ) ) {
+                wp_send_json_error( 'Not a CloudScale object cache — remove it manually if needed.' );
+            }
+            if ( ! @unlink( $drop_in ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+                wp_send_json_error( 'Could not remove object-cache.php — check directory permissions.' );
+            }
+            wp_send_json_success( self::get_object_cache_status() );
+        }
+
+        wp_send_json_error( 'Unknown action.' );
+    }
+
     /* ==================================================================
        7. MIGRATION TOOL
 

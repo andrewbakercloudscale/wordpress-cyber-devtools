@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.832
+ * Version: 1.9.833
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.832';
+    const VERSION      = '1.9.833';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -329,6 +329,7 @@ class CloudScale_DevTools {
         // Settings AJAX
         add_action( 'wp_ajax_csdt_devtools_save_theme_setting',  [ 'CSDT_Code_Migrator', 'ajax_save_theme_setting' ] );
         add_action( 'wp_ajax_csdt_devtools_save_perf_monitor',   [ 'CSDT_Code_Migrator', 'ajax_save_perf_monitor' ] );
+        add_action( 'wp_ajax_csdt_object_cache_toggle',           [ 'CSDT_Code_Migrator', 'ajax_object_cache_toggle' ] );
 
         // Login security AJAX
         add_action( 'wp_ajax_csdt_devtools_login_save',          [ 'CSDT_Login', 'ajax_login_save' ] );
@@ -1703,8 +1704,10 @@ class CloudScale_DevTools {
                 'aiNonce'       => wp_create_nonce( CloudScale_DevTools::OPTIMIZER_NONCE ),
                 'debugNonce'    => wp_create_nonce( CloudScale_DevTools::DEBUG_NONCE ),
                 'fpmNonce'      => wp_create_nonce( CloudScale_DevTools::FPM_NONCE ),
-                'perfNonce'     => wp_create_nonce( CloudScale_DevTools::PERF_NONCE ),
-                'perfEnabled'   => get_option( 'csdt_devtools_perf_monitor_enabled', '1' ),
+                'perfNonce'       => wp_create_nonce( CloudScale_DevTools::PERF_NONCE ),
+                'perfEnabled'     => get_option( 'csdt_devtools_perf_monitor_enabled', '1' ),
+                'objCacheNonce'   => wp_create_nonce( 'csdt_object_cache_nonce' ),
+                'objCacheStatus'  => CSDT_Code_Migrator::get_object_cache_status(),
                 'sources'       => self::get_log_sources(),
             ] );
         }
@@ -2239,6 +2242,81 @@ class CloudScale_DevTools {
                 <div style="display:flex;align-items:center;gap:10px;">
                     <button type="button" id="cs-perf-monitor-save" class="cs-btn-primary cs-btn-sm">💾 <?php esc_html_e( 'Save', 'cloudscale-devtools' ); ?></button>
                     <span id="cs-perf-monitor-saved" class="cs-settings-saved">✓ <?php esc_html_e( 'Saved', 'cloudscale-devtools' ); ?></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Object Cache ── -->
+        <?php
+        $oc = CSDT_Code_Migrator::get_object_cache_status();
+        $oc_type    = $oc['type'];
+        $oc_label   = $oc['label'];
+        $oc_apcu    = $oc['apcu_ok'];
+        $oc_color   = match ( $oc_type ) {
+            'ours'      => $oc_apcu ? '#16a34a' : '#d97706',
+            'redis',
+            'memcached',
+            'other'     => '#7c3aed',
+            default     => '#64748b',
+        };
+        $oc_dot_color = $oc_type === 'ours' && $oc_apcu ? '#16a34a' : ( $oc_type === 'none' ? '#94a3b8' : '#7c3aed' );
+        ?>
+        <div class="cs-panel" id="cs-panel-object-cache" style="margin-bottom:12px;">
+            <div class="cs-section-header" style="background:linear-gradient(90deg,#134e4a 0%,#0f766e 100%);border-left:3px solid #2dd4bf;">
+                <span>🗄️ <?php esc_html_e( 'Object Cache', 'cloudscale-devtools' ); ?></span>
+                <span class="cs-header-hint"><?php esc_html_e( 'Persistent in-memory cache — eliminates WP core N+1 DB patterns', 'cloudscale-devtools' ); ?></span>
+            </div>
+            <div class="cs-panel-body" style="padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <!-- Status badge -->
+                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;">
+                    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:<?php echo esc_attr( $oc_dot_color ); ?>;flex-shrink:0;"></span>
+                    <span style="font-size:13px;font-weight:600;color:#1d2327;">
+                        <?php esc_html_e( 'Status:', 'cloudscale-devtools' ); ?>
+                        <span style="color:<?php echo esc_attr( $oc_color ); ?>;"><?php echo esc_html( $oc_label ); ?></span>
+                        <?php if ( $oc_type === 'ours' && ! $oc_apcu ) : ?>
+                            <span style="color:#d97706;font-size:11px;"> — APCu extension not loaded</span>
+                        <?php elseif ( $oc_type === 'ours' ) : ?>
+                            <span style="color:#16a34a;font-size:11px;"> ✓ Active</span>
+                        <?php endif; ?>
+                    </span>
+                </div>
+
+                <!-- APCu availability -->
+                <span class="cs-hint" style="flex:2;min-width:200px;">
+                    <?php if ( $oc_apcu ) : ?>
+                        <?php esc_html_e( 'APCu extension: loaded ✓ — shared PHP memory available.', 'cloudscale-devtools' ); ?>
+                    <?php else : ?>
+                        <?php esc_html_e( 'APCu extension: not loaded. Install php-apcu in the container to enable.', 'cloudscale-devtools' ); ?>
+                    <?php endif; ?>
+                </span>
+
+                <!-- Action buttons -->
+                <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                    <?php if ( $oc_type === 'none' ) : ?>
+                        <button type="button" id="csdt-obj-cache-btn" data-action="install"
+                                class="cs-btn-primary cs-btn-sm"
+                                <?php echo ! $oc_apcu ? 'title="' . esc_attr__( 'APCu is not loaded — the drop-in will install but caching will be in-memory only until APCu is enabled', 'cloudscale-devtools' ) . '"' : ''; ?>>
+                            ⬇ <?php esc_html_e( 'Install APCu cache', 'cloudscale-devtools' ); ?>
+                        </button>
+                    <?php elseif ( $oc_type === 'ours' ) : ?>
+                        <button type="button" id="csdt-obj-cache-btn" data-action="uninstall"
+                                class="cs-btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:600;">
+                            ✕ <?php esc_html_e( 'Remove', 'cloudscale-devtools' ); ?>
+                        </button>
+                    <?php elseif ( in_array( $oc_type, [ 'redis', 'memcached', 'other' ], true ) ) : ?>
+                        <span style="font-size:12px;color:#7c3aed;font-weight:600;">
+                            <?php
+                            if ( $oc_type === 'redis' ) {
+                                esc_html_e( 'Redis is handling object caching — no action needed.', 'cloudscale-devtools' );
+                            } elseif ( $oc_type === 'memcached' ) {
+                                esc_html_e( 'Memcached is handling object caching — no action needed.', 'cloudscale-devtools' );
+                            } else {
+                                esc_html_e( 'Third-party drop-in detected — remove manually to switch.', 'cloudscale-devtools' );
+                            }
+                            ?>
+                        </span>
+                    <?php endif; ?>
+                    <span id="csdt-obj-cache-msg" style="font-size:12px;"></span>
                 </div>
             </div>
         </div>

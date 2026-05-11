@@ -959,11 +959,25 @@
         });
 
         // N+1 patterns (already computed)
+        // Callers that are WordPress core internals — un-fixable without a persistent
+        // object cache (Redis/APCu/SQLite). Show as info, not warning.
+        var WP_CORE_N1_CALLERS = [
+            'create_initial_post_types',
+            'load_default_textdomain',
+            'wp_count_comments',
+            'wp_site_icon',
+            'register_post_type',
+            'wp_set_script_translations',
+        ];
         Object.keys(n1Patterns).forEach(function (k) {
             var p = n1Patterns[k];
             var detail = truncate(normalisePattern(p.example), 90);
             if (p.caller) detail += ' — caller: ' + truncate(p.caller, 50);
-            issuesList.push({ sev: 'warning', tab: 'db',
+            var isWpCore = p.caller && WP_CORE_N1_CALLERS.some(function (c) {
+                return p.caller.toLowerCase().indexOf(c.toLowerCase()) !== -1;
+            });
+            if (isWpCore) detail += ' (→ WP core — persistent object cache required)';
+            issuesList.push({ sev: isWpCore ? 'info' : 'warning', tab: 'db',
                 title: 'N+1 pattern — ' + p.count + ' identical calls — ' + fmtMs(p.total_ms) + ' total',
                 detail: detail, plugin: p.plugin });
         });

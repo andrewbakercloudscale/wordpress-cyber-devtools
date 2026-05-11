@@ -764,4 +764,46 @@
         }
     } )();
 
+    // ── Object cache toggle ───────────────────────────────────────────────────
+    ( function () {
+        var btn = document.getElementById( 'csdt-obj-cache-btn' );
+        var msg = document.getElementById( 'csdt-obj-cache-msg' );
+        if ( ! btn ) { return; }
+
+        btn.addEventListener( 'click', function () {
+            var action = btn.dataset.action;
+            btn.disabled = true;
+            btn.textContent = action === 'install' ? 'Installing…' : 'Removing…';
+            if ( msg ) { msg.textContent = ''; msg.style.color = ''; }
+
+            var fd = new FormData();
+            fd.append( 'action',      'csdt_object_cache_toggle' );
+            fd.append( 'nonce',       csdtDebug.objCacheNonce );
+            fd.append( 'action_type', action );
+
+            fetch( csdtDebug.ajaxUrl, { method: 'POST', body: fd } )
+                .then( function ( r ) { return r.json(); } )
+                .then( function ( resp ) {
+                    if ( resp.success ) {
+                        window.location.reload();
+                    } else {
+                        btn.disabled = false;
+                        btn.textContent = action === 'install' ? 'Install APCu Cache' : 'Remove Drop-in';
+                        if ( msg ) {
+                            msg.textContent = '❌ ' + ( ( resp.data && resp.data.message ) || 'Action failed.' );
+                            msg.style.color = '#dc2626';
+                        }
+                    }
+                } )
+                .catch( function () {
+                    btn.disabled = false;
+                    btn.textContent = action === 'install' ? 'Install APCu Cache' : 'Remove Drop-in';
+                    if ( msg ) {
+                        msg.textContent = '❌ Request failed.';
+                        msg.style.color = '#dc2626';
+                    }
+                } );
+        } );
+    } )();
+
 }() );
