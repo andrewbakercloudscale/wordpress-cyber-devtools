@@ -2168,6 +2168,49 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
     }
 
     /**
+     * Hooked to `rest_authentication_errors` at priority 1 (early).
+     * Returns a 400 Bad Request immediately when a Basic Auth header is present
+     * but contains no username — this is a malformed request from a bot/scanner.
+     * A legitimate client always provides a username.
+     */
+    public static function rest_reject_empty_basic_auth( $result ) {
+        // Only act if no authentication has been established yet.
+        if ( $result !== null ) {
+            return $result;
+        }
+        $auth = isset( $_SERVER['HTTP_AUTHORIZATION'] )
+            ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_AUTHORIZATION'] ) )
+            : ( isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] )
+                ? sanitize_text_field( wp_unslash( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) )
+                : '' );
+        if ( ! $auth || stripos( $auth, 'Basic ' ) !== 0 ) {
+            return $result; // Not Basic Auth — leave alone.
+        }
+        // Decode Basic Auth credentials.
+        $decoded  = base64_decode( substr( $auth, 6 ), true );
+        $username = $decoded ? (string) strstr( $decoded, ':', true ) : '';
+
+        // 1. Empty username — malformed request from a bot.
+        if ( '' === $username ) {
+            return new \WP_Error( 'rest_bad_request', 'Malformed credentials.', [ 'status' => 400 ] );
+        }
+
+        // 2. Username too long — credential stuffing / buffer overflow attempt.
+        //    WP usernames have a practical limit of ~60 chars; reject anything over 100.
+        if ( strlen( $username ) > 100 ) {
+            return new \WP_Error( 'rest_bad_request', 'Malformed credentials.', [ 'status' => 400 ] );
+        }
+
+        // 3. Invalid characters — WP usernames are alphanumeric + limited punctuation.
+        //    Reject control characters, null bytes, angle brackets, SQL-injection fragments.
+        if ( preg_match( '/[\x00-\x1f\x7f<>\'";\\\\]/', $username ) ) {
+            return new \WP_Error( 'rest_bad_request', 'Malformed credentials.', [ 'status' => 400 ] );
+        }
+
+        return $result;
+    }
+
+    /**
      * Hooked to `rest_authentication_errors` at priority 99.
      * Replaces WP's default credential-revealing error ("Unknown username",
      * "The provided password is an application password") with a generic 401
