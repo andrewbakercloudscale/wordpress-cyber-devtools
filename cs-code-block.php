@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.830
+ * Version: 1.9.831
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.830';
+    const VERSION      = '1.9.831';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -3656,16 +3656,21 @@ class CloudScale_DevTools {
                         $ae_ip = '';
                         if ( preg_match( '/IP:\s*([\d.a-fA-F:]+)/', $ae['detail'] ?? '', $ipm ) ) { $ae_ip = $ipm[1]; }
                         $ae_cc = '';
-                        if ( preg_match( '/·\s*([A-Z]{2})\s*$/', $ae['detail'] ?? '', $ccm ) ) { $ae_cc = $ccm[1]; }
+                        if ( preg_match( '/·\s*([A-Z]{2})\b/', $ae['detail'] ?? '', $ccm ) ) { $ae_cc = $ccm[1]; }
+                        $ae_user = '';
+                        if ( preg_match( '/user:([^\s·]+)/', $ae['detail'] ?? '', $um ) ) { $ae_user = $um[1]; }
                         if ( $ae_ip ) {
                             if ( ! isset( $api_ip_stats[ $ae_ip ] ) ) {
-                                $api_ip_stats[ $ae_ip ] = [ 'count' => 0, 'last_ts' => 0, 'country' => $ae_cc ];
+                                $api_ip_stats[ $ae_ip ] = [ 'count' => 0, 'last_ts' => 0, 'country' => $ae_cc, 'users' => [] ];
                             }
                             $api_ip_stats[ $ae_ip ]['count']++;
                             if ( $ae_ts > $api_ip_stats[ $ae_ip ]['last_ts'] ) {
                                 $api_ip_stats[ $ae_ip ]['last_ts'] = $ae_ts;
                             }
                             if ( $ae_cc ) { $api_ip_stats[ $ae_ip ]['country'] = $ae_cc; }
+                            if ( $ae_user && ! in_array( $ae_user, $api_ip_stats[ $ae_ip ]['users'], true ) ) {
+                                $api_ip_stats[ $ae_ip ]['users'][] = $ae_user;
+                            }
                         }
                         if ( $ae_ts > $api_last_ts ) { $api_last_ts = $ae_ts; $api_last_ip = $ae_ip; }
                     }
@@ -3714,6 +3719,7 @@ class CloudScale_DevTools {
                                     <thead><tr>
                                         <th class="cs-bf-th"><?php esc_html_e( 'Last attempt', 'cloudscale-devtools' ); ?></th>
                                         <th class="cs-bf-th"><?php esc_html_e( 'IP / Country', 'cloudscale-devtools' ); ?></th>
+                                        <th class="cs-bf-th"><?php esc_html_e( 'Username(s) tried', 'cloudscale-devtools' ); ?></th>
                                         <th class="cs-bf-th" style="text-align:right;"><?php esc_html_e( 'Attempts', 'cloudscale-devtools' ); ?></th>
                                         <th class="cs-bf-th"></th>
                                     </tr></thead>
@@ -3724,12 +3730,24 @@ class CloudScale_DevTools {
                                         $a_flag = $a_cc && strlen( $a_cc ) === 2
                                             ? mb_chr( 0x1F1E6 + ord( $a_cc[0] ) - 65 ) . mb_chr( 0x1F1E6 + ord( $a_cc[1] ) - 65 )
                                             : '';
+                                        $a_users = $a_data['users'] ?? [];
                                     ?>
                                     <tr data-ts="<?php echo (int) $a_data['last_ts']; ?>" data-cnt="<?php echo (int) $a_data['count']; ?>">
                                         <td class="cs-bf-td cs-bf-td-time"><?php echo $a_data['last_ts'] ? esc_html( human_time_diff( (int) $a_data['last_ts'] ) . ' ago' ) : '—'; ?></td>
                                         <td class="cs-bf-td cs-bf-td-ip"><?php echo esc_html( $a_ip ); ?>
                                             <?php if ( $a_cc ) : ?>
                                             <div style="font-size:10px;color:#64748b;margin-top:2px;"><?php echo esc_html( $a_flag . ' ' . $a_cc ); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="cs-bf-td" style="font-size:11px;color:#374151;">
+                                            <?php if ( ! empty( $a_users ) ) : ?>
+                                                <?php foreach ( $a_users as $a_u ) : ?>
+                                                <div style="font-family:monospace;<?php echo get_user_by( 'login', $a_u ) ? 'color:#dc2626;font-weight:700;' : ''; ?>" title="<?php echo get_user_by( 'login', $a_u ) ? esc_attr__( 'Valid account!', 'cloudscale-devtools' ) : ''; ?>">
+                                                    <?php echo esc_html( $a_u ); ?><?php if ( get_user_by( 'login', $a_u ) ) : ?> <span style="font-size:9px;background:#fef2f2;color:#dc2626;padding:1px 4px;border-radius:4px;border:1px solid #fca5a5;">valid</span><?php endif; ?>
+                                                </div>
+                                                <?php endforeach; ?>
+                                            <?php else : ?>
+                                            <span style="color:#94a3b8;">—</span>
                                             <?php endif; ?>
                                         </td>
                                         <td class="cs-bf-td" style="text-align:right;font-weight:700;color:#7c3aed;"><?php echo number_format( (int) $a_data['count'] ); ?></td>

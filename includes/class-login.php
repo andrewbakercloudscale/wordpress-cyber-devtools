@@ -2150,7 +2150,7 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
 
         // ── Record + alert ─────────────────────────────────────────────────
 
-        $detail = "IP: {$ip}" . ( $cc ? " · {$cc}" : '' );
+        $detail = "IP: {$ip}" . ( $cc ? " · {$cc}" : '' ) . ( $tried_user ? " · user:{$tried_user}" : '' );
         self::record_security_event( 'api_attack', 'REST API auth failure', $detail );
 
         $body  = "🔌 REST API brute-force attempt\n";
