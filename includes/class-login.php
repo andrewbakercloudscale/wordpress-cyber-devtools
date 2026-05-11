@@ -2043,6 +2043,19 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
      * username is a known WordPress account (valid) or not (enumeration attempt).
      */
     public static function on_login_failed( string $username ): void {
+        // Skip REST API / application-password failures — those are handled by
+        // on_rest_auth_failed() via application_password_failed_authentication.
+        // Both hooks fire for the same REST request, so we'd send two ntfys.
+        if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+            return;
+        }
+        // Also skip if this looks like a Basic-Auth REST call (REST_REQUEST may not
+        // be defined yet when application_password_failed_authentication fires first).
+        $auth_hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? ( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '' );
+        if ( $auth_hdr && stripos( $auth_hdr, 'Basic ' ) === 0 ) {
+            return;
+        }
+
         $notify_valid   = get_option( 'csdt_ntfy_login_valid_user',   '0' ) === '1';
         $notify_invalid = get_option( 'csdt_ntfy_login_invalid_user', '0' ) === '1';
 
