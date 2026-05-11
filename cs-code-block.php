@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.829
+ * Version: 1.9.830
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.829';
+    const VERSION      = '1.9.830';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -3785,7 +3785,7 @@ class CloudScale_DevTools {
                                 </label>
                             </span>
                         </div>
-                        <div id="cs-bf-geo-map" style="height:360px;border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;background:#e8f4f4;margin-top:8px;"></div>
+                        <div id="cs-bf-geo-map" style="height:400px;border-radius:6px;overflow:hidden;border:1px solid #e2e8f0;background:#e8f4f4;margin-top:8px;"></div>
                         <div style="margin-top:6px;font-size:11px;color:#94a3b8;"><?php esc_html_e( 'Each ring scales independently — circle size reflects volume within that category only. Country via Cloudflare CF-IPCountry or DB-IP Lite fallback.', 'cloudscale-devtools' ); ?></div>
                         <?php CSDT_Geo::render_dbip_status(); ?>
                     </div>
