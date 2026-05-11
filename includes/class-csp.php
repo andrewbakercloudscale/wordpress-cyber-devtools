@@ -183,6 +183,7 @@ class CSDT_CSP {
         foreach ( $services as $svc ) {
             if ( ! isset( $map[ $svc ] ) ) { continue; }
             foreach ( $map[ $svc ] as $dir => $vals ) {
+                if ( ! isset( $d[ $dir ] ) ) { $d[ $dir ] = []; } // initialise new directives
                 foreach ( $vals as $v ) {
                     if ( ! in_array( $v, $d[ $dir ], true ) ) { $d[ $dir ][] = $v; }
                 }
