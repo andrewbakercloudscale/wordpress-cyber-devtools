@@ -123,7 +123,8 @@
         entry.ts = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2)+'.'+('00'+d.getMilliseconds()).slice(-3);
         editorLogs.unshift(entry);
         if (editorLogs.length > 200) { editorLogs.pop(); }
-        if (entry.type === 'fail' || entry.type === 'jserr') {
+        var isCrossOriginErr = entry.type === 'jserr' && /^script error\./i.test(entry.detail || '');
+        if (entry.type === 'fail' || (entry.type === 'jserr' && !isCrossOriginErr)) {
             editorFailCount++;
             if (editorBadgeEl) { editorBadgeEl.textContent = editorFailCount; }
             computeIssues();
@@ -142,6 +143,9 @@
             } else {
                 pendingFlash = true;
             }
+        } else if (isCrossOriginErr) {
+            computeIssues();
+            renderIssues();
         }
         if (activeTab === 'editor') { renderEditor(); }
     }
