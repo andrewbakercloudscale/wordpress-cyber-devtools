@@ -76,6 +76,47 @@ fi
 echo "PHP syntax: OK"
 echo ""
 
+# PHP runtime include test — catches TypeError/fatal errors that php -l misses.
+# Runs each include file through php -r to catch runtime errors like:
+#   in_array(value, null) — passes syntax check but crashes on first request.
+echo "Checking PHP runtime includes..."
+RUNTIME_ERRORS=0
+while IFS= read -r -d '' phpfile; do
+  # Skip files that require WP constants to load (plugins, shortcodes etc)
+  basename=$(basename "$phpfile")
+  [[ "$basename" == "uninstall.php" ]] && continue
+  result=$(php -r "
+define('ABSPATH', '/tmp/');
+define('WPINC', 'wp-includes');
+define('DB_HOST', '');
+\$_SERVER['HTTP_HOST'] = 'localhost';
+// Suppress expected WP-not-loaded notices, catch fatals
+set_error_handler(function(\$errno, \$str) {
+    if (\$errno === E_FATAL || \$errno === E_ERROR) { echo \"FATAL: \$str\n\"; exit(1); }
+    return true;
+});
+\$code = file_get_contents('$phpfile');
+// Only test files that are pure class/function definitions (no WP bootstrap needed)
+if (strpos(\$code, 'class ') !== false || strpos(\$code, 'function ') !== false) {
+    if (strpos(\$code, 'require') === false && strpos(\$code, 'wp_') === false) {
+        @include '$phpfile';
+    }
+}
+" 2>&1 | grep -i "FATAL\|TypeError\|ParseError" || true)
+  if [ -n "$result" ]; then
+    echo "  RUNTIME ERROR in $phpfile:"
+    echo "    $result"
+    RUNTIME_ERRORS=1
+  fi
+done < <(find "$REPO_DIR/includes" -name "*.php" -print0 2>/dev/null)
+if [ "$RUNTIME_ERRORS" -ne 0 ]; then
+  echo ""
+  echo "ERROR: PHP runtime errors found. These pass php -l but crash on first HTTP request."
+  exit 1
+fi
+echo "PHP runtime: OK"
+echo ""
+
 if [ "${SKIP_REVIEW:-1}" != "1" ]; then
 # WordPress plugin standards review — 2 parallel sections
 echo -e "\033[1;34mRunning WordPress plugin standards review (parallel, model: haiku-4-5)...\033[0m"
