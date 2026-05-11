@@ -763,11 +763,14 @@ class CSDT_CSP {
             $fix_label    = 'Fix applied: Added ' . ( $names[ $value ] ?? $value ) . ' to CSP allow-list';
             update_option( 'csdt_devtools_csp_services', wp_json_encode( $new_services ) );
         } else {
-            // Validate origin — must start with https://, http://, or //
-            if ( ! preg_match( '/^(https?:)?\/\//', $value ) ) {
-                wp_send_json_error( 'Invalid origin URL.' );
+            // Allow CSP keyword values (quoted) OR valid origins (https://).
+            $is_csp_keyword = preg_match( "/^'(unsafe-inline|unsafe-eval|unsafe-hashes|strict-dynamic|nonce-[a-zA-Z0-9+\/=]+|sha256-[a-zA-Z0-9+\/=]+|sha384-[a-zA-Z0-9+\/=]+|sha512-[a-zA-Z0-9+\/=]+|wasm-unsafe-eval|self|none)'$/", $value );
+            $is_valid_origin = preg_match( '/^(https?:)?\/\//', $value );
+            if ( ! $is_csp_keyword && ! $is_valid_origin ) {
+                wp_send_json_error( 'Invalid CSP value — must be a URL origin (https://example.com) or a CSP keyword (\'unsafe-inline\').' );
             }
-            $origin     = esc_url_raw( $value );
+            // Escape URL origins, use raw value for CSP keywords.
+            $origin     = $is_csp_keyword ? $value : esc_url_raw( $value );
             $new_custom = trim( $old_custom );
             $entry      = $directive . ' ' . $origin;
             // Only append if not already present.
