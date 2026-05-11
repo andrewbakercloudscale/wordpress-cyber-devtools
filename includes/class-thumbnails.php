@@ -381,7 +381,7 @@ The text rule is passed separately in the user message — follow it exactly.
         $saved_vendor  = (string) get_option( 'csdt_devtools_prompt_vendor', 'openai' );
         $saved_model   = (string) get_option( 'csdt_devtools_prompt_model', 'gpt-4o' );
         $saved_style   = (string) get_option( 'csdt_devtools_img_style', 'auto' );
-        $saved_quality = (string) get_option( 'csdt_devtools_img_quality', 'hd' );
+        $saved_quality = (string) get_option( 'csdt_devtools_img_quality', 'standard' );
         $saved_no_text = (bool)   get_option( 'csdt_devtools_img_no_text', false );
         $system_prompt = self::get_img_system_prompt();
         $keys_json     = wp_json_encode( [
@@ -492,7 +492,7 @@ The text rule is passed separately in the user message — follow it exactly.
 
                 <!-- DALL-E key (OpenAI) — only shown when prompt writer vendor ≠ openai -->
                 <div class="cs-sec-row" id="cs-ai-img-dalle-key-row" style="display:none">
-                    <span class="cs-sec-label"><?php esc_html_e( 'DALL-E key (OpenAI):', 'cloudscale-devtools' ); ?></span>
+                    <span class="cs-sec-label"><?php esc_html_e( 'OpenAI key (for DALL-E image generation):', 'cloudscale-devtools' ); ?></span>
                     <div class="cs-sec-control">
                         <div style="position:relative;display:flex;align-items:center;width:100%;max-width:480px">
                             <input type="password" id="cs-ai-img-dalle-key" class="cs-text-input cs-sec-key-input"
@@ -506,7 +506,7 @@ The text rule is passed separately in the user message — follow it exactly.
                             <button type="button" id="cs-ai-img-dalle-save-key" class="cs-btn-secondary"><?php esc_html_e( 'Save DALL-E Key', 'cloudscale-devtools' ); ?></button>
                             <span id="cs-ai-img-dalle-key-status" class="cs-sec-key-status"><?php echo $openai_key ? '<span style="color:#2e7d32">✓ Key saved</span>' : ''; ?></span>
                         </div>
-                        <span class="cs-hint"><?php esc_html_e( 'DALL-E 3 always uses OpenAI for image generation regardless of your prompt writer choice.', 'cloudscale-devtools' ); ?></span>
+                        <span class="cs-hint"><?php esc_html_e( 'Your Google/Anthropic key above writes the prompt. This separate OpenAI key is required because DALL-E 3 (the image generator) is an OpenAI-only product.', 'cloudscale-devtools' ); ?></span>
                     </div>
                 </div>
 
@@ -1713,7 +1713,7 @@ The text rule is passed separately in the user message — follow it exactly.
             'promptVendor'  => (string) get_option( 'csdt_devtools_prompt_vendor', 'openai' ),
             'promptModel'   => (string) get_option( 'csdt_devtools_prompt_model', 'gpt-4o' ),
             'imgStyle'      => (string) get_option( 'csdt_devtools_img_style', 'auto' ),
-            'imgQuality'    => (string) get_option( 'csdt_devtools_img_quality', 'hd' ),
+            'imgQuality'    => (string) get_option( 'csdt_devtools_img_quality', 'standard' ),
             'imgDual'       => get_option( 'csdt_devtools_img_dual', false ) ? '1' : '0',
         ] );
     }

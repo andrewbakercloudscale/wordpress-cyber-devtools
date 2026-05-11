@@ -115,7 +115,13 @@ class CSDT_AI_Dispatcher {
         $body = wp_remote_retrieve_body( $resp );
         if ( $code !== 200 ) {
             $api = json_decode( $body, true );
-            throw new \RuntimeException( $api['error']['message'] ?? "HTTP {$code}" );
+            $msg = $api['error']['message'] ?? "HTTP {$code}";
+            if ( $code === 529 ) {
+                $msg = 'Anthropic API is overloaded — please try again in a few seconds.';
+            } elseif ( $code === 429 ) {
+                $msg = 'Rate limit reached — please wait a moment and try again.';
+            }
+            throw new \RuntimeException( $msg );
         }
         return self::parse_response_text( $provider, $body );
     }
