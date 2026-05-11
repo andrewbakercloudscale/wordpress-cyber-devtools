@@ -2074,14 +2074,14 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
             return;
         }
 
-        $type     = $is_valid_user ? 'valid username' : 'unknown username';
-        $label    = $is_valid_user ? 'Known account targeted' : 'Unknown username tried';
+        // Never reveal in the ntfy whether the username is valid or not —
+        // that would confirm account existence to anyone who can read the notification.
         $priority = $is_valid_user ? 'high' : 'default';
         $tags     = $is_valid_user ? 'rotating_light' : 'warning';
 
         self::send_ntfy(
-            "Failed login — {$label}",
-            "Username: {$username}\nType: {$type}\nIP: {$ip}",
+            'Failed login attempt',
+            "Username: {$username}\nIP: {$ip}" . ( $cc ? " · {$cc}" : '' ),
             $priority,
             $tags
         );
@@ -2125,9 +2125,11 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
             ? sanitize_user( wp_unslash( $_SERVER['PHP_AUTH_USER'] ), true )
             : '';
 
-        // Failure reason (strip WP's HTML tags).
-        $reason     = wp_strip_all_tags( $error->get_error_message() );
+        // Generic reason only — never reveal whether the username exists or not.
+        // The specific WP error code (incorrect_password vs invalid_username) confirms
+        // account existence, so we suppress it entirely.
         $error_code = $error->get_error_code();
+        $reason     = 'Authentication failed';
 
         // User agent (truncated).
         $ua = isset( $_SERVER['HTTP_USER_AGENT'] )

@@ -74,7 +74,8 @@
                 '<span class="cs-pwr-sess-count" style="font-size:12px;color:' + sessColor + ';">' + escHtml(sessLabel) + '</span>' +
                 loginHtml +
                 '</div>' +
-                '<div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">' +
+                '<div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;align-items:center;">' +
+                '<button type="button" class="cs-btn-secondary cs-btn-sm cs-pwr-rename" data-name="' + escHtml(u.name) + '" data-user-id="' + escHtml(String(u.user_id || '')) + '" data-current-login="' + escHtml(u.username) + '" title="Change WordPress username">✏️ Rename</button>' +
                 '<button type="button" class="cs-btn-secondary cs-btn-sm cs-pwr-kill-sessions" data-name="' + escHtml(u.name) + '"' + killDisabled + '>Kill Sessions</button>' +
                 '<button type="button" class="cs-btn-secondary cs-btn-sm cs-pwr-delete" data-name="' + escHtml(u.name) + '" style="color:#dc2626;border-color:#fca5a5;">Delete User</button>' +
                 '</div>' +
@@ -102,6 +103,33 @@
                     } else {
                         btn.disabled = false;
                         btn.textContent = 'Kill Sessions';
+                        alert('Error: ' + (res.data || 'unknown'));
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('.cs-pwr-rename').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var userId       = btn.dataset.userId;
+                var currentLogin = btn.dataset.currentLogin;
+                var newLogin     = prompt('New username for this account (current: ' + currentLogin + '):', currentLogin);
+                if (!newLogin || newLogin === currentLogin) { return; }
+                newLogin = newLogin.trim();
+                if (newLogin.length < 3) { alert('Username must be at least 3 characters.'); return; }
+                btn.disabled = true;
+                btn.textContent = '⏳';
+                post('csdt_rename_test_user', { user_id: userId, new_login: newLogin }, function (res) {
+                    btn.disabled = false;
+                    btn.textContent = '✏️ Rename';
+                    if (res.success) {
+                        renderUsers();
+                        // Reload to reflect the updated username in the user list.
+                        post('csdt_playwright_role_list', {}, function (r2) {
+                            if (r2.success) { renderUsers(r2.data.users); }
+                        });
+                        alert('Username changed from "' + res.data.old_login + '" to "' + res.data.new_login + '". Sessions have been killed — the account must re-authenticate.');
+                    } else {
                         alert('Error: ' + (res.data || 'unknown'));
                     }
                 });

@@ -490,6 +490,70 @@ class CSDT_Test_Accounts {
         ] );
     }
 
+    public static function ajax_rename_test_user(): void {
+        if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Forbidden', 403 ); }
+        check_ajax_referer( 'csdt_devtools_login_nonce', 'nonce' );
+
+        $user_id   = isset( $_POST['user_id'] )    ? (int) $_POST['user_id']    : 0;
+        $new_login = isset( $_POST['new_login'] )  ? sanitize_user( wp_unslash( $_POST['new_login'] ), true ) : '';
+
+        if ( ! $user_id || ! $new_login ) {
+            wp_send_json_error( __( 'User ID and new username are required.', 'cloudscale-devtools' ) );
+        }
+        if ( strlen( $new_login ) < 3 || strlen( $new_login ) > 60 ) {
+            wp_send_json_error( __( 'Username must be 3–60 characters.', 'cloudscale-devtools' ) );
+        }
+
+        // Must be one of our test users.
+        $roles_data = get_option( 'csdt_playwright_roles', [] );
+        $role_key   = null;
+        foreach ( $roles_data as $key => $r ) {
+            if ( (int) $r['user_id'] === $user_id ) { $role_key = $key; break; }
+        }
+        if ( $role_key === null ) {
+            wp_send_json_error( __( 'User is not a registered test account.', 'cloudscale-devtools' ) );
+        }
+
+        // Check new login not already taken.
+        if ( username_exists( $new_login ) && get_user_by( 'login', $new_login )->ID !== $user_id ) {
+            wp_send_json_error( __( 'That username is already in use.', 'cloudscale-devtools' ) );
+        }
+
+        // WP does not expose a direct way to change user_login — use wpdb.
+        global $wpdb;
+        $old_login = get_userdata( $user_id )->user_login;
+        $updated   = $wpdb->update( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+            $wpdb->users,
+            [ 'user_login' => $new_login ],
+            [ 'ID'         => $user_id ],
+            [ '%s' ],
+            [ '%d' ]
+        );
+
+        if ( $updated === false ) {
+            wp_send_json_error( __( 'Database error — could not rename user.', 'cloudscale-devtools' ) );
+        }
+
+        // Update display name and nicename to match.
+        wp_update_user( [
+            'ID'            => $user_id,
+            'display_name'  => $new_login,
+            'user_nicename' => sanitize_title( $new_login ),
+        ] );
+
+        // Kill all sessions for this user so they re-auth with the new credentials.
+        WP_Session_Tokens::get_instance( $user_id )->destroy_all();
+
+        // Update the stored username in roles data.
+        $roles_data[ $role_key ]['username'] = $new_login;
+        update_option( 'csdt_playwright_roles', $roles_data, false );
+
+        wp_send_json_success( [
+            'old_login' => $old_login,
+            'new_login' => $new_login,
+        ] );
+    }
+
     public static function ajax_toggle_block_basic_auth(): void {
         if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Forbidden', 403 ); }
         check_ajax_referer( 'csdt_devtools_login_nonce', 'nonce' );

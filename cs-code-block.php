@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.809
+ * Version: 1.9.810
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.809';
+    const VERSION      = '1.9.810';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -457,6 +457,7 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_kill_test_sessions',           [ 'CSDT_Test_Accounts', 'ajax_kill_test_sessions' ] );
         add_action( 'wp_ajax_csdt_regen_test_secret',            [ 'CSDT_Test_Accounts', 'ajax_regen_test_secret' ] );
         add_action( 'wp_ajax_csdt_regen_path_token',             [ 'CSDT_Test_Accounts', 'ajax_regen_path_token' ] );
+        add_action( 'wp_ajax_csdt_rename_test_user',             [ 'CSDT_Test_Accounts', 'ajax_rename_test_user' ] );
         add_action( 'wp_ajax_csdt_toggle_block_basic_auth',      [ 'CSDT_Test_Accounts', 'ajax_toggle_block_basic_auth' ] );
         add_action( 'rest_api_init',                             [ 'CSDT_Test_Accounts', 'register_rest_routes' ] );
         self::cron_action( 'csdt_scheduled_scan',                [ 'CSDT_Site_Audit', 'run_scheduled_scan' ] );
@@ -4500,7 +4501,14 @@ class CloudScale_DevTools {
                                     <?php if ( $last_login_str ) : ?>
                                     <span style="font-size:11px;color:#9ca3af;"><?php echo esc_html__( 'Last login:', 'cloudscale-devtools' ); ?> <?php echo esc_html( $last_login_str ); ?></span>
                                     <?php endif; ?>
-                                    <div style="margin-left:auto;display:flex;gap:6px;flex-shrink:0;">
+                                    <div style="margin-left:auto;display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;align-items:center;">
+                                        <button type="button" class="cs-btn-secondary cs-btn-sm cs-pwr-rename"
+                                                data-name="<?php echo esc_attr( $u['name'] ); ?>"
+                                                data-user-id="<?php echo (int) $u['user_id']; ?>"
+                                                data-current-login="<?php echo esc_attr( $u['username'] ); ?>"
+                                                title="<?php esc_attr_e( 'Change the WP username for this test account', 'cloudscale-devtools' ); ?>">
+                                            ✏️ <?php esc_html_e( 'Rename', 'cloudscale-devtools' ); ?>
+                                        </button>
                                         <button type="button" class="cs-btn-secondary cs-btn-sm cs-pwr-kill-sessions" data-name="<?php echo esc_attr( $u['name'] ); ?>" <?php echo $u['session_count'] === 0 ? 'disabled' : ''; ?>>
                                             <?php esc_html_e( 'Kill Sessions', 'cloudscale-devtools' ); ?>
                                         </button>
