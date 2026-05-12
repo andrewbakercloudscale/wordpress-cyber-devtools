@@ -1319,8 +1319,54 @@
     let curModel       = window.csdtImgModel  || cfg.defaultModel  || 'gpt-4o-mini';
     let modelEl        = null;
     let styleEl        = null;
-    let imageModal     = null;
+    let imageModal        = null;
     let promptReviewModal = null;
+
+    // ── Concurrency queue ──────────────────────────────────────────────
+    const MAX_CONCURRENT = 4;
+    let   activeJobs     = 0;
+    const jobQueue       = []; // [{fn}] — waiting to fire
+
+    function jobSlotFree() {
+        activeJobs = Math.max( 0, activeJobs - 1 );
+        if ( jobQueue.length ) jobQueue.shift().fn();
+    }
+
+    function enqueueJob( btn, fn ) {
+        if ( activeJobs < MAX_CONCURRENT ) {
+            activeJobs++;
+            fn();
+        } else {
+            const statusEl = document.getElementById( 'cs-ai-status-' + btn.dataset.postId );
+            btn.disabled    = true;
+            btn.textContent = '⏳ Queued…';
+            if ( statusEl ) statusEl.innerHTML = '<span style="color:#94a3b8;font-size:11px">⏳ Queued — waiting for a free slot</span>';
+            jobQueue.push( { fn: () => { activeJobs++; fn(); } } );
+        }
+    }
+
+    // ── Review queue ───────────────────────────────────────────────────
+    const reviewQueue = []; // [{options, callbacks, prompt, postTitle}]
+    let   reviewModalOpen = false;
+
+    function enqueueReview( options, callbacks, prompt, postTitle ) {
+        reviewQueue.push( { options, callbacks, prompt, postTitle } );
+        if ( ! reviewModalOpen ) _showNextReview();
+    }
+
+    function _showNextReview() {
+        if ( ! reviewQueue.length ) { reviewModalOpen = false; return; }
+        reviewModalOpen = true;
+        const item = reviewQueue.shift();
+        const queueLabel = reviewQueue.length > 0 ? ` (${reviewQueue.length + 1} pending)` : '';
+        const wrapped = {
+            onAccept:     ( id ) => { item.callbacks.onAccept( id );     _showNextReview(); },
+            onRegenerate: ()     => { item.callbacks.onRegenerate();      reviewModalOpen = false; },
+            onCancel:     ()     => { item.callbacks.onCancel();          _showNextReview(); },
+        };
+        if ( ! imageModal ) imageModal = makeImageModal();
+        imageModal.open( item.options, wrapped, item.postTitle + queueLabel, item.prompt );
+    }
     const ajaxUrl = cfg.ajaxUrl || '';
     const nonce   = cfg.nonce   || '';
 
@@ -1668,7 +1714,7 @@
                 const meta        = `<span style="font-size:11px;color:#94a3b8">${esc(p.date)}</span>${viewsBadge}${wordsBadge}${imgDateBadge}`;
                 const btnLabel   = p.has_thumb ? '↺ Regenerate' : '✨ Generate';
                 const existingThumb = p.has_thumb && p.thumb_url
-                    ? `<img src="${esc(p.thumb_url)}" style="width:80px;height:42px;object-fit:cover;border-radius:3px;border:1px solid #ddd">`
+                    ? `<img src="${esc(p.thumb_url)}" class="cs-ai-list-thumb" data-full-url="${esc(p.full_url || p.thumb_url)}" data-title="${esc(decodeHtml(p.title))}" style="width:80px;height:42px;object-fit:cover;border-radius:3px;border:1px solid #ddd;cursor:zoom-in" title="Click to preview">`
                     : '';
                 html += `
                 <div id="cs-ai-row-${esc(String(p.post_id))}" style="display:flex;align-items:stretch;gap:0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden">
@@ -1696,84 +1742,18 @@
             } );
         }
 
+        // Click any list thumbnail to preview it full-size.
+        if ( results ) {
+            results.addEventListener( 'click', ( e ) => {
+                const img = e.target.closest( '.cs-ai-list-thumb' );
+                if ( ! img ) return;
+                if ( ! imageModal ) imageModal = makeImageModal();
+                imageModal.preview( img.dataset.fullUrl, img.dataset.title );
+            } );
+        }
+
         // ── Image preview modal ───────────────────────────────────────────
-        imageModal = ( () => {
-            const overlay = document.createElement( 'div' );
-            overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;overflow-y:auto;padding:32px 16px;box-sizing:border-box';
-            const box = document.createElement( 'div' );
-            box.style.cssText = 'background:#fff;border-radius:10px;max-width:740px;margin:0 auto;box-shadow:0 16px 56px rgba(0,0,0,.5);overflow:hidden';
-            overlay.appendChild( box );
-            document.body.appendChild( overlay );
-            let _cb = {};
-            overlay.addEventListener( 'click', e => { if ( e.target === overlay ) _cancel(); } );
-            document.addEventListener( 'keydown', e => { if ( e.key === 'Escape' && overlay.style.display !== 'none' ) _cancel(); } );
-            function _cancel() { overlay.style.display = 'none'; if ( _cb.onCancel ) _cb.onCancel(); }
-            function open( options, callbacks, dallePrompt ) {
-                _cb = callbacks || {};
-                const isMult = options.length > 1;
-                const titleText = isMult
-                    ? `Choose a Featured Image (${options.length} options)`
-                    : 'Generated Featured Image';
-                const imagesHtml = isMult
-                    ? `<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;padding:24px 20px 12px">` +
-                      options.map( ( opt, i ) =>
-                        `<div style="flex:1;min-width:220px;max-width:320px;text-align:center">
-                            <img src="${esc(opt.thumb_url)}" style="width:100%;max-height:210px;object-fit:cover;border-radius:6px;border:2px solid #e2e8f0;display:block">
-                            <button type="button" class="cs-modal-pick-btn"
-                                data-attach-id="${esc(String(opt.attach_id))}"
-                                style="margin-top:10px;background:#1565c0;color:#fff;border:none;border-radius:5px;padding:8px 0;font-size:13px;font-weight:600;cursor:pointer;width:100%">
-                                ✓ Use Option ${i + 1}
-                            </button>
-                        </div>` ).join( '' ) +
-                      `</div>`
-                    : `<div style="padding:24px 20px 12px;text-align:center">
-                          <a href="${esc(options[0].full_url || options[0].thumb_url)}" target="_blank" rel="noopener" title="Tap to view full size (1200×675)">
-                              <img src="${esc(options[0].thumb_url)}?v=${Date.now()}" style="max-width:100%;border-radius:6px;border:1px solid #e2e8f0;object-fit:contain;box-shadow:0 4px 24px rgba(0,0,0,.15);cursor:zoom-in;display:block">
-                          </a>
-                          <p style="margin:6px 0 0;font-size:11px;color:#94a3b8">Tap image to view full size (1200×675)</p>
-                       </div>`;
-                const promptHtml = dallePrompt
-                    ? `<div style="margin:0 20px 14px">
-                           <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Image prompt used</p>
-                           <p style="margin:0;padding:10px;background:#f1f5f9;border-radius:4px;font-family:monospace;font-size:11px;line-height:1.6;white-space:pre-wrap;color:#334155;border:1px solid #e2e8f0">${esc(dallePrompt)}</p>
-                       </div>`
-                    : '';
-                const footerBtns = isMult
-                    ? `<button type="button" class="cs-modal-regen"  style="background:#6366f1;color:#fff;border:none;border-radius:5px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">↺ Regenerate both</button>
-                       <button type="button" class="cs-modal-cancel" style="background:#fff;color:#64748b;border:1px solid #cbd5e1;border-radius:5px;padding:8px 18px;font-size:13px;cursor:pointer">✕ Cancel</button>`
-                    : `<button type="button" class="cs-modal-accept" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:8px 22px;font-size:13px;font-weight:600;cursor:pointer">✓ Accept</button>
-                       <button type="button" class="cs-modal-regen"  style="background:#6366f1;color:#fff;border:none;border-radius:5px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">↺ Regenerate</button>
-                       <button type="button" class="cs-modal-cancel" style="background:#fff;color:#64748b;border:1px solid #cbd5e1;border-radius:5px;padding:8px 18px;font-size:13px;cursor:pointer">✕ Cancel</button>`;
-                box.innerHTML = `
-                    <div style="background:#1d2327;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
-                        <strong style="font-size:14px">🖼 ${esc(titleText)}</strong>
-                        <button class="cs-modal-close-x" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:0 4px">&times;</button>
-                    </div>
-                    ${imagesHtml}
-                    ${promptHtml}
-                    <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc">
-                        ${footerBtns}
-                    </div>`;
-                overlay.style.display = 'block';
-                box.querySelector( '.cs-modal-close-x' )?.addEventListener( 'click', _cancel );
-                box.querySelector( '.cs-modal-cancel' )?.addEventListener( 'click', _cancel );
-                box.querySelector( '.cs-modal-accept' )?.addEventListener( 'click', () => {
-                    overlay.style.display = 'none';
-                    if ( _cb.onAccept ) _cb.onAccept( options[0].attach_id );
-                } );
-                box.querySelector( '.cs-modal-regen' )?.addEventListener( 'click', () => {
-                    overlay.style.display = 'none';
-                    if ( _cb.onRegenerate ) _cb.onRegenerate();
-                } );
-                box.querySelectorAll( '.cs-modal-pick-btn' ).forEach( btn => {
-                    btn.addEventListener( 'click', () => {
-                        overlay.style.display = 'none';
-                        if ( _cb.onAccept ) _cb.onAccept( btn.dataset.attachId );
-                    } );
-                } );
-            }
-            return { open };
-        } )();
+        imageModal = makeImageModal();
 
         // ── Prompt review modal (step 1 of 2) ────────────────────────────
         promptReviewModal = ( () => {
@@ -1828,45 +1808,166 @@
         overlay.addEventListener( 'click', e => { if ( e.target === overlay ) _cancel(); } );
         document.addEventListener( 'keydown', e => { if ( e.key === 'Escape' && overlay.style.display !== 'none' ) _cancel(); } );
         function _cancel() { overlay.style.display = 'none'; if ( _cb.onCancel ) _cb.onCancel(); }
-        function open( options, callbacks ) {
+
+        // open(options, callbacks, title, dallePrompt) — full review mode
+        // preview(imgUrl, title)                       — view only, no accept/cancel
+        function open( options, callbacks, title, dallePrompt ) {
             _cb = callbacks || {};
+            const headerTitle = esc( title || 'Generated Featured Image' );
+            const promptHtml = dallePrompt
+                ? '<div style="margin:0 20px 14px">' +
+                  '<p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Image prompt used</p>' +
+                  '<p style="margin:0;padding:10px;background:#f1f5f9;border-radius:4px;font-family:monospace;font-size:11px;line-height:1.6;white-space:pre-wrap;color:#334155;border:1px solid #e2e8f0">' + esc( dallePrompt ) + '</p>' +
+                  '</div>'
+                : '';
+            box.innerHTML =
+                '<div style="background:#1d2327;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">' +
+                '<strong style="font-size:14px">🖼 ' + headerTitle + '</strong>' +
+                '<button class="cs-modal-close-x" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:0 4px">&times;</button>' +
+                '</div>' +
+                '<div style="padding:20px">' +
+                options.map( ( opt ) =>
+                    '<div style="margin-bottom:12px;text-align:center">' +
+                    '<a href="' + esc( opt.full_url || opt.thumb_url ) + '" target="_blank" rel="noopener" title="Click to view full size">' +
+                    '<img src="' + esc( opt.thumb_url ) + '?v=' + Date.now() + '" style="max-width:100%;border-radius:6px;display:block;cursor:zoom-in">' +
+                    '</a>' +
+                    '<p style="margin:4px 0 0;font-size:11px;color:#94a3b8">Click image to view full size</p>' +
+                    ( options.length > 1
+                        ? '<button class="cs-modal-pick-btn" data-attach-id="' + esc( String( opt.attach_id ) ) + '" style="margin-top:10px;background:#16a34a;color:#fff;border:none;border-radius:5px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;width:100%">✓ Use this image</button>'
+                        : ''
+                    ) +
+                    '</div>'
+                ).join( '' ) +
+                '</div>' +
+                promptHtml +
+                '<div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc">' +
+                ( options.length === 1
+                    ? '<button class="cs-modal-accept" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:8px 22px;font-size:13px;font-weight:600;cursor:pointer">✓ Accept</button>'
+                    : ''
+                ) +
+                '<button class="cs-modal-regen-btn" style="background:#6366f1;color:#fff;border:none;border-radius:5px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">↺ Regenerate</button>' +
+                '<button class="cs-modal-cancel-btn" style="background:#fff;color:#64748b;border:1px solid #cbd5e1;border-radius:5px;padding:8px 18px;font-size:13px;cursor:pointer">✕ Cancel</button>' +
+                '</div>';
             overlay.style.display = 'block';
-            box.innerHTML = '<div style="padding:24px">' + options.map( ( opt, i ) =>
-                '<div style="margin-bottom:12px">' +
-                '<img src="' + esc( opt.thumb_url ) + '" style="max-width:100%;border-radius:6px;display:block;margin-bottom:8px">' +
-                '<button class="cs-modal-pick-btn" data-attach-id="' + esc( String( opt.attach_id ) ) + '" style="background:#1565c0;color:#fff;border:none;border-radius:5px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">✓ Use this image</button>' +
-                '</div>'
-            ).join( '' ) +
-            '<div style="margin-top:12px;display:flex;gap:8px">' +
-            '<button class="cs-modal-regen-btn" style="background:#fff;border:1px solid #cbd5e1;border-radius:5px;padding:8px 18px;font-size:13px;cursor:pointer">↺ Regenerate</button>' +
-            '<button class="cs-modal-cancel-btn" style="background:#fff;border:1px solid #cbd5e1;border-radius:5px;padding:8px 18px;font-size:13px;cursor:pointer">✕ Cancel</button>' +
-            '</div></div>';
+            box.querySelector( '.cs-modal-close-x' )?.addEventListener( 'click', _cancel );
+            box.querySelector( '.cs-modal-cancel-btn' )?.addEventListener( 'click', _cancel );
+            box.querySelector( '.cs-modal-accept' )?.addEventListener( 'click', () => {
+                overlay.style.display = 'none';
+                if ( _cb.onAccept ) _cb.onAccept( options[0].attach_id );
+            } );
+            box.querySelector( '.cs-modal-regen-btn' )?.addEventListener( 'click', () => {
+                overlay.style.display = 'none';
+                if ( _cb.onRegenerate ) _cb.onRegenerate();
+            } );
             box.querySelectorAll( '.cs-modal-pick-btn' ).forEach( b => {
                 b.addEventListener( 'click', () => { overlay.style.display = 'none'; if ( _cb.onAccept ) _cb.onAccept( b.dataset.attachId ); } );
             } );
-            box.querySelector( '.cs-modal-regen-btn' )?.addEventListener( 'click', () => { overlay.style.display = 'none'; if ( _cb.onRegenerate ) _cb.onRegenerate(); } );
-            box.querySelector( '.cs-modal-cancel-btn' )?.addEventListener( 'click', () => _cancel() );
         }
-        return { open };
+
+        function preview( imgUrl, title ) {
+            _cb = {};
+            box.innerHTML =
+                '<div style="background:#1d2327;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">' +
+                '<strong style="font-size:14px">🖼 ' + esc( title || 'Preview' ) + '</strong>' +
+                '<button class="cs-modal-close-x" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:0 4px">&times;</button>' +
+                '</div>' +
+                '<div style="padding:20px;text-align:center">' +
+                '<img src="' + esc( imgUrl ) + '" style="max-width:100%;height:auto;border-radius:6px;display:block;margin:0 auto">' +
+                '</div>' +
+                '<div style="display:flex;justify-content:flex-end;padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc">' +
+                '<button class="cs-modal-close-x2" style="background:#fff;color:#64748b;border:1px solid #cbd5e1;border-radius:5px;padding:8px 18px;font-size:13px;cursor:pointer">Close</button>' +
+                '</div>';
+            overlay.style.display = 'block';
+            box.querySelector( '.cs-modal-close-x' )?.addEventListener( 'click', () => { overlay.style.display = 'none'; } );
+            box.querySelector( '.cs-modal-close-x2' )?.addEventListener( 'click', () => { overlay.style.display = 'none'; } );
+        }
+
+        return { open, preview };
+    }
+
+    const STYLE_OPTIONS = [
+        { val: 'auto',                 label: '🎲 Auto — AI chooses'      },
+        { val: 'cinematic_poster',     label: '🎬 Cinematic Poster'        },
+        { val: 'photorealistic',       label: '📷 Photorealistic'          },
+        { val: 'editorial',            label: '📰 Editorial'               },
+        { val: 'technical_infographic',label: '📊 Technical Infographic'   },
+        { val: 'isometric',            label: '🏗 Isometric 3D'            },
+        { val: 'cartoon',              label: '🎨 Cartoon'                 },
+        { val: 'flat_vector',          label: '▲ Flat Vector'              },
+        { val: 'minimalist',           label: '⬜ Minimalist'              },
+    ];
+
+    function pickStyle( anchor ) {
+        return new Promise( resolve => {
+            const current = styleEl?.value || 'auto';
+
+            const picker = document.createElement( 'div' );
+            picker.style.cssText = 'position:absolute;z-index:100001;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:5px;min-width:240px';
+
+            const rect = anchor.getBoundingClientRect();
+            const top  = rect.bottom + window.scrollY + 6;
+            let   left = rect.left   + window.scrollX;
+            picker.style.top  = top  + 'px';
+            picker.style.left = left + 'px';
+
+            STYLE_OPTIONS.forEach( s => {
+                const b = document.createElement( 'button' );
+                b.type = 'button';
+                b.textContent = s.label;
+                const isActive = ( s.val === current );
+                b.style.cssText = 'border-radius:5px;padding:7px 10px;font-size:12px;cursor:pointer;text-align:left;white-space:nowrap;color:#334155;width:100%;'
+                    + ( isActive ? 'background:#eff6ff;border:2px solid #3b82f6;font-weight:600' : 'background:#f8fafc;border:1px solid #e2e8f0;font-weight:400' );
+                b.addEventListener( 'mouseenter', () => { if ( !isActive ) { b.style.background = '#f0f9ff'; b.style.borderColor = '#93c5fd'; } } );
+                b.addEventListener( 'mouseleave', () => { if ( !isActive ) { b.style.background = '#f8fafc'; b.style.borderColor = '#e2e8f0'; } } );
+                b.addEventListener( 'click', ( e ) => { e.stopPropagation(); cleanup(); resolve( s.val ); } );
+                picker.appendChild( b );
+            } );
+
+            document.body.appendChild( picker );
+
+            // Nudge left if it overflows the viewport.
+            const pr = picker.getBoundingClientRect();
+            if ( pr.right > window.innerWidth - 8 ) {
+                picker.style.left = Math.max( 8, window.innerWidth - pr.width - 8 ) + 'px';
+            }
+
+            function cleanup() {
+                picker.remove();
+                document.removeEventListener( 'click',   outsideClick );
+                document.removeEventListener( 'keydown', escKey );
+            }
+            function outsideClick( e ) {
+                if ( ! picker.contains( e.target ) ) { cleanup(); resolve( null ); }
+            }
+            function escKey( e ) { if ( e.key === 'Escape' ) { cleanup(); resolve( null ); } }
+            setTimeout( () => {
+                document.addEventListener( 'click',   outsideClick );
+                document.addEventListener( 'keydown', escKey );
+            }, 50 );
+        } );
     }
 
     function triggerGenerate( btn, forceVary = false ) {
-        // Lazily initialise modals if init() didn't run (e.g. called from scan panel).
         if ( ! imageModal ) imageModal = makeImageModal();
+        pickStyle( btn ).then( style => {
+            if ( style === null ) return;
+            enqueueJob( btn, () => _doGenerate( btn, forceVary, style ) );
+        } );
+    }
 
+    function _doGenerate( btn, forceVary, chosenStyle ) {
             const postId       = btn.dataset.postId;
             const statusEl     = document.getElementById( 'cs-ai-status-' + postId );
             const thumbEl      = document.getElementById( 'cs-ai-thumb-'  + postId );
             const quality      = document.getElementById( 'cs-ai-img-quality' )?.value || 'standard';
             const promptVendor = curVendor  || 'openai';
             const promptModel  = ( modelEl?.value || curModel || 'gpt-4o-mini' );
-            const promptStyle  = styleEl?.value || 'auto';
+            const promptStyle  = chosenStyle || styleEl?.value || 'auto';
             const noText       = document.getElementById( 'cs-ai-img-no-text' )?.checked ? '1' : '0';
 
             btn.disabled    = true;
             btn.textContent = '⏳ Writing prompt…';
             if ( statusEl ) statusEl.textContent = '';
-            if ( thumbEl )  { thumbEl.innerHTML = ''; thumbEl.style.width = ''; }
 
             // Step 1 — ask AI to write the image prompt.
             post( 'csdt_devtools_ai_image_write_prompt', { post_id: postId, prompt_vendor: promptVendor, prompt_model: promptModel, prompt_style: promptStyle, no_text: noText, force_vary: forceVary ? '1' : '0' } )
@@ -1875,6 +1976,7 @@
                     btn.textContent = '✨ Generate';
                     if ( ! res.success ) {
                         if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px">✗ ' + esc( res.data?.message || 'Failed to write prompt' ) + '</span>';
+                        jobSlotFree();
                         return;
                     }
                     const writtenPrompt = res.data?.prompt || '';
@@ -1891,21 +1993,23 @@
                                         btn.disabled    = false;
                                         btn.textContent = '✨ Generate';
                                         if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px">✗ ' + esc( startRes.data?.message || 'Failed to start' ) + '</span>';
+                                        jobSlotFree();
                                         return;
                                     }
                                     const jobId = startRes.data.job_id;
                                     let elapsed = 0;
-                                    const MAX_POLL_S = 300;
+                                    const MAX_POLL_S = 600;
                                     const showErr = ( msg ) => {
                                         btn.disabled    = false;
                                         btn.textContent = '✨ Generate';
                                         if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px" title="' + esc( msg ) + '">✗ ' + esc( msg ) + '</span>';
+                                        jobSlotFree();
                                     };
                                     const pollTimer = setInterval( () => {
                                         elapsed += 4;
                                         if ( elapsed > MAX_POLL_S ) {
                                             clearInterval( pollTimer );
-                                            showErr( 'Timed out after 5 min — check server error logs' );
+                                            showErr( 'Timed out after 10 min — check server error logs' );
                                             return;
                                         }
                                         const m = Math.floor( elapsed / 60 ), s = elapsed % 60;
@@ -1925,67 +2029,67 @@
                                                     showErr( pollRes.data?.error || 'Generation failed (no error detail — check PHP error log)' );
                                                     return;
                                                 }
-                                                const genRes = { success: true, data: pollRes.data.result };
-                                                handleGenResult( genRes );
+                                                handleGenResult( { success: true, data: pollRes.data.result } );
                                             } )
-                                            .catch( () => {} ); // swallow poll network errors — keep polling
+                                            .catch( () => {} );
                                     }, 4000 );
                                 } );
 
                             function handleGenResult( genRes ) {
+                                jobSlotFree(); // free the concurrency slot — image is ready for review
                                 btn.disabled = false;
                                 if ( ! genRes.success ) {
                                     btn.textContent = '✨ Generate';
                                     if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px">✗ ' + esc( genRes.data?.message || 'Failed' ) + '</span>';
                                     return;
                                 }
-                                    const options     = genRes.data.options || [];
-                                    const dallePrompt = genRes.data.prompt  || editedPrompt;
-                                    if ( ! options.length ) {
-                                        btn.textContent = '✨ Generate';
-                                        if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828">✗ No images returned</span>';
-                                        return;
-                                    }
-                                    btn.textContent = '↺ Regenerate';
-                                    const allIds = options.map( o => String( o.attach_id ) );
+                                const options     = genRes.data.options || [];
+                                const dallePrompt = genRes.data.prompt  || editedPrompt;
+                                if ( ! options.length ) {
+                                    btn.textContent = '✨ Generate';
+                                    if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828">✗ No images returned</span>';
+                                    return;
+                                }
+                                btn.textContent = '⏳ Ready — review pending…';
+                                if ( statusEl ) statusEl.innerHTML = '<span style="color:#6366f1;font-size:11px">⏳ Ready — awaiting review</span>';
+                                const allIds = options.map( o => String( o.attach_id ) );
+                                const postTitle = document.querySelector( '#cs-ai-row-' + postId + ' a' )?.textContent || 'Post #' + postId;
 
-                                    function doAccept( chosenId ) {
-                                        const discard = allIds.filter( id => id !== String( chosenId ) ).join( ',' );
-                                        if ( statusEl ) statusEl.innerHTML = '<span style="color:#94a3b8;font-size:11px">⏳ Setting…</span>';
-                                        post( 'csdt_devtools_ai_image_pick', { post_id: postId, attach_id: chosenId, discard } )
-                                            .then( pickRes => {
-                                                if ( pickRes.success ) {
-                                                    if ( thumbEl ) {
-                                                        thumbEl.style.width = '80px';
-                                                        thumbEl.innerHTML = `<img src="${esc(pickRes.data.thumb_url)}" style="width:80px;height:42px;object-fit:cover;border-radius:3px;border:1px solid #ddd;cursor:pointer" title="Click to view larger" class="cs-ai-thumb-preview" data-full-url="${esc(pickRes.data.thumb_url)}">`;
-                                                        thumbEl.querySelector( '.cs-ai-thumb-preview' )?.addEventListener( 'click', function () {
-                                                            imageModal.open( [ { thumb_url: this.dataset.fullUrl, attach_id: chosenId } ], {
-                                                                onAccept: () => {},
-                                                                onRegenerate: () => { btn.textContent = '✨ Generate'; triggerGenerate( btn, true ); },
-                                                                onCancel: () => {},
-                                                            }, dallePrompt );
-                                                        } );
-                                                    }
-                                                    if ( statusEl ) statusEl.innerHTML = '<span style="color:#2e7d32">✓ Set</span>';
+                                function doAccept( chosenId ) {
+                                    const discard = allIds.filter( id => id !== String( chosenId ) ).join( ',' );
+                                    if ( statusEl ) statusEl.innerHTML = '<span style="color:#94a3b8;font-size:11px">⏳ Setting…</span>';
+                                    post( 'csdt_devtools_ai_image_pick', { post_id: postId, attach_id: chosenId, discard } )
+                                        .then( pickRes => {
+                                            if ( pickRes.success ) {
+                                                btn.textContent = '↺ Regenerate';
+                                                if ( thumbEl ) {
+                                                    thumbEl.style.width = '80px';
+                                                    thumbEl.innerHTML = `<img src="${esc(pickRes.data.thumb_url)}" style="width:80px;height:42px;object-fit:cover;border-radius:3px;border:1px solid #ddd;cursor:pointer" title="Click to preview" class="cs-ai-thumb-preview" data-full-url="${esc(pickRes.data.full_url || pickRes.data.thumb_url)}">`;
+                                                    thumbEl.querySelector( '.cs-ai-thumb-preview' )?.addEventListener( 'click', function () {
+                                                        if ( imageModal ) imageModal.preview( this.dataset.fullUrl, postTitle );
+                                                    } );
                                                 }
-                                            } );
-                                    }
+                                                if ( statusEl ) statusEl.innerHTML = '<span style="color:#2e7d32">✓ Set</span>';
+                                            }
+                                        } );
+                                }
 
-                                    function doDiscard() {
-                                        post( 'csdt_devtools_ai_image_discard', { attach_ids: allIds.join( ',' ) } ).catch( () => {} );
-                                    }
+                                function doDiscard() {
+                                    post( 'csdt_devtools_ai_image_discard', { attach_ids: allIds.join( ',' ) } ).catch( () => {} );
+                                }
 
-                                    imageModal.open( options, {
-                                        onAccept:     ( chosenId ) => doAccept( chosenId ),
-                                        onRegenerate: () => { doDiscard(); btn.textContent = '✨ Generate'; triggerGenerate( btn, true ); },
-                                        onCancel:     () => { doDiscard(); btn.textContent = '✨ Generate'; if ( statusEl ) statusEl.textContent = ''; },
-                                    }, dallePrompt );
+                                enqueueReview( options, {
+                                    onAccept:     ( chosenId ) => doAccept( chosenId ),
+                                    onRegenerate: () => { doDiscard(); btn.textContent = '✨ Generate'; if ( statusEl ) statusEl.textContent = ''; triggerGenerate( btn, true ); },
+                                    onCancel:     () => { doDiscard(); btn.textContent = '✨ Generate'; if ( statusEl ) statusEl.textContent = ''; },
+                                }, dallePrompt, postTitle );
                             } // end handleGenResult
                     } )( writtenPrompt );
                 } )
                 .catch( e => {
                     btn.disabled    = false;
                     btn.textContent = '✨ Generate';
+                    jobSlotFree();
                     const netMsg = ( e?.message || '' ).toLowerCase().includes( 'load' ) || ( e?.message || '' ).toLowerCase().includes( 'network' ) || ( e?.message || '' ).toLowerCase().includes( 'fetch' )
                         ? 'Timed out — try again on WiFi'
                         : ( e?.message || 'Request failed' );

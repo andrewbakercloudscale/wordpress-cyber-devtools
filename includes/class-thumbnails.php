@@ -2128,6 +2128,7 @@ The text rule is passed in the user message — follow it exactly.';
 
             $thumb_id        = (int) get_post_thumbnail_id( $post_id );
             $thumb_url       = $thumb_id ? wp_get_attachment_image_url( $thumb_id, 'thumbnail' ) : null;
+            $full_url        = $thumb_id ? wp_get_attachment_url( $thumb_id ) : null;
             $thumb_post      = $thumb_id ? get_post( $thumb_id ) : null;
             $thumb_date_raw  = $thumb_post ? strtotime( $thumb_post->post_date ) : 0;
 
@@ -2142,6 +2143,7 @@ The text rule is passed in the user message — follow it exactly.';
                 'word_count'     => $word_count,
                 'has_thumb'      => (bool) $thumb_id,
                 'thumb_url'      => $thumb_url ?: null,
+                'full_url'       => $full_url ?: null,
                 'thumb_date_raw' => $thumb_date_raw,
                 'thumb_date'     => $thumb_date_raw ? gmdate( 'j M Y', $thumb_date_raw ) : null,
             ];
@@ -2261,14 +2263,21 @@ The text rule is passed in the user message — follow it exactly.';
 
         $style_instruction = isset( $style_map[ $style ] ) ? " Required visual style: {$style_map[$style]}." : '';
         $is_poster = ( $style === 'cinematic_poster' );
+        $icon_carveout = ' Brand ICON SHAPES (coffee cup, animal mascots, geometric marks) are visual symbols — they are exempt from this text rule and should be used.';
         $text_rule = $no_text
-            ? ' TEXT RULE: The finished image must contain ZERO text — no words, no letters, no numbers, no labels, no captions, no titles. Pure visual only.'
+            ? ' TEXT RULE: The finished image must contain ZERO rendered text — no words, letters, numbers, labels, captions, titles.' . $icon_carveout
             : ( $is_poster
-                ? ' TEXT RULE: Include ONE 2–3 word all-caps bold headline as the SOLE text element. Absolutely no subtitles, body copy, bullet points, captions, or other text.'
-                : ' TEXT RULE: Include ZERO text in the image — no headlines, titles, labels, captions, or descriptions. The article title is added separately by the publishing system.' );
+                ? ' TEXT RULE: Include ONE 2–3 word all-caps bold headline as the SOLE text element. Absolutely no subtitles, body copy, bullet points, captions, or other text.' . $icon_carveout
+                : ' TEXT RULE: Include ZERO text in the image — no headlines, titles, labels, captions, or descriptions. The article title is added separately by the publishing system.' . $icon_carveout );
 
         $vary_instruction = $force_vary
             ? ' IMPORTANT: The user just regenerated because they did not like the previous image. You MUST choose a completely different visual metaphor: different setting, different subject, different mood. If the previous prompt used a data centre or city, use a workshop, natural landscape, or organic environment instead. If it used an isometric style, use photorealistic. Never repeat the same type of scene.'
+            : '';
+
+        // Detect recognisable tech brand icons in this post and inject as a mandatory hint.
+        $logo_hint         = self::extract_tech_logos( $title, $full_body );
+        $icon_instruction  = $logo_hint
+            ? "\n\nICONS CONFIRMED in this article: {$logo_hint}. You MUST include these recognisable VISUAL ICON SHAPES as large, prominent foreground elements. Use the shapes as described — they contain no readable text."
             : '';
 
         // Pick a random compositional POV to inject into the generated prompt itself.
@@ -2285,7 +2294,21 @@ The text rule is passed in the user message — follow it exactly.';
         $pov_instruction = ' ' . $pov_pool[ array_rand( $pov_pool ) ];
 
         $system_msg   = self::get_img_system_prompt();
-        $user_msg   = "{$context_str}\n\nStep 1 — Read the ENTIRE article — title, angle, and conclusion — then identify: (a) which technology brands/products/protocols are mentioned, (b) the ROLE each plays in THIS SPECIFIC ARTICLE'S NARRATIVE — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n\nStep 2 — Write the gpt-image-2 prompt using those roles. For companies with logos (AWS, Cloudflare, Docker, etc.) use their actual iconic visual. For protocols and concepts (TCP, QUIC, HTTP/3, etc.) use a concrete physical metaphor for what they DO. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.\n\nOutput ONLY the final gpt-image-2 prompt.{$style_instruction}{$text_rule}{$pov_instruction}{$vary_instruction}";
+        $step1 = "Step 1 — Read the ENTIRE article — title, angle, and conclusion — then identify:\n"
+            . "(a) Which technology brands/products/protocols are mentioned.\n"
+            . "(b) The ROLE each plays — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n"
+            . "(c) The CORE TECHNICAL CONCEPT expressed as a concrete physical metaphor. Examples: \"write throughput saturation\" = a pipe under enormous pressure with data gushing through a bottleneck; \"query optimisation\" = a magnifying glass examining branching path forks; \"cache eviction\" = shelves rapidly emptying; \"replication lag\" = one runner far behind another; \"memory leak\" = a vessel slowly draining; \"rate limiting\" = a gate throttling a queue; \"tuning / configuration\" = hands adjusting precise calibration dials. Always translate the concept into something PHYSICAL and VISUAL.";
+        $step2 = "Step 2 — Identify the PRIMARY DOMAIN, then choose imagery accordingly — DO NOT default to circuit boards or server rooms unless the article is specifically about hardware or networking:\n"
+            . "- PEOPLE / ORGANISATION / TALENT / MANAGEMENT / HR: real humans, diverse teams, office environments, org-chart structures, career ladders — NO circuit boards.\n"
+            . "- SECURITY / HACKING / VULNERABILITIES: locks, shields, vaults, shadowy figures, glowing threat indicators.\n"
+            . "- PERFORMANCE / SPEED / OPTIMISATION: racing, motion blur, turbines, gauges at maximum, physical speed metaphors.\n"
+            . "- DATABASE / STORAGE: the brand icon (elephant, dolphin, etc.) combined with the concept metaphor from (c) above.\n"
+            . "- CLOUD / INFRA / DEVOPS: server icons, cloud shapes, pipeline diagrams, deployment arrows.\n"
+            . "- CODE / LANGUAGES / FRAMEWORKS: terminal screens, code glows, brand icons.\n"
+            . "- BUSINESS / STRATEGY / MONEY: chess pieces, boardrooms, graphs, financial objects.\n"
+            . "- AI / ML / DATA SCIENCE: neural network nodes, glowing brain shapes, data streams.\n"
+            . "Write the prompt using the identified domain, the concept metaphor from (c), and the champion/struggling/disruptor roles. For companies with recognisable logos use their actual iconic visual. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.";
+        $user_msg = "{$context_str}\n\n{$step1}\n\n{$step2}{$icon_instruction}\n\nOutput ONLY the final gpt-image-2 prompt.{$style_instruction}{$text_rule}{$pov_instruction}{$vary_instruction}";
 
         try {
             switch ( $prompt_vendor ) {
@@ -2332,7 +2355,7 @@ The text rule is passed in the user message — follow it exactly.';
         }
 
         $job_id = uniqid( 'csdt_img_', true );
-        set_transient( "csdt_img_job_{$job_id}", [
+        update_option( "csdt_img_job_{$job_id}", [
             'status'        => 'pending',
             'post_id'       => $post_id,
             'prompt'        => $prompt,
@@ -2341,7 +2364,8 @@ The text rule is passed in the user message — follow it exactly.';
             'prompt_vendor' => $prompt_vendor,
             'prompt_model'  => $prompt_model,
             'prompt_style'  => $prompt_style,
-        ], 600 );
+            'created_at'    => time(),
+        ], false );
 
         // Fire non-blocking loopback so the generation runs in its own PHP process.
         $cookies = array_map(
@@ -2375,11 +2399,11 @@ The text rule is passed in the user message — follow it exactly.';
         $job_id = isset( $_POST['job_id'] ) ? sanitize_text_field( wp_unslash( $_POST['job_id'] ) ) : '';
         if ( ! $job_id ) { wp_die(); }
 
-        $job = get_transient( "csdt_img_job_{$job_id}" );
+        $job = get_option( "csdt_img_job_{$job_id}", false );
         if ( ! $job || 'pending' !== $job['status'] ) { wp_die(); }
 
         $job['status'] = 'processing';
-        set_transient( "csdt_img_job_{$job_id}", $job, 600 );
+        update_option( "csdt_img_job_{$job_id}", $job, false );
 
         set_time_limit( 0 );
 
@@ -2395,7 +2419,7 @@ The text rule is passed in the user message — follow it exactly.';
         if ( ! $post ) {
             $job['status'] = 'error';
             $job['error']  = 'Post not found.';
-            set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+            update_option( "csdt_img_job_{$job_id}", $job, false );
             wp_die();
         }
 
@@ -2430,11 +2454,17 @@ The text rule is passed in the user message — follow it exactly.';
             ];
             $style_instr = isset( $style_map[ $prompt_style ] ) ? " Required visual style: {$style_map[$prompt_style]}." : '';
             $is_poster   = ( 'cinematic_poster' === $prompt_style );
+            $icon_carveout = ' Brand ICON SHAPES (coffee cup, animal mascots, geometric marks) are visual symbols — they are exempt from this text rule and should be used.';
             $text_rule   = $no_text
-                ? ' TEXT RULE: The finished image must contain ZERO text — no words, no letters, no numbers, no labels, no captions, no titles. Pure visual only.'
+                ? ' TEXT RULE: The finished image must contain ZERO rendered text — no words, letters, numbers, labels, captions, titles.' . $icon_carveout
                 : ( $is_poster
-                    ? ' TEXT RULE: Include ONE 2–3 word all-caps bold headline as the SOLE text element. Absolutely no subtitles, body copy, bullet points, captions, or other text.'
-                    : ' TEXT RULE: Include ZERO text in the image — no headlines, titles, labels, captions, or descriptions. The article title is added separately by the publishing system.' );
+                    ? ' TEXT RULE: Include ONE 2–3 word all-caps bold headline as the SOLE text element. Absolutely no subtitles, body copy, bullet points, captions, or other text.' . $icon_carveout
+                    : ' TEXT RULE: Include ZERO text in the image — no headlines, titles, labels, captions, or descriptions. The article title is added separately by the publishing system.' . $icon_carveout );
+
+            $logo_hint        = self::extract_tech_logos( $title, $full_body );
+            $icon_instruction = $logo_hint
+                ? "\n\nICONS CONFIRMED in this article: {$logo_hint}. You MUST include these recognisable VISUAL ICON SHAPES as large, prominent foreground elements. Use the shapes as described — they contain no readable text."
+                : '';
 
             $pov_pool = [
                 'MANDATORY COMPOSITION: extreme macro close-up — fill the entire frame with surface detail, no background visible.',
@@ -2446,7 +2476,21 @@ The text rule is passed in the user message — follow it exactly.';
             ];
 
             $system_msg = self::get_img_system_prompt();
-            $user_msg   = "{$context_str}\n\nStep 1 — Read the ENTIRE article — title, angle, and conclusion — then identify: (a) which technology brands/products/protocols are mentioned, (b) the ROLE each plays in THIS SPECIFIC ARTICLE'S NARRATIVE — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n\nStep 2 — Write the gpt-image-2 prompt using those roles. For companies with logos (AWS, Cloudflare, Docker, etc.) use their actual iconic visual. For protocols and concepts (TCP, QUIC, HTTP/3, etc.) use a concrete physical metaphor for what they DO. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.\n\nOutput ONLY the final gpt-image-2 prompt.{$style_instr}{$text_rule} " . $pov_pool[ array_rand( $pov_pool ) ];
+            $step1 = "Step 1 — Read the ENTIRE article — title, angle, and conclusion — then identify:\n"
+                . "(a) Which technology brands/products/protocols are mentioned.\n"
+                . "(b) The ROLE each plays — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n"
+                . "(c) The CORE TECHNICAL CONCEPT expressed as a concrete physical metaphor. Examples: \"write throughput saturation\" = a pipe under enormous pressure with data gushing through a bottleneck; \"query optimisation\" = a magnifying glass examining branching path forks; \"cache eviction\" = shelves rapidly emptying; \"replication lag\" = one runner far behind another; \"memory leak\" = a vessel slowly draining; \"rate limiting\" = a gate throttling a queue; \"tuning / configuration\" = hands adjusting precise calibration dials. Always translate the concept into something PHYSICAL and VISUAL.";
+            $step2 = "Step 2 — Identify the PRIMARY DOMAIN, then choose imagery accordingly — DO NOT default to circuit boards or server rooms unless the article is specifically about hardware or networking:\n"
+                . "- PEOPLE / ORGANISATION / TALENT / MANAGEMENT / HR: real humans, diverse teams, office environments, org-chart structures, career ladders — NO circuit boards.\n"
+                . "- SECURITY / HACKING / VULNERABILITIES: locks, shields, vaults, shadowy figures, glowing threat indicators.\n"
+                . "- PERFORMANCE / SPEED / OPTIMISATION: racing, motion blur, turbines, gauges at maximum, physical speed metaphors.\n"
+                . "- DATABASE / STORAGE: the brand icon (elephant, dolphin, etc.) combined with the concept metaphor from (c) above.\n"
+                . "- CLOUD / INFRA / DEVOPS: server icons, cloud shapes, pipeline diagrams, deployment arrows.\n"
+                . "- CODE / LANGUAGES / FRAMEWORKS: terminal screens, code glows, brand icons.\n"
+                . "- BUSINESS / STRATEGY / MONEY: chess pieces, boardrooms, graphs, financial objects.\n"
+                . "- AI / ML / DATA SCIENCE: neural network nodes, glowing brain shapes, data streams.\n"
+                . "Write the prompt using the identified domain, the concept metaphor from (c), and the champion/struggling/disruptor roles. For companies with recognisable logos use their actual iconic visual. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.";
+            $user_msg = "{$context_str}\n\n{$step1}\n\n{$step2}{$icon_instruction}\n\nOutput ONLY the final gpt-image-2 prompt.{$style_instr}{$text_rule} " . $pov_pool[ array_rand( $pov_pool ) ];
 
             try {
                 switch ( $prompt_vendor ) {
@@ -2466,7 +2510,7 @@ The text rule is passed in the user message — follow it exactly.';
             } catch ( \RuntimeException $e ) {
                 $job['status'] = 'error';
                 $job['error']  = $e->getMessage();
-                set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+                update_option( "csdt_img_job_{$job_id}", $job, false );
                 wp_die();
             }
         }
@@ -2484,7 +2528,7 @@ The text rule is passed in the user message — follow it exactly.';
         } catch ( \RuntimeException $e ) {
             $job['status'] = 'error';
             $job['error']  = $e->getMessage();
-            set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+            update_option( "csdt_img_job_{$job_id}", $job, false );
             wp_die();
         }
 
@@ -2494,7 +2538,7 @@ The text rule is passed in the user message — follow it exactly.';
         if ( ! $tmp_jpg ) {
             $job['status'] = 'error';
             $job['error']  = 'Image conversion failed.';
-            set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+            update_option( "csdt_img_job_{$job_id}", $job, false );
             wp_die();
         }
 
@@ -2517,7 +2561,7 @@ The text rule is passed in the user message — follow it exactly.';
         if ( is_wp_error( $attach_id ) ) {
             $job['status'] = 'error';
             $job['error']  = $attach_id->get_error_message();
-            set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+            update_option( "csdt_img_job_{$job_id}", $job, false );
             wp_die();
         }
 
@@ -2532,7 +2576,7 @@ The text rule is passed in the user message — follow it exactly.';
             ] ],
             'prompt' => $prompt,
         ];
-        set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+        update_option( "csdt_img_job_{$job_id}", $job, false );
         wp_die();
     }
 
@@ -2545,11 +2589,17 @@ The text rule is passed in the user message — follow it exactly.';
         }
 
         $job_id = isset( $_POST['job_id'] ) ? sanitize_text_field( wp_unslash( $_POST['job_id'] ) ) : '';
-        $job    = get_transient( "csdt_img_job_{$job_id}" );
+        $job    = get_option( "csdt_img_job_{$job_id}", false );
 
-        if ( ! $job ) {
+        if ( ! $job || ( isset( $job['created_at'] ) && ( time() - $job['created_at'] ) > 1800 ) ) {
+            if ( $job ) { delete_option( "csdt_img_job_{$job_id}" ); }
             wp_send_json_error( [ 'status' => 'expired' ] );
             return;
+        }
+
+        // Delete the option once the browser has received the terminal state.
+        if ( in_array( $job['status'], [ 'done', 'error' ], true ) ) {
+            delete_option( "csdt_img_job_{$job_id}" );
         }
 
         wp_send_json_success( [
@@ -2608,6 +2658,7 @@ The text rule is passed in the user message — follow it exactly.';
 
         wp_send_json_success( [
             'thumb_url' => wp_get_attachment_image_url( $attach_id, 'medium' ),
+            'full_url'  => wp_get_attachment_url( $attach_id ),
         ] );
     }
 
@@ -2629,33 +2680,56 @@ The text rule is passed in the user message — follow it exactly.';
         wp_send_json_success();
     }
 
-    // ─── Helper: extract recognisable tech brand/logo names from post text ──
+    // ─── Helper: extract tech brand visual icons from post text ─────────────
+    // Returns a comma-separated string like "Java (steaming coffee cup), Docker (blue whale)"
+    // so the prompt-writer AI knows which VISUAL SHAPES to include (not text labels).
 
     private static function extract_tech_logos( string ...$texts ): string {
         $haystack = mb_strtolower( implode( ' ', $texts ) );
+
+        // pattern => 'Label (icon description to give the image AI)'
         $brands = [
-            'AWS'            => 'aws amazon',
-            'Amazon'         => 'amazon',
-            'Azure'          => 'azure microsoft',
-            'Google Cloud'   => 'google cloud gcp',
-            'Cloudflare'     => 'cloudflare',
-            'Raspberry Pi'   => 'raspberry pi raspi',
-            'ARM'            => '\barm\b',
-            'Docker'         => 'docker',
-            'Kubernetes'     => 'kubernetes k8s',
-            'Nginx'          => 'nginx',
-            'MySQL'          => 'mysql',
-            'PostgreSQL'     => 'postgresql postgres',
-            'Redis'          => 'redis',
-            'Python'         => 'python',
-            'WordPress'      => 'wordpress',
-            'GitHub'         => 'github',
-            'Linux'          => 'linux',
-            'Intel'          => 'intel',
-            'NVIDIA'         => 'nvidia',
+            'java\b(?!script)'                  => 'Java (a steaming coffee cup with a distinctive rounded handle)',
+            'javascript\b|node\.?js\b|nodejs\b' => 'JavaScript/Node.js (a bold yellow hexagon)',
+            'typescript\b'                       => 'TypeScript (a blue angular gemstone crystal)',
+            '\bpython\b'                         => 'Python (two intertwined serpents, one blue and one yellow)',
+            '\bdocker\b'                         => 'Docker (a smiling blue whale with colourful shipping containers stacked on its back)',
+            'kubernetes\b|\bk8s\b'               => 'Kubernetes (a ship\'s steering wheel / helm)',
+            '\breact\b|reactjs\b'                => 'React (a blue atom symbol with three orbital ellipse rings)',
+            'vue\.?js\b|vuejs\b'                 => 'Vue.js (a bright green V-shaped mountain peak)',
+            '\bangular\b'                        => 'Angular (a red faceted shield)',
+            'golang\b|go lang\b'                 => 'Go (a friendly sky-blue gopher mascot)',
+            '\brust\b(?! belt| proof)'           => 'Rust (an orange gear wheel with a crab silhouette)',
+            '\bphp\b'                            => 'PHP (a purple elephant silhouette)',
+            '\bruby\b(?! gem\b)'                 => 'Ruby (a faceted red gemstone)',
+            '\bswift\b'                          => 'Swift (an orange swooping bird in flight)',
+            '\blinux\b'                          => 'Linux (a friendly black-and-white Tux penguin)',
+            '\bmysql\b'                          => 'MySQL (a blue leaping dolphin)',
+            'postgresql\b|postgres\b'            => 'PostgreSQL (a blue elephant head silhouette)',
+            '\bredis\b'                          => 'Redis (red stacked disc layers)',
+            '\bmongodb\b'                        => 'MongoDB (a bright green leaf)',
+            '\baws\b|amazon web services'        => 'AWS (an orange arc-smile beneath a golden cloud)',
+            '\bcloudflare\b'                     => 'Cloudflare (a layered orange cloud)',
+            '\bgithub\b'                         => 'GitHub (a dark octocat — octopus with a cat face)',
+            '\bwordpress\b'                      => 'WordPress (a bold blue W inside a circle)',
+            'google cloud\b|\bgcp\b'             => 'Google Cloud (four coloured geometric shapes in red, blue, yellow, green)',
+            '\bazure\b'                          => 'Azure (an angular blue A-shaped mountain form)',
+            '\bnvidia\b'                         => 'NVIDIA (a bold green geometric eye shape)',
+            'raspberry pi\b'                     => 'Raspberry Pi (a red raspberry silhouette)',
+            '\bterraform\b'                      => 'Terraform (a purple faceted diamond-mountain)',
+            '\bnginx\b'                          => 'Nginx (a vivid green N emblem)',
+            'spring boot\b|\bspring\b'           => 'Spring Boot (a bright green leaf on a spring coil)',
+            '\bsvelte\b'                         => 'Svelte (an orange flame)',
+            '\bnext\.?js\b'                      => 'Next.js (a bold black N letterform)',
+            '\bvercel\b'                         => 'Vercel (a bold black upward triangle)',
+            '\bdeno\b'                           => 'Deno (a cartoon dinosaur)',
+            '\bfigma\b'                          => 'Figma (overlapping coloured circles)',
+            '\bintel\b'                          => 'Intel (a dark blue swooping arc)',
+            '\barm\b'                            => 'ARM (a bold blue A-shaped processor mark)',
         ];
+
         $found = [];
-        foreach ( $brands as $label => $pattern ) {
+        foreach ( $brands as $pattern => $label ) {
             if ( preg_match( '/' . $pattern . '/i', $haystack ) ) {
                 $found[] = $label;
             }
