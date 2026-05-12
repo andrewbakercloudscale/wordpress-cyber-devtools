@@ -80,7 +80,10 @@ class CSDT_CSP {
             'script-src'      => $script_src,
             // script-src-elem (CSP3) is checked independently — always include 'self' so WP's
             // own scripts (wp-includes, theme JS) are never blocked when a service map adds this.
-            'script-src-elem' => array_merge( [ "'self'" ], $use_nonces ? [ "'nonce-" . self::get_csp_nonce() . "'", "'strict-dynamic'" ] : [ "'unsafe-inline'" ] ),
+            // No 'strict-dynamic' here: that keyword silently ignores all host/self allowlisting
+            // (per CSP spec), which blocks Cloudflare's edge-injected /cdn-cgi/ scripts that
+            // never receive a nonce. Nonces alone are sufficient for script-src-elem.
+            'script-src-elem' => array_merge( [ "'self'" ], $use_nonces ? [ "'nonce-" . self::get_csp_nonce() . "'" ] : [ "'unsafe-inline'" ] ),
             // style-src-elem must also include 'self' so theme stylesheets are never blocked.
             'style-src-elem'  => [ "'self'", "'unsafe-inline'" ],
             'style-src'       => [ "'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com' ],

@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.842
+ * Version: 1.9.847
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.842';
+    const VERSION      = '1.9.847';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -390,9 +390,7 @@ class CloudScale_DevTools {
         add_action( 'admin_notices',   [ 'CSDT_Thumbnails', 'social_format_admin_notice' ] );
         // Serve platform-specific og:image based on crawler User-Agent.
         add_action( 'wp_head', [ 'CSDT_Thumbnails', 'output_crawler_og_image' ], 1 );
-        if ( get_option( 'csdt_ads_dedup', '0' ) === '1' ) {
-            add_action( 'wp_head', [ __CLASS__, 'output_ads_dedup_script' ], 1 );
-        }
+        add_action( 'wp_head', [ __CLASS__, 'output_ads_dedup_script' ], 0 );
         if ( get_option( 'csdt_crossorigin_scripts', '0' ) === '1' ) {
             add_filter( 'script_loader_tag', [ __CLASS__, 'add_crossorigin_to_external_scripts' ], 10, 3 );
         }
@@ -4522,7 +4520,7 @@ class CloudScale_DevTools {
                     [ 'name' => 'Session URL',       'rec' => 'Required',    'html' => '<code>POST {session_url}</code><br>Body: <code>{ "secret": "...", "role": "your_name", "ttl": 1200 }</code><br>Returns auth cookies to inject into Playwright context. TTL max is 3600 seconds.' ],
                     [ 'name' => 'Logout URL',        'rec' => 'Recommended', 'html' => '<code>POST {logout_url}</code><br>Body: <code>{ "secret": "...", "role": "your_name" }</code> (or add <code>"session_token": "..."</code> to kill only that session). Call this in afterAll to clean up.' ],
                     [ 'name' => 'Security',          'rec' => 'Info',        'html' => 'Both the URL path token (32 random chars) and the shared secret are required to obtain a session. After 5 bad secret attempts the API locks for 10 minutes and sends an ntfy alert. Never commit the secret to git.' ],
-                    [ 'name' => 'Block Basic Auth',  'rec' => 'Recommended', 'html' => 'WordPress Application Passwords allow REST API authentication via HTTP Basic Auth (<code>Authorization: Basic base64(user:app_password)</code>). This completely bypasses 2FA — an attacker who steals an app password gets full REST API access with no second factor.<br><br>The <strong>Block Basic Auth</strong> toggle disables app passwords site-wide so no user can create or use one. Your test accounts are unaffected — they authenticate via server-side session cookies, not Basic Auth.<br><br>To roll back: uncheck the toggle. Nothing is deleted.' ],
+                    [ 'name' => 'Block Basic Auth',  'rec' => 'Recommended', 'html' => '<strong>What are app passwords?</strong><br>WordPress lets any user generate an "Application Password" under their profile. External tools then send <code>Authorization: Basic username:app_password</code> with every REST API request — no login form, no 2FA.<br><br><strong>The security risk</strong><br>App passwords completely bypass 2FA. An attacker who leaks one gets full REST API access as that user, forever, with no second factor to stop them.<br><br><strong>Enable the block if:</strong><ul style="margin:.4em 0 .4em 1.2em;line-height:1.8"><li>You have 2FA enabled and want it to actually protect the account</li><li>You do not use the WordPress mobile app to post</li><li>No external service (Zapier, IFTTT, a headless CMS, a backup tool) authenticates with an app password</li></ul><strong>Leave it off if:</strong><ul style="margin:.4em 0 .4em 1.2em;line-height:1.8"><li>You publish from the WordPress iPhone/Android app</li><li>A third-party service is connected via REST API + app password</li></ul><strong>Check "App passwords in use" first.</strong> If the counter shows 0, you can safely enable the block with zero impact. If it shows &gt;0, identify which integration uses them before blocking.<br><br><em>Test accounts are unaffected — they use server-side session cookies, not Basic Auth.</em>' ],
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
@@ -4604,19 +4602,37 @@ class CloudScale_DevTools {
                     </div>
 
                     <!-- Block Basic Auth toggle -->
+                    <?php
+                    $app_pw_usage   = CSDT_Test_Accounts::get_app_password_usage();
+                    $app_pw_users   = $app_pw_usage['users'];
+                    $app_pw_total   = $app_pw_usage['passwords'];
+                    if ( $app_pw_total === 0 ) {
+                        $usage_badge_bg    = '#f0fdf4'; $usage_badge_border = '#86efac'; $usage_badge_color = '#166534';
+                        $usage_badge_text  = '✓ No app passwords in use — safe to enable block';
+                    } else {
+                        $usage_badge_bg    = '#fef2f2'; $usage_badge_border = '#fca5a5'; $usage_badge_color = '#991b1b';
+                        $usage_badge_text  = sprintf(
+                            _n( '%d app password across %d user — identify the integration before blocking', '%d app passwords across %d users — identify the integrations before blocking', $app_pw_total, 'cloudscale-devtools' ),
+                            $app_pw_total, $app_pw_users
+                        );
+                    }
+                    ?>
                     <div class="cs-sec-row" style="margin-top:8px;">
                         <span class="cs-sec-label"><?php esc_html_e( 'Block Basic Auth:', 'cloudscale-devtools' ); ?></span>
                         <div class="cs-sec-control">
+                            <div id="cs-app-pw-usage-badge" style="display:inline-block;background:<?php echo esc_attr( $usage_badge_bg ); ?>;border:1px solid <?php echo esc_attr( $usage_badge_border ); ?>;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:<?php echo esc_attr( $usage_badge_color ); ?>;margin-bottom:8px;">
+                                <?php echo esc_html( $usage_badge_text ); ?>
+                            </div>
                             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                                 <label class="cs-toggle-label" style="margin:0;">
                                     <input type="checkbox" id="cs-block-basic-auth-toggle" <?php checked( get_option( 'csdt_block_basic_auth', '0' ), '1' ); ?>>
                                     <span class="cs-toggle-switch"></span>
-                                    <span class="cs-toggle-text"><?php esc_html_e( 'Disable REST API app passwords / Basic Auth for all users', 'cloudscale-devtools' ); ?></span>
+                                    <span class="cs-toggle-text"><?php esc_html_e( 'Block all app passwords / Basic Auth', 'cloudscale-devtools' ); ?></span>
                                 </label>
                                 <button type="button" id="cs-block-basic-auth-save" class="cs-btn-secondary cs-btn-sm"><?php esc_html_e( 'Save', 'cloudscale-devtools' ); ?></button>
                                 <span id="cs-block-basic-auth-hint" style="font-size:12px;color:#6b7280;"></span>
                             </div>
-                            <span class="cs-hint" style="margin-top:4px;"><?php esc_html_e( 'Session-based test auth is unaffected. Roll back by unchecking and saving.', 'cloudscale-devtools' ); ?></span>
+                            <span class="cs-hint" style="margin-top:4px;"><?php esc_html_e( 'Enable if you use 2FA and don\'t publish via the WP mobile app or any external REST API integration. Test account sessions are unaffected.', 'cloudscale-devtools' ); ?></span>
                         </div>
                     </div>
                     <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline auth block button handler; wp_add_inline_script not available at this render point ?>
@@ -4645,6 +4661,18 @@ class CloudScale_DevTools {
                                     try { resp = JSON.parse(res.txt); } catch(e) {}
                                     if (resp && resp.success) {
                                         if (hint) { hint.textContent = '✓ Saved'; hint.style.color = '#166534'; setTimeout(function(){ hint.textContent = ''; }, 2000); }
+                                        var usage = resp.data && resp.data.usage;
+                                        var badge = document.getElementById('cs-app-pw-usage-badge');
+                                        if (badge && usage) {
+                                            var n = usage.passwords, u = usage.users;
+                                            if (n === 0) {
+                                                badge.style.background = '#f0fdf4'; badge.style.borderColor = '#86efac'; badge.style.color = '#166534';
+                                                badge.textContent = '✓ No app passwords in use — safe to enable block';
+                                            } else {
+                                                badge.style.background = '#fef2f2'; badge.style.borderColor = '#fca5a5'; badge.style.color = '#991b1b';
+                                                badge.textContent = n + ' app password' + (n !== 1 ? 's' : '') + ' across ' + u + ' user' + (u !== 1 ? 's' : '') + ' — identify the integration' + (n !== 1 ? 's' : '') + ' before blocking';
+                                            }
+                                        }
                                     } else {
                                         var msg = resp ? (resp.data || 'Unknown error') : 'Server error (HTTP ' + res.status + ')';
                                         if (hint) { hint.textContent = '✗ ' + msg; hint.style.color = '#dc2626'; }
@@ -5897,13 +5925,23 @@ class CloudScale_DevTools {
         ?>
 <script>
 (function(){
-    window.adsbygoogle=window.adsbygoogle||[];
-    var _orig=window.adsbygoogle.push.bind(window.adsbygoogle);
-    var _pageLevelDone=false;
-    window.adsbygoogle.push=function(o){
-        if(o&&o.enable_page_level_ads){if(_pageLevelDone)return;_pageLevelDone=true;}
-        return _orig(o);
-    };
+    var _done=false;
+    function wrap(arr){
+        if(!arr||arr.__adsDedupWrapped)return;
+        arr.__adsDedupWrapped=true;
+        var _p=arr.push.bind(arr);
+        arr.push=function(o){
+            if(o&&o.enable_page_level_ads){if(_done)return;_done=true;}
+            return _p(o);
+        };
+    }
+    // Wrap the initial placeholder array immediately.
+    var _cur=window.adsbygoogle=window.adsbygoogle||[];
+    wrap(_cur);
+    // Re-wrap whenever adsbygoogle.js replaces window.adsbygoogle with its own object.
+    try{Object.defineProperty(window,'adsbygoogle',{configurable:true,get:function(){return _cur;},set:function(v){_cur=v;wrap(_cur);}});}catch(e){}
+    // Also guard against bfcache page restores re-triggering the library's own push.
+    window.addEventListener('pageshow',function(e){if(e.persisted){_done=true;}});
 }());
 </script>
         <?php

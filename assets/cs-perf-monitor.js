@@ -61,25 +61,30 @@
     (function initEditorDebug() {
         var origFetch = window.fetch;
         window.fetch = function (input, init) {
-            var method = (init && init.method) || 'GET';
-            var url    = typeof input === 'string' ? input : (input && input.url) || String(input);
-            var t0     = performance.now();
+            var method  = (init && init.method) || 'GET';
+            var url     = typeof input === 'string' ? input : (input && input.url) || String(input);
+            var t0      = performance.now();
+            // For admin-ajax.php POSTs, capture the action name from FormData so failures are self-diagnosing.
+            var ajaxAction = '';
+            if (method === 'POST' && url.indexOf('admin-ajax.php') !== -1 && init && init.body instanceof FormData) {
+                try { ajaxAction = init.body.get('action') || ''; } catch (ex) { /* ignore */ }
+            }
             return origFetch.apply(this, arguments).then(function (resp) {
                 var dur = Math.round(performance.now() - t0);
                 var ok  = resp.ok;
                 if (!ok) {
                     // Clone to read body without consuming the original
                     resp.clone().text().then(function (body) {
-                        pushEditorLog({ type:'fail', method:method, url:url, status:resp.status, dur:dur, detail:body.slice(0,300) });
+                        pushEditorLog({ type:'fail', method:method, url:url, action:ajaxAction, status:resp.status, dur:dur, detail:body.slice(0,300) });
                     }).catch(function () {
-                        pushEditorLog({ type:'fail', method:method, url:url, status:resp.status, dur:dur });
+                        pushEditorLog({ type:'fail', method:method, url:url, action:ajaxAction, status:resp.status, dur:dur });
                     });
                 } else {
-                    pushEditorLog({ type:'ok', method:method, url:url, status:resp.status, dur:dur });
+                    pushEditorLog({ type:'ok', method:method, url:url, action:ajaxAction, status:resp.status, dur:dur });
                 }
                 return resp;
             }, function (err) {
-                pushEditorLog({ type:'fail', method:method, url:url, status:'ERR', dur:Math.round(performance.now()-t0), detail:String(err) });
+                pushEditorLog({ type:'fail', method:method, url:url, action:ajaxAction, status:'ERR', dur:Math.round(performance.now()-t0), detail:String(err) });
                 throw err;
             });
         };
@@ -1468,9 +1473,10 @@
         // Editor fetch failures and JS errors
         editorLogs.forEach(function (e) {
             if (e.type === 'fail') {
-                var path = (e.url||'').replace(window.location.origin,'').split('?')[0];
+                var path       = (e.url||'').replace(window.location.origin,'').split('?')[0];
+                var actionHint = e.action ? ' [action: ' + e.action + ']' : '';
                 issuesList.push({ sev: 'critical', tab: 'editor',
-                    title: 'Editor request failed — ' + (e.method||'GET') + ' ' + path + ' → ' + e.status,
+                    title: 'Editor request failed — ' + (e.method||'GET') + ' ' + path + actionHint + ' → ' + e.status,
                     detail: e.detail ? e.detail.slice(0,100) : '', plugin: '' });
             } else if (e.type === 'jserr') {
                 var isCrossOrigin = /^script error\./i.test(e.detail || '');

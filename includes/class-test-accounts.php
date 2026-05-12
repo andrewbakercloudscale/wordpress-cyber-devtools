@@ -554,13 +554,40 @@ class CSDT_Test_Accounts {
         ] );
     }
 
+    /**
+     * Returns the number of non-test users who have at least one app password, plus the total password count.
+     *
+     * @return array{ users: int, passwords: int }
+     */
+    public static function get_app_password_usage(): array {
+        global $wpdb;
+        $rows = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+            "SELECT user_id, meta_value FROM {$wpdb->usermeta}
+             WHERE meta_key = '_application_passwords' AND meta_value NOT LIKE 'a:0:%'"
+        );
+        $users = 0;
+        $total = 0;
+        foreach ( $rows as $row ) {
+            $test = get_user_meta( (int) $row->user_id, 'csdt_test_account', true );
+            if ( $test === '1' ) {
+                continue;
+            }
+            $list = maybe_unserialize( $row->meta_value );
+            if ( is_array( $list ) && count( $list ) > 0 ) {
+                $users++;
+                $total += count( $list );
+            }
+        }
+        return [ 'users' => $users, 'passwords' => $total ];
+    }
+
     public static function ajax_toggle_block_basic_auth(): void {
         if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Forbidden', 403 ); }
         check_ajax_referer( 'csdt_devtools_login_nonce', 'nonce' );
 
         $enabled = ( $_POST['enabled'] ?? '0' ) === '1' ? '1' : '0';
         update_option( 'csdt_block_basic_auth', $enabled );
-        wp_send_json_success( [ 'enabled' => $enabled ] );
+        wp_send_json_success( [ 'enabled' => $enabled, 'usage' => self::get_app_password_usage() ] );
     }
 
     public static function filter_app_pw_for_user( $available, $user ): bool {
