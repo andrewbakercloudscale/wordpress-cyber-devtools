@@ -1307,7 +1307,7 @@
 } )();
 
 /* ── AI Image Generator ──────────────────────────────────────────────────────
-   DALL-E 3 image generation for posts without a featured image.
+   gpt-image-2 image generation for posts without a featured image.
  */
 ( function () {
     'use strict';
@@ -1363,7 +1363,7 @@
             none:      [],
         };
         const KEY_HINTS = {
-            openai:    'platform.openai.com → API keys → Create new secret key. Also used for DALL-E image generation.',
+            openai:    'platform.openai.com → API keys → Create new secret key. Also used for gpt-image-2 image generation.',
             anthropic: 'console.anthropic.com → API Keys → Create Key. Starts with sk-ant-…',
             gemini:    'aistudio.google.com → Get API Key. Or Google Cloud Console → Credentials.',
             none:      '',
@@ -1509,26 +1509,26 @@
                 } );
         } );
 
-        // ── Save DALL-E key (OpenAI, shown when non-OpenAI vendor) ────────
+        // ── Save OpenAI key (shown when non-OpenAI vendor) ───────────────
         const dalleSaveBtn = document.getElementById( 'cs-ai-img-dalle-save-key' );
         if ( dalleSaveBtn ) {
             dalleSaveBtn.addEventListener( 'click', () => {
                 const di = document.getElementById( 'cs-ai-img-dalle-key' );
                 const ds = document.getElementById( 'cs-ai-img-dalle-key-status' );
                 const rawKey = ( di?.value || '' ).trim();
-                if ( ! rawKey ) { alert( 'Enter your OpenAI key for DALL-E.' ); return; }
+                if ( ! rawKey ) { alert( 'Enter your OpenAI key for gpt-image-2.' ); return; }
                 dalleSaveBtn.disabled    = true;
                 dalleSaveBtn.textContent = 'Saving…';
                 post( 'csdt_devtools_ai_image_save_key', { vendor: 'openai', key: rawKey } )
                     .then( res => {
                         dalleSaveBtn.disabled    = false;
-                        dalleSaveBtn.textContent = 'Save DALL-E Key';
+                        dalleSaveBtn.textContent = 'Save OpenAI Key';
                         storedKeys.openai = rawKey;
                         if ( ds ) ds.innerHTML = res.success ? '<span style="color:#2e7d32">✓ Key saved</span>' : '<span style="color:#c62828">✗ Failed</span>';
                     } )
                     .catch( () => {
                         dalleSaveBtn.disabled    = false;
-                        dalleSaveBtn.textContent = 'Save DALL-E Key';
+                        dalleSaveBtn.textContent = 'Save OpenAI Key';
                     } );
             } );
         }
@@ -1657,7 +1657,7 @@
             const headerText = mode === 'with_image'
                 ? `Found <strong>${esc(String(posts.length))}</strong> post(s) with a featured image <span style="color:#94a3b8">(${esc(sortLabel)})</span> — click Regenerate to replace`
                 : `Found <strong>${esc(String(posts.length))}</strong> post(s) without a featured image <span style="color:#94a3b8">(${esc(sortLabel)})</span>`;
-            let html = `<p style="font-size:13px;color:#555;margin-bottom:10px">${headerText}:</p>`;
+            let html = `<p style="font-size:13px;font-weight:600;color:#1e293b;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:8px 12px;margin-bottom:10px">${headerText}</p>`;
             html += '<div style="display:flex;flex-direction:column;gap:8px">';
             for ( const p of posts ) {
                 const viewCount  = ( p.view_count !== null && p.view_count !== undefined ) ? p.view_count : 0;
@@ -1727,14 +1727,14 @@
                         </div>` ).join( '' ) +
                       `</div>`
                     : `<div style="padding:24px 20px 12px;text-align:center">
-                          <a href="${esc(options[0].full_url || options[0].thumb_url)}" target="_blank" rel="noopener" title="Tap to view full size (1792×1024)">
+                          <a href="${esc(options[0].full_url || options[0].thumb_url)}" target="_blank" rel="noopener" title="Tap to view full size (1200×675)">
                               <img src="${esc(options[0].thumb_url)}?v=${Date.now()}" style="max-width:100%;border-radius:6px;border:1px solid #e2e8f0;object-fit:contain;box-shadow:0 4px 24px rgba(0,0,0,.15);cursor:zoom-in;display:block">
                           </a>
-                          <p style="margin:6px 0 0;font-size:11px;color:#94a3b8">Tap image to view full size (1792×1024)</p>
+                          <p style="margin:6px 0 0;font-size:11px;color:#94a3b8">Tap image to view full size (1200×675)</p>
                        </div>`;
                 const promptHtml = dallePrompt
                     ? `<div style="margin:0 20px 14px">
-                           <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">DALL-E prompt used</p>
+                           <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.5px">Image prompt used</p>
                            <p style="margin:0;padding:10px;background:#f1f5f9;border-radius:4px;font-family:monospace;font-size:11px;line-height:1.6;white-space:pre-wrap;color:#334155;border:1px solid #e2e8f0">${esc(dallePrompt)}</p>
                        </div>`
                     : '';
@@ -1791,7 +1791,7 @@
                 _cb = callbacks || {};
                 box.innerHTML = `
                     <div style="background:#0d7377;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
-                        <strong style="font-size:14px">✏ Review DALL-E Prompt</strong>
+                        <strong style="font-size:14px">✏ Review Image Prompt</strong>
                         <button class="cs-prm-close" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:0 4px">&times;</button>
                     </div>
                     <div style="padding:20px">
@@ -1868,7 +1868,7 @@
             if ( statusEl ) statusEl.textContent = '';
             if ( thumbEl )  { thumbEl.innerHTML = ''; thumbEl.style.width = ''; }
 
-            // Step 1 — ask AI to write the DALL-E prompt.
+            // Step 1 — ask AI to write the image prompt.
             post( 'csdt_devtools_ai_image_write_prompt', { post_id: postId, prompt_vendor: promptVendor, prompt_model: promptModel, prompt_style: promptStyle, no_text: noText, force_vary: forceVary ? '1' : '0' } )
                 .then( res => {
                     btn.disabled    = false;
@@ -1879,20 +1879,66 @@
                     }
                     const writtenPrompt = res.data?.prompt || '';
 
-                    // Step 2 — send directly to DALL-E (no review modal).
+                    // Step 2 — start async job, then poll until done.
                     ( ( editedPrompt ) => {
                             btn.disabled    = true;
                             btn.textContent = '⏳ Generating…';
                             if ( statusEl ) statusEl.innerHTML = '<span style="color:#94a3b8;font-size:11px">⏳ Generating…</span>';
 
                             post( 'csdt_devtools_ai_image_generate', { post_id: postId, quality, prompt_vendor: promptVendor, prompt_model: promptModel, prompt: editedPrompt, no_text: noText } )
-                                .then( genRes => {
-                                    btn.disabled = false;
-                                    if ( ! genRes.success ) {
+                                .then( startRes => {
+                                    if ( ! startRes.success ) {
+                                        btn.disabled    = false;
                                         btn.textContent = '✨ Generate';
-                                        if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px">✗ ' + esc( genRes.data?.message || 'Failed' ) + '</span>';
+                                        if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px">✗ ' + esc( startRes.data?.message || 'Failed to start' ) + '</span>';
                                         return;
                                     }
+                                    const jobId = startRes.data.job_id;
+                                    let elapsed = 0;
+                                    const MAX_POLL_S = 300;
+                                    const showErr = ( msg ) => {
+                                        btn.disabled    = false;
+                                        btn.textContent = '✨ Generate';
+                                        if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px" title="' + esc( msg ) + '">✗ ' + esc( msg ) + '</span>';
+                                    };
+                                    const pollTimer = setInterval( () => {
+                                        elapsed += 4;
+                                        if ( elapsed > MAX_POLL_S ) {
+                                            clearInterval( pollTimer );
+                                            showErr( 'Timed out after 5 min — check server error logs' );
+                                            return;
+                                        }
+                                        const m = Math.floor( elapsed / 60 ), s = elapsed % 60;
+                                        const t = m > 0 ? `${m}m ${s}s` : `${s}s`;
+                                        if ( statusEl ) statusEl.innerHTML = `<span style="color:#94a3b8;font-size:11px">⏳ Generating… (${t})</span>`;
+                                        post( 'csdt_devtools_ai_image_poll', { job_id: jobId } )
+                                            .then( pollRes => {
+                                                const st = pollRes.data?.status;
+                                                if ( st === 'pending' || st === 'processing' ) return;
+                                                clearInterval( pollTimer );
+                                                btn.disabled = false;
+                                                if ( ! pollRes.success ) {
+                                                    showErr( st === 'expired' ? 'Job expired — server may have timed out' : ( pollRes.data?.error || pollRes.data?.message || 'Request failed' ) );
+                                                    return;
+                                                }
+                                                if ( st === 'error' ) {
+                                                    showErr( pollRes.data?.error || 'Generation failed (no error detail — check PHP error log)' );
+                                                    return;
+                                                }
+                                                const genRes = { success: true, data: pollRes.data.result };
+                                                handleGenResult( genRes );
+                                            } )
+                                            .catch( () => {} ); // swallow poll network errors — keep polling
+                                    }, 4000 );
+                                } );
+
+                            function handleGenResult( genRes ) {
+                                btn.disabled = false;
+                                if ( ! genRes.success ) {
+                                    btn.textContent = '✨ Generate';
+                                    if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px">✗ ' + esc( genRes.data?.message || 'Failed' ) + '</span>';
+                                    return;
+                                }
                                     const options     = genRes.data.options || [];
                                     const dallePrompt = genRes.data.prompt  || editedPrompt;
                                     if ( ! options.length ) {
@@ -1934,15 +1980,7 @@
                                         onRegenerate: () => { doDiscard(); btn.textContent = '✨ Generate'; triggerGenerate( btn, true ); },
                                         onCancel:     () => { doDiscard(); btn.textContent = '✨ Generate'; if ( statusEl ) statusEl.textContent = ''; },
                                     }, dallePrompt );
-                                } )
-                                .catch( e => {
-                                    btn.disabled    = false;
-                                    btn.textContent = '✨ Generate';
-                                    const netMsg = ( e?.message || '' ).toLowerCase().includes( 'load' ) || ( e?.message || '' ).toLowerCase().includes( 'network' ) || ( e?.message || '' ).toLowerCase().includes( 'fetch' )
-                                        ? 'Timed out — try again on WiFi'
-                                        : ( e?.message || 'Request failed' );
-                                    if ( statusEl ) statusEl.innerHTML = '<span style="color:#c62828;font-size:11px" title="' + esc( e?.message || '' ) + '">✗ ' + esc( netMsg ) + '</span>';
-                                } );
+                            } // end handleGenResult
                     } )( writtenPrompt );
                 } )
                 .catch( e => {

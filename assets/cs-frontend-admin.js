@@ -153,7 +153,7 @@
         selectedId = 0;
         saveBtn.disabled = true;
         setBusy( true );
-        setMsg( '⏳ Writing prompt and generating image…' );
+        setMsg( '⏳ Writing prompt…' );
 
         var style   = styleEl ? styleEl.value : ( cfg.imgStyle || 'auto' );
         var quality = qualEl  ? qualEl.value  : 'standard';
@@ -161,46 +161,80 @@
         post( 'csdt_devtools_ai_image_generate', {
             post_id:       currentPostId,
             quality:       quality,
-            dual:          '0',
             prompt_vendor: cfg.promptVendor || 'openai',
             prompt_model:  cfg.promptModel  || 'gpt-4o-mini',
             prompt_style:  style,
-        }, function ( resp ) {
-            setBusy( false );
-            if ( ! resp.success || ! resp.data || ! resp.data.options || ! resp.data.options.length ) {
-                setMsg( '✕ ' + ( ( resp.data && resp.data.message ) || 'Generation failed.' ) );
+        }, function ( startResp ) {
+            if ( ! startResp.success || ! startResp.data || ! startResp.data.job_id ) {
+                setBusy( false );
+                setMsg( '✕ ' + ( ( startResp.data && startResp.data.message ) || 'Failed to start generation.' ) );
                 return;
             }
-            if ( resp.data.prompt && promptRow && promptText ) {
-                promptText.textContent = resp.data.prompt;
-                promptRow.style.display = 'block';
-                promptText.style.display = 'none';
-                if ( promptToggle ) { promptToggle.textContent = '▶ View prompt'; }
-            }
-            var options = resp.data.options;
-            pendingIds = options.map( function ( o ) { return o.attach_id; } );
-            setMsg( options.length > 1 ? 'Click an image to select it, then save.' : 'Review the image and save or regenerate.' );
-            imgsEl.innerHTML = '';
-            options.forEach( function ( opt ) {
-                var wrap = document.createElement( 'div' );
-                wrap.className = 'csdt-gen-img-opt' + ( options.length === 1 ? ' selected' : '' );
-                wrap.dataset.attachId = opt.attach_id;
-                var img = document.createElement( 'img' );
-                img.src = opt.thumb_url || opt.full_url;
-                img.alt = 'Generated option';
-                wrap.appendChild( img );
-                wrap.addEventListener( 'click', function () {
-                    imgsEl.querySelectorAll( '.csdt-gen-img-opt' ).forEach( function ( el ) { el.classList.remove( 'selected' ); } );
-                    wrap.classList.add( 'selected' );
-                    selectedId = opt.attach_id;
-                    saveBtn.disabled = false;
+            var jobId      = startResp.data.job_id;
+            var elapsed    = 0;
+            var MAX_POLL_S = 300;
+            setMsg( '⏳ Generating… (0s)' );
+            var pollTimer = setInterval( function () {
+                elapsed += 4;
+                if ( elapsed > MAX_POLL_S ) {
+                    clearInterval( pollTimer );
+                    setBusy( false );
+                    setMsg( '✕ Timed out after 5 min — check server error logs' );
+                    return;
+                }
+                var m = Math.floor( elapsed / 60 ), s = elapsed % 60;
+                setMsg( '⏳ Generating… (' + ( m > 0 ? m + 'm ' : '' ) + s + 's)' );
+                post( 'csdt_devtools_ai_image_poll', { job_id: jobId }, function ( pollResp ) {
+                    var st = pollResp.data && pollResp.data.status;
+                    if ( st === 'pending' || st === 'processing' ) return;
+                    clearInterval( pollTimer );
+                    setBusy( false );
+                    if ( ! pollResp.success ) {
+                        var expMsg = st === 'expired' ? 'Job expired — server may have timed out' : ( ( pollResp.data && ( pollResp.data.error || pollResp.data.message ) ) || 'Request failed' );
+                        setMsg( '✕ ' + expMsg );
+                        return;
+                    }
+                    if ( st === 'error' ) {
+                        setMsg( '✕ ' + ( ( pollResp.data && pollResp.data.error ) || 'Generation failed (no error detail — check PHP error log)' ) );
+                        return;
+                    }
+                    var result  = pollResp.data.result || {};
+                    var options = result.options || [];
+                    if ( ! options.length ) {
+                        setMsg( '✕ Generation failed — no images returned' );
+                        return;
+                    }
+                    if ( result.prompt && promptRow && promptText ) {
+                        promptText.textContent = result.prompt;
+                        promptRow.style.display = 'block';
+                        promptText.style.display = 'none';
+                        if ( promptToggle ) { promptToggle.textContent = '▶ View prompt'; }
+                    }
+                    pendingIds = options.map( function ( o ) { return o.attach_id; } );
+                    setMsg( options.length > 1 ? 'Click an image to select it, then save.' : 'Review the image and save or regenerate.' );
+                    imgsEl.innerHTML = '';
+                    options.forEach( function ( opt ) {
+                        var wrap = document.createElement( 'div' );
+                        wrap.className = 'csdt-gen-img-opt' + ( options.length === 1 ? ' selected' : '' );
+                        wrap.dataset.attachId = opt.attach_id;
+                        var img = document.createElement( 'img' );
+                        img.src = opt.thumb_url || opt.full_url;
+                        img.alt = 'Generated option';
+                        wrap.appendChild( img );
+                        wrap.addEventListener( 'click', function () {
+                            imgsEl.querySelectorAll( '.csdt-gen-img-opt' ).forEach( function ( el ) { el.classList.remove( 'selected' ); } );
+                            wrap.classList.add( 'selected' );
+                            selectedId = opt.attach_id;
+                            saveBtn.disabled = false;
+                        } );
+                        imgsEl.appendChild( wrap );
+                    } );
+                    if ( options.length === 1 ) {
+                        selectedId = options[0].attach_id;
+                        saveBtn.disabled = false;
+                    }
                 } );
-                imgsEl.appendChild( wrap );
-            } );
-            if ( options.length === 1 ) {
-                selectedId = options[0].attach_id;
-                saveBtn.disabled = false;
-            }
+            }, 4000 );
         } );
     }
 

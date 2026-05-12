@@ -1194,7 +1194,7 @@
                         html += '<div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px;">';
                         html += '<span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#fde68a;color:#92400e;white-space:nowrap;">' + escH(dir) + '</span>';
                         if (isInline) {
-                            html += '<span style="font-size:12px;color:#374151;font-weight:600;">Inline script or style (\'unsafe-inline\')</span>';
+                            html += '<span style="font-size:12px;color:#374151;font-weight:600;">Inline script or style — code embedded directly in the HTML, not loaded from a URL</span>';
                         } else {
                             html += '<span style="font-size:12px;color:#374151;font-weight:600;word-break:break-all;">' + escH(shortBlocked) + '</span>';
                         }
@@ -1219,7 +1219,7 @@
                                 + '</div>';
                         } else if (isInline) {
                             html += '<div style="font-size:11px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;padding:8px 10px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
-                                + '<span>⚠️ Inline script/style — needs <code>\'unsafe-inline\'</code> in ' + escH(dir) + '.</span>'
+                                + '<span>⚠️ A <code>&lt;script&gt;</code> or <code>&lt;style&gt;</code> is written directly in the HTML of this page — not loaded from a URL. Your CSP blocks these by default for security. Clicking <strong>Add</strong> permits them in <code>' + escH(dir) + '</code> but weakens XSS protection. Use <strong>Nonce Mode</strong> above as a safer alternative.</span>'
                                 + '<button type="button" class="cs-fix-btn" style="' + fixBtnStyle + 'background:#d97706;" data-fix-type="custom" data-fix-value="\'unsafe-inline\'" data-fix-directive="' + escH(dir) + '">⚡ Add \'unsafe-inline\'</button>'
                                 + '</div>';
                         } else if (blocked.indexOf(siteOrigin) === 0) {
@@ -1241,10 +1241,11 @@
 
                         // Affected pages
                         if (item.pages.length > 0) {
-                            html += '<div style="font-size:10px;color:#6b7280;margin-top:4px;">Seen on: ';
+                            html += '<div style="font-size:10px;color:#6b7280;margin-top:4px;">';
                             html += item.pages.slice(0, 3).map(function(pg) {
-                                var short = pg.replace(/^https?:\/\/[^/]+/, '').slice(0, 50) || '/';
-                                return '<a href="' + escH(pg) + '" target="_blank" rel="noopener" style="color:#6366f1;text-decoration:none;">' + escH(short) + '</a>';
+                                var absUrl = /^https?:\/\//.test(pg) ? pg : siteOrigin + (pg.charAt(0) === '/' ? '' : '/') + pg;
+                                var display = absUrl.replace(/^https?:\/\//, '').slice(0, 60);
+                                return '<a href="' + escH(absUrl) + '" target="_blank" rel="noopener" style="color:#6366f1;text-decoration:none;">' + escH(display) + '</a>';
                             }).join(', ');
                             if (item.pages.length > 3) html += ' + ' + (item.pages.length - 3) + ' more';
                             html += '</div>';

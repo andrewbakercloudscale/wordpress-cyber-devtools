@@ -278,30 +278,33 @@ class CSDT_AI_Dispatcher {
     }
 
     /**
-     * Generate an image via DALL-E 3. Returns the temporary image URL.
+     * Generate an image via gpt-image-2. Returns a local temp file path (PNG).
      *
      * @param string $prompt  The image description.
-     * @param string $size    DALL-E size string — '1792x1024' (default landscape) or '1024x1024'.
-     * @param string $quality 'standard' or 'hd'.
+     * @param string $size    OpenAI size string — '1536x1024' (default landscape) or '1024x1024'.
+     * @param string $quality 'standard' (→ medium) or 'hd' (→ high).
      * @throws \RuntimeException on API or network error.
      */
-    public static function generate_image( string $prompt, string $size = '1792x1024', string $quality = 'standard' ): string {
+    public static function generate_image( string $prompt, string $size = '1536x1024', string $quality = 'standard' ): string {
         $key = get_option( 'csdt_devtools_openai_key', '' );
         if ( ! $key ) { throw new \RuntimeException( 'No OpenAI API key configured.' ); }
 
+        // gpt-image-2 uses low/medium/high; map legacy DALL-E quality names.
+        $quality_map = [ 'standard' => 'medium', 'hd' => 'high' ];
+        $api_quality = $quality_map[ $quality ] ?? $quality;
 
         $resp = wp_remote_post( 'https://api.openai.com/v1/images/generations', [
-            'timeout' => 90,
+            'timeout' => 180,
             'headers' => [
                 'Authorization' => 'Bearer ' . $key,
                 'Content-Type'  => 'application/json',
             ],
             'body' => wp_json_encode( [
-                'model'   => 'dall-e-3',
+                'model'   => 'gpt-image-2',
                 'prompt'  => $prompt,
                 'n'       => 1,
                 'size'    => $size,
-                'quality' => $quality,
+                'quality' => $api_quality,
             ] ),
         ] );
 
@@ -312,9 +315,16 @@ class CSDT_AI_Dispatcher {
         if ( $code !== 200 ) {
             throw new \RuntimeException( $data['error']['message'] ?? "HTTP {$code}" );
         }
-        $url = $data['data'][0]['url'] ?? '';
-        if ( ! $url ) { throw new \RuntimeException( 'DALL-E returned no image URL.' ); }
-        return $url;
+        // gpt-image-2 returns base64-encoded PNG — no URL.
+        $b64 = $data['data'][0]['b64_json'] ?? '';
+        if ( ! $b64 ) { throw new \RuntimeException( 'gpt-image-2 returned no image data.' ); }
+
+        $tmp = wp_tempnam( 'csdt-ai-img.png' );
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+        if ( false === file_put_contents( $tmp, base64_decode( $b64 ) ) ) {
+            throw new \RuntimeException( 'Failed to write image to temp file.' );
+        }
+        return $tmp;
     }
 
     /**

@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.847
+ * Version: 1.9.862
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.847';
+    const VERSION      = '1.9.862';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -401,8 +401,11 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_devtools_ai_image_test_key',     [ 'CSDT_Thumbnails', 'ajax_ai_image_test_key' ] );
         add_action( 'wp_ajax_csdt_devtools_ai_image_scan',          [ 'CSDT_Thumbnails', 'ajax_ai_image_scan' ] );
         add_action( 'wp_ajax_csdt_devtools_ai_image_write_prompt',  [ 'CSDT_Thumbnails', 'ajax_ai_image_write_prompt' ] );
-        add_action( 'wp_ajax_csdt_devtools_ai_image_generate',      [ 'CSDT_Thumbnails', 'ajax_ai_image_generate' ] );
-        add_action( 'wp_ajax_csdt_devtools_ai_image_pick',          [ 'CSDT_Thumbnails', 'ajax_ai_image_pick' ] );
+        add_action( 'wp_ajax_csdt_devtools_ai_image_generate',       [ 'CSDT_Thumbnails', 'ajax_ai_image_generate' ] );
+        add_action( 'wp_ajax_csdt_devtools_ai_image_process',        [ 'CSDT_Thumbnails', 'ajax_ai_image_process' ] );
+        add_action( 'wp_ajax_nopriv_csdt_devtools_ai_image_process', [ 'CSDT_Thumbnails', 'ajax_ai_image_process' ] );
+        add_action( 'wp_ajax_csdt_devtools_ai_image_poll',           [ 'CSDT_Thumbnails', 'ajax_ai_image_poll' ] );
+        add_action( 'wp_ajax_csdt_devtools_ai_image_pick',           [ 'CSDT_Thumbnails', 'ajax_ai_image_pick' ] );
         add_action( 'wp_ajax_csdt_devtools_ai_image_discard',       [ 'CSDT_Thumbnails', 'ajax_ai_image_discard' ] );
         add_action( 'wp_ajax_csdt_devtools_ai_image_save_sysprompt', [ 'CSDT_Thumbnails', 'ajax_ai_image_save_sysprompt' ] );
         add_action( 'wp_ajax_csdt_devtools_ai_image_save_settings',  [ 'CSDT_Thumbnails', 'ajax_ai_image_save_settings' ] );
@@ -6128,14 +6131,14 @@ class CloudScale_DevTools {
                         ? '&#x26A0;&#xFE0F; ' . sprintf( esc_html__( '%d posts need images', 'cloudscale-devtools' ), $missing_images )
                         : '&#x2705; ' . esc_html__( 'All posts have images', 'cloudscale-devtools' ); ?>
                 </div>
-                <div style="font-size:11px;color:#6b7280;margin-top:2px;line-height:1.4;"><?php esc_html_e( 'DALL-E 3 · OpenAI key configured', 'cloudscale-devtools' ); ?></div>
+                <div style="font-size:11px;color:#6b7280;margin-top:2px;line-height:1.4;"><?php esc_html_e( 'gpt-image-2 · OpenAI key configured', 'cloudscale-devtools' ); ?></div>
                 <a href="<?php echo esc_url( $thumbs_url ); ?>" style="font-size:11px;color:#6366f1;font-weight:600;display:inline-block;margin-top:6px;text-decoration:none;"><?php esc_html_e( 'Generate Images', 'cloudscale-devtools' ); ?> &rarr;</a>
             </div>
             <?php else : ?>
             <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:12px 14px;">
                 <div style="font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;"><?php esc_html_e( 'AI Image Generator', 'cloudscale-devtools' ); ?></div>
                 <div style="font-size:13px;font-weight:700;color:#dc2626;">&#x274C; <?php esc_html_e( 'Not configured', 'cloudscale-devtools' ); ?></div>
-                <div style="font-size:11px;color:#dc2626;margin-top:2px;line-height:1.4;"><?php esc_html_e( 'Add an OpenAI key to generate featured images with DALL-E 3.', 'cloudscale-devtools' ); ?></div>
+                <div style="font-size:11px;color:#dc2626;margin-top:2px;line-height:1.4;"><?php esc_html_e( 'Add an OpenAI key to generate featured images with gpt-image-2.', 'cloudscale-devtools' ); ?></div>
                 <a href="<?php echo esc_url( $thumbs_url ); ?>" style="font-size:11px;color:#6366f1;font-weight:600;display:inline-block;margin-top:6px;text-decoration:none;"><?php esc_html_e( 'Set up', 'cloudscale-devtools' ); ?> &rarr;</a>
             </div>
             <?php endif; ?>

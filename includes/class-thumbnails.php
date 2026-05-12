@@ -318,56 +318,26 @@ class CSDT_Thumbnails {
 
     // ─── Featured Images tab ─────────────────────────────────────────────────
 
-    private const DEFAULT_IMG_SYSTEM_PROMPT = 'You write DALL-E 3 prompts for 1792x1024 WordPress blog post header images. Output ONLY the prompt — no preamble.
+    private const DEFAULT_IMG_SYSTEM_PROMPT = 'Write a gpt-image-2 prompt for a 1200×675 WordPress tech blog header. Output ONLY the image prompt — no preamble, no explanation.
 
-━━ PROCESS ━━
-Read the article. Then write a DALL-E 3 prompt that creates a cinematic, dramatic image a reader would immediately connect to this specific article.
+Read the article. Identify the central subject and its narrative role:
+- Hero / winner → gleaming, pristine, radiating controlled power
+- Legacy / struggling → weathered, overheating, visibly under strain
+- Threat / warning → sleek and modern on the surface, but its wake leaves broken connections and error sparks behind it — dangerous precisely because it looks capable
 
-━━ BRAND ICONS ━━
-CRITICAL RULE: NEVER ask DALL-E to render a brand name as text — DALL-E mis-renders words. Describe the PHYSICAL FORM instead. A brand is recognised by its shape, colour, and form — not its name written on something.
+Write 2–3 sentences of direct visual description: the specific object, its material and condition, the lighting, and the emotional tone. Fill the frame — no empty backgrounds. Cinematic photorealism, macro detail, bright studio lighting.
 
-COMPANIES / PRODUCTS — use the PHYSICAL FORM, not text:
-- ARM / ARM server: a green Raspberry Pi PCB (iconic green circuit board with rows of GPIO pins) OR a bare ARM processor die (small square chip with gold contact pads). NEVER "ARM" lettering.
-- x86 / Intel server: a large silver Intel CPU lid (rectangular metal cap with subtle Intel logo embossed). NEVER a generic server tower with text.
-- Cloudflare: a large orange shield shape with a globe/grid pattern on it — the Cloudflare logo shield in solid orange.
-- AWS: the AWS orange curved smile-arrow arch (the distinctive orange arch with the arrow smile).
-- NVMe / SSD storage: slim flat black M.2 NVMe sticks standing upright — small black rectangular cards with gold edge connectors.
-- Docker: a blue Docker whale silhouette with coloured shipping containers stacked on its back.
-- GitHub: a black Octocat silhouette — cat body with octopus tentacles.
-- Raspberry Pi (brand): a green PCB board with a raspberry fruit logo. For the fruit itself: a red berry made of drupelets.
-- For all other well-known brands: use your training knowledge of their visual form.
+Use a light background — pale grey, off-white, warm cream, or a soft neutral gradient. Never use black or near-black backgrounds. The image must read clearly as a small thumbnail: high contrast between subject and background.
 
-PROTOCOLS / STANDARDS / CONCEPTS (TCP, QUIC, HTTP/3, UDP, TLS, DNS, etc.): no real logo exists. Represent them with a concrete physical metaphor for what they DO — e.g. QUIC = a supersonic data packet as a glowing blue dart; TCP = a heavy gear-and-piston mechanism grinding slowly. Apply narrative conditions to these too.
+Describe brands and products by their physical form, never by name as text. For abstract concepts (protocols, standards), invent a concrete physical metaphor for what they do.
 
-━━ NARRATIVE CONDITIONS ━━
-Read the article angle CAREFULLY before assigning roles — the same technology can play different roles depending on the article\'s message:
-
-- CHAMPION / winner / rising technology → gleaming, clean, cool, powerful, radiating controlled energy
-- STRUGGLING / legacy / being-disrupted → glowing red-hot edges, heat shimmer, cracking casing, smoke from vents
-- DISRUPTOR / HIDDEN THREAT / WARNING → the subject LOOKS fast and modern but causes unexpected breakage — show it as a sleek projectile that leaves fractured connections, broken pipes, or error sparks behind it; its surface is clean but its WAKE is destructive
-- NEUTRAL / tool → normal condition
-
-IMPORTANT: A technology can be modern AND dangerous. An article titled "X breaks your site without warning" means X is a DISRUPTOR/THREAT, not a CHAMPION — even if X is technically superior. Read the article\'s WARNING signals, not just its technical comparisons.
-
-━━ COMPOSITION ━━
-- Fill 85%+ of the frame. No large empty backgrounds.
-- Cinematic photorealism by default. Macro detail. Dramatic lighting.
-- For warning / danger / unexpected-failure articles: show the moment of impact — a fast sleek element causing visible destruction: fractured cables, cracked pipes, broken connections, flying sparks.
-- For tutorials / how-tos: cinematic workshop or workbench scene, hands and tools mid-action.
-- BANNED: aerial data-centre city skylines, glowing server-tower cityscapes, abstract streams of light, generic split-screen rivalries.
-- Safety: never imply hacking, illegal acts, or breaches — describe the defensive side instead.
-
-━━ TEXT RULE ━━
-The text rule is passed separately in the user message — follow it exactly.
-
-━━ OUTPUT ━━
-2–3 sentences. Visual style first, then the specific scene.';
+The text rule is passed in the user message — follow it exactly.';
 
     private static function get_img_system_prompt(): string {
         $saved = (string) get_option( 'csdt_devtools_img_system_prompt', self::DEFAULT_IMG_SYSTEM_PROMPT );
         // Auto-migrate: reset saved prompt if it matches any known old version.
-        // v9+ adds physical form reference for key brands; any version lacking it should be replaced.
-        if ( strpos( $saved, 'DALL-E mis-renders words' ) === false ) {
+        // v10+ adds light-background rule; any version lacking it should be replaced.
+        if ( strpos( $saved, 'high contrast between subject and background' ) === false ) {
             $saved = self::DEFAULT_IMG_SYSTEM_PROMPT;
             update_option( 'csdt_devtools_img_system_prompt', $saved, false );
         }
@@ -393,12 +363,12 @@ The text rule is passed separately in the user message — follow it exactly.
         <div class="cs-panel" id="cs-panel-ai-image-gen">
             <div class="cs-section-header" style="background:linear-gradient(135deg,#0d7377,#14a085);">
                 <span>🎨 FEATURED IMAGE GENERATOR</span>
-                <span class="cs-header-hint"><?php esc_html_e( 'Generate DALL-E 3 featured images for posts that have none', 'cloudscale-devtools' ); ?></span>
+                <span class="cs-header-hint"><?php esc_html_e( 'Generate AI featured images for posts that have none', 'cloudscale-devtools' ); ?></span>
                 <?php CloudScale_DevTools::render_explain_btn( 'ai-image-gen', 'AI Image Generator', [
-                    [ 'name' => 'What it does',     'rec' => 'Overview',         'html' => 'Finds your published posts that have no featured image, then uses DALL-E 3 (OpenAI) to generate a 1792×1024 landscape header image tailored to each post. The image is automatically uploaded to your Media Library and set as the featured image.' ],
-                    [ 'name' => 'How to set up',    'rec' => 'Step-by-step',     'html' => '<strong>Step 1: Pick a vendor</strong> — choose which AI writes the prompt description sent to DALL-E. OpenAI (ChatGPT) is recommended as it shares your billing account.<br><strong>Step 2: Pick a model</strong> — GPT-4o mini is fast and cheap (~$0.001/prompt). Use a larger model for better prompt quality.<br><strong>Step 3: Enter your API key</strong> for that vendor and click Save Key.<br><strong>Note:</strong> DALL-E 3 always uses OpenAI for image generation. If you choose Anthropic or Google as your prompt writer, you also need to enter an OpenAI key in the DALL-E row.' ],
-                    [ 'name' => 'Image quality',    'rec' => 'Standard recommended', 'html' => '<strong>Standard</strong> — $0.04 per image (1792×1024 px).<br><strong>HD</strong> — $0.08 per image. More detail.' ],
-                    [ 'name' => 'Cost estimate',    'rec' => 'Info',             'html' => 'With GPT-4o mini as prompt writer + Standard quality: ~<strong>$0.041 per image</strong>. A $5 top-up covers ~120 posts.' ],
+                    [ 'name' => 'What it does',     'rec' => 'Overview',         'html' => 'Finds your published posts that have no featured image, then uses gpt-image-2 (OpenAI) to generate a 1200×675 landscape header image tailored to each post. The image is automatically uploaded to your Media Library and set as the featured image.' ],
+                    [ 'name' => 'How to set up',    'rec' => 'Step-by-step',     'html' => '<strong>Step 1: Pick a vendor</strong> — choose which AI writes the prompt description sent to gpt-image-2. OpenAI (ChatGPT) is recommended as it shares your billing account.<br><strong>Step 2: Pick a model</strong> — GPT-4o mini is fast and cheap (~$0.001/prompt). Use a larger model for better prompt quality.<br><strong>Step 3: Enter your API key</strong> for that vendor and click Save Key.<br><strong>Note:</strong> gpt-image-2 always uses OpenAI for image generation. If you choose Anthropic or Google as your prompt writer, you also need to enter an OpenAI key in the OpenAI row.' ],
+                    [ 'name' => 'Image quality',    'rec' => 'Standard recommended', 'html' => '<strong>Standard</strong> — medium quality (1200×675 px). Recommended for most posts.<br><strong>HD</strong> — high quality. More detail, higher cost. See openai.com/pricing for current rates.' ],
+                    [ 'name' => 'Cost estimate',    'rec' => 'Info',             'html' => 'With GPT-4o mini as prompt writer + Standard quality: approximately <strong>$0.07–$0.10 per image</strong> (varies with prompt length). See openai.com/pricing for gpt-image-2 rates.' ],
                     [ 'name' => 'After generation', 'rec' => 'Info',             'html' => 'The image is uploaded as a WordPress attachment and set as the featured image. Social format crops (Facebook, Twitter, etc.) are generated immediately.' ],
                 ] ); ?>
             </div>
@@ -425,7 +395,7 @@ The text rule is passed separately in the user message — follow it exactly.
                             <option value="gemini"    <?php selected( $saved_vendor, 'gemini' ); ?>><?php esc_html_e( 'Google (Gemini)', 'cloudscale-devtools' ); ?></option>
                             <option value="none"      <?php selected( $saved_vendor, 'none' ); ?>><?php esc_html_e( 'None — use post title only', 'cloudscale-devtools' ); ?></option>
                         </select>
-                        <span class="cs-hint"><?php esc_html_e( 'The AI that reads your post content and writes the DALL-E image description. OpenAI is recommended — it shares the same billing account as DALL-E.', 'cloudscale-devtools' ); ?></span>
+                        <span class="cs-hint"><?php esc_html_e( 'The AI that reads your post content and writes the image description. OpenAI is recommended — it shares the same billing account as gpt-image-2.', 'cloudscale-devtools' ); ?></span>
                     </div>
                 </div>
 
@@ -490,9 +460,9 @@ The text rule is passed separately in the user message — follow it exactly.
                     </div>
                 </div>
 
-                <!-- DALL-E key (OpenAI) — only shown when prompt writer vendor ≠ openai -->
+                <!-- OpenAI key — only shown when prompt writer vendor ≠ openai -->
                 <div class="cs-sec-row" id="cs-ai-img-dalle-key-row" style="display:none">
-                    <span class="cs-sec-label"><?php esc_html_e( 'OpenAI key (for DALL-E image generation):', 'cloudscale-devtools' ); ?></span>
+                    <span class="cs-sec-label"><?php esc_html_e( 'OpenAI key (for gpt-image-2 image generation):', 'cloudscale-devtools' ); ?></span>
                     <div class="cs-sec-control">
                         <div style="position:relative;display:flex;align-items:center;width:100%;max-width:480px">
                             <input type="password" id="cs-ai-img-dalle-key" class="cs-text-input cs-sec-key-input"
@@ -503,10 +473,10 @@ The text rule is passed separately in the user message — follow it exactly.
                                     style="position:absolute;right:8px;background:none;border:none;cursor:pointer;padding:0;line-height:1;font-size:16px;color:#94a3b8">👁</button>
                         </div>
                         <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
-                            <button type="button" id="cs-ai-img-dalle-save-key" class="cs-btn-secondary"><?php esc_html_e( 'Save DALL-E Key', 'cloudscale-devtools' ); ?></button>
+                            <button type="button" id="cs-ai-img-dalle-save-key" class="cs-btn-secondary"><?php esc_html_e( 'Save OpenAI Key', 'cloudscale-devtools' ); ?></button>
                             <span id="cs-ai-img-dalle-key-status" class="cs-sec-key-status"><?php echo $openai_key ? '<span style="color:#2e7d32">✓ Key saved</span>' : ''; ?></span>
                         </div>
-                        <span class="cs-hint"><?php esc_html_e( 'Your Google/Anthropic key above writes the prompt. This separate OpenAI key is required because DALL-E 3 (the image generator) is an OpenAI-only product.', 'cloudscale-devtools' ); ?></span>
+                        <span class="cs-hint"><?php esc_html_e( 'Your Google/Anthropic key above writes the prompt. This separate OpenAI key is required because gpt-image-2 (the image generator) is an OpenAI-only product.', 'cloudscale-devtools' ); ?></span>
                     </div>
                 </div>
 
@@ -514,8 +484,8 @@ The text rule is passed separately in the user message — follow it exactly.
                     <span class="cs-sec-label"><?php esc_html_e( 'Image quality:', 'cloudscale-devtools' ); ?></span>
                     <div class="cs-sec-control">
                         <select id="cs-ai-img-quality" class="cs-sec-select">
-                            <option value="standard" <?php selected( $saved_quality, 'standard' ); ?>><?php esc_html_e( 'Standard ($0.04 / image)', 'cloudscale-devtools' ); ?></option>
-                            <option value="hd" <?php selected( $saved_quality, 'hd' ); ?>><?php esc_html_e( 'HD ($0.08 / image)', 'cloudscale-devtools' ); ?></option>
+                            <option value="standard" <?php selected( $saved_quality, 'standard' ); ?>><?php esc_html_e( 'Standard quality', 'cloudscale-devtools' ); ?></option>
+                            <option value="hd" <?php selected( $saved_quality, 'hd' ); ?>><?php esc_html_e( 'HD quality', 'cloudscale-devtools' ); ?></option>
                         </select>
                     </div>
                 </div>
@@ -525,7 +495,7 @@ The text rule is passed separately in the user message — follow it exactly.
                     <div class="cs-sec-control" style="display:flex;flex-direction:column;gap:8px">
                         <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
                             <input type="checkbox" id="cs-ai-img-no-text" style="width:16px;height:16px" <?php checked( $saved_no_text ); ?>>
-                            <?php esc_html_e( 'No text in image (avoids misspellings — DALL-E draws no labels or titles)', 'cloudscale-devtools' ); ?>
+                            <?php esc_html_e( 'No text in image (avoids misspellings — gpt-image-2 draws no labels or titles)', 'cloudscale-devtools' ); ?>
                         </label>
                     </div>
                 </div>
@@ -554,13 +524,13 @@ The text rule is passed separately in the user message — follow it exactly.
                     <div class="cs-sec-control">
                         <textarea id="cs-ai-img-system-prompt" rows="10"
                                   style="width:100%;max-width:560px;font-size:12px;font-family:monospace;padding:8px;border:1px solid #cbd5e1;border-radius:4px;box-sizing:border-box;resize:vertical;line-height:1.5"
-                                  placeholder="Instructions sent to the AI when writing the DALL-E prompt…"><?php echo esc_textarea( $system_prompt ); ?></textarea>
+                                  placeholder="Instructions sent to the AI when writing the image prompt…"><?php echo esc_textarea( $system_prompt ); ?></textarea>
                         <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                             <button type="button" id="cs-ai-img-save-sysprompt" class="cs-btn-secondary"><?php esc_html_e( 'Save Instructions', 'cloudscale-devtools' ); ?></button>
                             <button type="button" id="cs-ai-img-reset-sysprompt" style="background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;border-radius:4px;padding:5px 12px;font-size:12px;cursor:pointer"><?php esc_html_e( 'Reset to default', 'cloudscale-devtools' ); ?></button>
                             <span id="cs-ai-img-sysprompt-status" style="font-size:12px"></span>
                         </div>
-                        <span class="cs-hint"><?php esc_html_e( 'These instructions tell the AI how to write the DALL-E description. Edit to enforce a consistent style (e.g. "dark technical infographic, no photorealism"). You can also edit each prompt individually before the image is generated.', 'cloudscale-devtools' ); ?></span>
+                        <span class="cs-hint"><?php esc_html_e( 'These instructions tell the AI how to write the image description. Edit to enforce a consistent style (e.g. "dark technical infographic, no photorealism"). You can also edit each prompt individually before the image is generated.', 'cloudscale-devtools' ); ?></span>
                     </div>
                 </div>
 
@@ -568,9 +538,9 @@ The text rule is passed separately in the user message — follow it exactly.
                     <button type="button" class="cs-btn-primary" id="cs-ai-img-scan-btn" data-mode="missing" style="width:100%;text-align:center;font-size:13px;padding:10px 16px">🔍 <?php esc_html_e( 'Find posts without featured image', 'cloudscale-devtools' ); ?></button>
                     <button type="button" id="cs-ai-img-scan-with-btn" data-mode="with_image" style="width:100%;text-align:center;background:#475569;color:#fff;border:none;border-radius:5px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer">🖼 <?php esc_html_e( 'Find posts with featured image', 'cloudscale-devtools' ); ?></button>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                    <span style="font-size:12px;color:#64748b;font-weight:600"><?php esc_html_e( 'Sort:', 'cloudscale-devtools' ); ?></span>
-                    <select id="cs-ai-img-sort" style="font-size:12px;padding:3px 8px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;color:#334155">
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:8px;padding:6px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px">
+                    <span style="font-size:12px;color:#334155;font-weight:700;letter-spacing:.3px"><?php esc_html_e( 'Sort:', 'cloudscale-devtools' ); ?></span>
+                    <select id="cs-ai-img-sort" style="font-size:12px;padding:4px 10px;border:1px solid #94a3b8;border-radius:4px;background:#fff;color:#1e293b;font-weight:600;cursor:pointer">
                         <option value="newest"><?php esc_html_e( 'Newest first', 'cloudscale-devtools' ); ?></option>
                         <option value="oldest"><?php esc_html_e( 'Oldest first', 'cloudscale-devtools' ); ?></option>
                         <option value="img_date"><?php esc_html_e( 'Image date (newest)', 'cloudscale-devtools' ); ?></option>
@@ -1815,6 +1785,15 @@ The text rule is passed separately in the user message — follow it exactly.
         if ( ! $og_image ) {
             $img_results[] = [ 'type' => 'fail', 'msg' => 'og:image is missing — cannot analyse image.', 'fix' => 'Set a featured image on this post/page and ensure your SEO plugin is configured to use it as og:image. Add a site-wide fallback image in your SEO plugin settings.' ];
         } else {
+            // Warn if og:image is the site-wide fallback (post has no post-specific featured image).
+            $seo_opts       = get_option( 'cs_seo_options', [] );
+            $default_og_url = trim( (string) ( $seo_opts['default_og_image'] ?? '' ) );
+            if ( $default_og_url ) {
+                $norm = static function( string $u ): string { return rtrim( strtok( $u, '?' ), '/' ); };
+                if ( $norm( $og_image ) === $norm( $default_og_url ) ) {
+                    $img_results[] = [ 'type' => 'warn', 'msg' => 'og:image is the site-wide default fallback — this post has no featured image set. Every post without a featured image will show this same generic image on social media.', 'fix' => 'Set a featured image on this post to give it a unique social preview.' ];
+                }
+            }
             $img_head = wp_remote_head( $og_image, [ 'user-agent' => $wa_ua, 'timeout' => 10, 'redirection' => 3 ] );
             if ( is_wp_error( $img_head ) ) {
                 $img_results[] = [ 'type' => 'fail', 'msg' => 'og:image URL unreachable: ' . $img_head->get_error_message(), 'fix' => 'Verify the image URL is publicly accessible. Check that the file exists in your Media Library and that no security plugin or Cloudflare rule is blocking direct image access.' ];
@@ -2189,7 +2168,7 @@ The text rule is passed separately in the user message — follow it exactly.
         wp_send_json_success( [ 'posts' => $results, 'sort' => $sort, 'mode' => $mode ] );
     }
 
-    // ─── AJAX: generate DALL-E image for a post (returns 2 options) ─────
+    // ─── AJAX: generate gpt-image-2 image for a post (returns 2 options) ─
 
     // ─── AJAX: save system prompt ────────────────────────────────────────
 
@@ -2220,7 +2199,7 @@ The text rule is passed separately in the user message — follow it exactly.
         wp_send_json_success();
     }
 
-    // ─── AJAX: write DALL-E prompt via AI (step 1 of 2) ─────────────────
+    // ─── AJAX: write image prompt via AI (step 1 of 2) ──────────────────
 
     public static function ajax_ai_image_write_prompt(): void {
         check_ajax_referer( self::THUMB_NONCE, 'nonce' );
@@ -2294,7 +2273,7 @@ The text rule is passed separately in the user message — follow it exactly.
 
         // Pick a random compositional POV to inject into the generated prompt itself.
         // This must be part of the GPT-4o instruction (not appended after), so it gets
-        // baked into the DALL-E prompt and survives DALL-E's internal content revision.
+        // baked into the image prompt and survives the model's internal content revision.
         $pov_pool = [
             'MANDATORY COMPOSITION: extreme macro close-up — fill the entire frame with surface detail, no background visible.',
             'MANDATORY COMPOSITION: dramatic worm\'s-eye view — subjects tower above the viewer, shot from ground level looking steeply upward.',
@@ -2306,7 +2285,7 @@ The text rule is passed separately in the user message — follow it exactly.
         $pov_instruction = ' ' . $pov_pool[ array_rand( $pov_pool ) ];
 
         $system_msg   = self::get_img_system_prompt();
-        $user_msg   = "{$context_str}\n\nStep 1 — Read the ENTIRE article — title, angle, and conclusion — then identify: (a) which technology brands/products/protocols are mentioned, (b) the ROLE each plays in THIS SPECIFIC ARTICLE'S NARRATIVE — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n\nStep 2 — Write the DALL-E 3 prompt using those roles. For companies with logos (AWS, Cloudflare, Docker, etc.) use their actual iconic visual. For protocols and concepts (TCP, QUIC, HTTP/3, etc.) use a concrete physical metaphor for what they DO. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.\n\nOutput ONLY the final DALL-E 3 prompt.{$style_instruction}{$text_rule}{$pov_instruction}{$vary_instruction}";
+        $user_msg   = "{$context_str}\n\nStep 1 — Read the ENTIRE article — title, angle, and conclusion — then identify: (a) which technology brands/products/protocols are mentioned, (b) the ROLE each plays in THIS SPECIFIC ARTICLE'S NARRATIVE — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n\nStep 2 — Write the gpt-image-2 prompt using those roles. For companies with logos (AWS, Cloudflare, Docker, etc.) use their actual iconic visual. For protocols and concepts (TCP, QUIC, HTTP/3, etc.) use a concrete physical metaphor for what they DO. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.\n\nOutput ONLY the final gpt-image-2 prompt.{$style_instruction}{$text_rule}{$pov_instruction}{$vary_instruction}";
 
         try {
             switch ( $prompt_vendor ) {
@@ -2331,38 +2310,101 @@ The text rule is passed separately in the user message — follow it exactly.
         wp_send_json_success( [ 'prompt' => $prompt ] );
     }
 
-    // ─── AJAX: generate image from prompt (step 2 of 2) ─────────────────
+    // ─── AJAX: start async image generation — returns job_id immediately ──
 
     public static function ajax_ai_image_generate(): void {
         check_ajax_referer( self::THUMB_NONCE, 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) {
             wp_send_json_error( 'Unauthorized', 403 );
         }
-        set_time_limit( 180 );
 
-        $post_id  = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
-        $quality  = ( isset( $_POST['quality'] ) && $_POST['quality'] === 'hd' ) ? 'hd' : 'standard';
-        $count    = 1;
-        $prompt        = isset( $_POST['prompt'] )        ? sanitize_textarea_field( wp_unslash( $_POST['prompt'] ) ) : '';
+        $post_id       = isset( $_POST['post_id'] )       ? (int) $_POST['post_id'] : 0;
+        $quality       = ( isset( $_POST['quality'] ) && 'hd' === $_POST['quality'] ) ? 'hd' : 'standard';
+        $prompt        = isset( $_POST['prompt'] )        ? sanitize_textarea_field( wp_unslash( $_POST['prompt'] ) )       : '';
         $no_text       = isset( $_POST['no_text'] )       && '1' === $_POST['no_text'];
-        $prompt_vendor = isset( $_POST['prompt_vendor'] ) ? sanitize_key( wp_unslash( $_POST['prompt_vendor'] ) )      : 'openai';
-        $prompt_model  = isset( $_POST['prompt_model'] )  ? sanitize_text_field( wp_unslash( $_POST['prompt_model'] ) ) : 'gpt-4o';
-        $prompt_style  = isset( $_POST['prompt_style'] )  ? sanitize_key( wp_unslash( $_POST['prompt_style'] ) )       : 'auto';
+        $prompt_vendor = isset( $_POST['prompt_vendor'] ) ? sanitize_key( wp_unslash( $_POST['prompt_vendor'] ) )           : 'openai';
+        $prompt_model  = isset( $_POST['prompt_model'] )  ? sanitize_text_field( wp_unslash( $_POST['prompt_model'] ) )     : 'gpt-4o';
+        $prompt_style  = isset( $_POST['prompt_style'] )  ? sanitize_key( wp_unslash( $_POST['prompt_style'] ) )            : 'auto';
 
         if ( ! $post_id ) {
             wp_send_json_error( [ 'message' => 'Invalid post ID.' ] );
             return;
         }
+
+        $job_id = uniqid( 'csdt_img_', true );
+        set_transient( "csdt_img_job_{$job_id}", [
+            'status'        => 'pending',
+            'post_id'       => $post_id,
+            'prompt'        => $prompt,
+            'quality'       => $quality,
+            'no_text'       => $no_text,
+            'prompt_vendor' => $prompt_vendor,
+            'prompt_model'  => $prompt_model,
+            'prompt_style'  => $prompt_style,
+        ], 600 );
+
+        // Fire non-blocking loopback so the generation runs in its own PHP process.
+        $cookies = array_map(
+            fn( $name, $value ) => new \WP_Http_Cookie( [ 'name' => $name, 'value' => $value ] ),
+            array_keys( $_COOKIE ),
+            array_values( $_COOKIE )
+        );
+        wp_remote_post( admin_url( 'admin-ajax.php' ), [
+            'blocking'  => false,
+            'sslverify' => false,
+            'timeout'   => 0.01,
+            'cookies'   => $cookies,
+            'body'      => [
+                'action' => 'csdt_devtools_ai_image_process',
+                'nonce'  => wp_create_nonce( self::THUMB_NONCE ),
+                'job_id' => $job_id,
+            ],
+        ] );
+
+        wp_send_json_success( [ 'job_id' => $job_id ] );
+    }
+
+    // ─── Background: process image job (called via loopback) ────────────
+
+    public static function ajax_ai_image_process(): void {
+        check_ajax_referer( self::THUMB_NONCE, 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die();
+        }
+
+        $job_id = isset( $_POST['job_id'] ) ? sanitize_text_field( wp_unslash( $_POST['job_id'] ) ) : '';
+        if ( ! $job_id ) { wp_die(); }
+
+        $job = get_transient( "csdt_img_job_{$job_id}" );
+        if ( ! $job || 'pending' !== $job['status'] ) { wp_die(); }
+
+        $job['status'] = 'processing';
+        set_transient( "csdt_img_job_{$job_id}", $job, 600 );
+
+        set_time_limit( 300 );
+
+        $post_id       = $job['post_id'];
+        $quality       = $job['quality'];
+        $prompt        = $job['prompt'];
+        $no_text       = $job['no_text'];
+        $prompt_vendor = $job['prompt_vendor'];
+        $prompt_model  = $job['prompt_model'];
+        $prompt_style  = $job['prompt_style'];
+
         $post = get_post( $post_id );
         if ( ! $post ) {
-            wp_send_json_error( [ 'message' => 'Post not found.' ] );
-            return;
+            $job['status'] = 'error';
+            $job['error']  = 'Post not found.';
+            set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+            wp_die();
         }
 
         $title = $post->post_title;
         $slug  = sanitize_file_name( $post->post_name ?: 'post-' . $post_id );
 
         if ( '' === $prompt ) {
+            set_time_limit( 0 );
+
             $content    = wp_strip_all_tags( $post->post_content );
             $excerpt    = $post->post_excerpt ?: wp_trim_words( $content, 80 );
             $categories = implode( ', ', wp_list_pluck( get_the_category( $post_id ), 'name' ) );
@@ -2376,7 +2418,7 @@ The text rule is passed separately in the user message — follow it exactly.
             $context_parts[] = "Article content:\n{$full_body}";
             $context_str = implode( "\n\n", $context_parts );
 
-            $style_map_inline = [
+            $style_map = [
                 'cinematic_poster'      => 'cinematic photorealistic movie-poster layout, ONE bold 2–3 word all-caps headline as the ONLY text element on a dark background — absolutely no subtitles, body copy, bullet points, captions, or any other text',
                 'technical_infographic' => 'bold technical illustration with strong visual hierarchy, clean geometric shapes',
                 'photorealistic'        => 'cinematic photorealistic photography, dramatic lighting, macro detail',
@@ -2386,14 +2428,15 @@ The text rule is passed separately in the user message — follow it exactly.
                 'flat_vector'           => 'flat vector illustration, bold shapes, clean lines',
                 'minimalist'            => 'minimalist design, bold shapes, clean negative space',
             ];
-            $style_instr_inline  = isset( $style_map_inline[ $prompt_style ] ) ? " Required visual style: {$style_map_inline[$prompt_style]}." : '';
-            $is_poster_inline    = ( $prompt_style === 'cinematic_poster' );
-            $text_rule_inline    = $no_text
+            $style_instr = isset( $style_map[ $prompt_style ] ) ? " Required visual style: {$style_map[$prompt_style]}." : '';
+            $is_poster   = ( 'cinematic_poster' === $prompt_style );
+            $text_rule   = $no_text
                 ? ' TEXT RULE: The finished image must contain ZERO text — no words, no letters, no numbers, no labels, no captions, no titles. Pure visual only.'
-                : ( $is_poster_inline
+                : ( $is_poster
                     ? ' TEXT RULE: Include ONE 2–3 word all-caps bold headline as the SOLE text element. Absolutely no subtitles, body copy, bullet points, captions, or other text.'
                     : ' TEXT RULE: Include ZERO text in the image — no headlines, titles, labels, captions, or descriptions. The article title is added separately by the publishing system.' );
-            $pov_pool_inline = [
+
+            $pov_pool = [
                 'MANDATORY COMPOSITION: extreme macro close-up — fill the entire frame with surface detail, no background visible.',
                 'MANDATORY COMPOSITION: dramatic worm\'s-eye view — subjects tower above the viewer, shot from ground level looking steeply upward.',
                 'MANDATORY COMPOSITION: aerial top-down bird\'s-eye view — all subjects arranged on a flat surface, viewed from directly above.',
@@ -2401,9 +2444,9 @@ The text rule is passed separately in the user message — follow it exactly.
                 'MANDATORY COMPOSITION: cinematic wide shot — subjects occupy left third, vast dark space on right with distant atmospheric depth.',
                 'MANDATORY COMPOSITION: over-the-shoulder mid shot — one large subject looms in the left foreground, second subject faces it from the right.',
             ];
-            $pov_inline = ' ' . $pov_pool_inline[ array_rand( $pov_pool_inline ) ];
+
             $system_msg = self::get_img_system_prompt();
-            $user_msg   = "{$context_str}\n\nStep 1 — Read the ENTIRE article — title, angle, and conclusion — then identify: (a) which technology brands/products/protocols are mentioned, (b) the ROLE each plays in THIS SPECIFIC ARTICLE'S NARRATIVE — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n\nStep 2 — Write the DALL-E 3 prompt using those roles. For companies with logos (AWS, Cloudflare, Docker, etc.) use their actual iconic visual. For protocols and concepts (TCP, QUIC, HTTP/3, etc.) use a concrete physical metaphor for what they DO. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.\n\nOutput ONLY the final DALL-E 3 prompt.{$style_instr_inline}{$text_rule_inline}{$pov_inline}";
+            $user_msg   = "{$context_str}\n\nStep 1 — Read the ENTIRE article — title, angle, and conclusion — then identify: (a) which technology brands/products/protocols are mentioned, (b) the ROLE each plays in THIS SPECIFIC ARTICLE'S NARRATIVE — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n\nStep 2 — Write the gpt-image-2 prompt using those roles. For companies with logos (AWS, Cloudflare, Docker, etc.) use their actual iconic visual. For protocols and concepts (TCP, QUIC, HTTP/3, etc.) use a concrete physical metaphor for what they DO. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.\n\nOutput ONLY the final gpt-image-2 prompt.{$style_instr}{$text_rule} " . $pov_pool[ array_rand( $pov_pool ) ];
 
             try {
                 switch ( $prompt_vendor ) {
@@ -2421,8 +2464,10 @@ The text rule is passed separately in the user message — follow it exactly.
                         break;
                 }
             } catch ( \RuntimeException $e ) {
-                wp_send_json_error( [ 'message' => $e->getMessage() ] );
-                return;
+                $job['status'] = 'error';
+                $job['error']  = $e->getMessage();
+                set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+                wp_die();
             }
         }
 
@@ -2430,74 +2475,88 @@ The text rule is passed separately in the user message — follow it exactly.
         require_once ABSPATH . 'wp-admin/includes/media.php';
         require_once ABSPATH . 'wp-admin/includes/image.php';
 
-        $options    = [];
-        $last_error = '';
-
-        // Enforce no-text at the DALL-E call level — DALL-E cannot reliably render
-        // text and any attempt produces garbled glyphs. Append when the user has
-        // checked "no text", or always (blog headers should never carry text).
         if ( $no_text ) {
             $prompt .= ' Important: NO text, words, letters, numbers, labels, captions, or typography of any kind anywhere in the image.';
         }
 
-        for ( $i = 1; $i <= $count; $i++ ) {
-            try {
-                $image_url = CSDT_AI_Dispatcher::generate_image( $prompt, '1792x1024', $quality );
-            } catch ( \RuntimeException $e ) {
-                $last_error = $e->getMessage();
-                continue;
-            }
+        try {
+            $tmp_png = CSDT_AI_Dispatcher::generate_image( $prompt, '1536x1024', $quality );
+        } catch ( \RuntimeException $e ) {
+            $job['status'] = 'error';
+            $job['error']  = $e->getMessage();
+            set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+            wp_die();
+        }
 
-            $tmp_png = download_url( $image_url );
-            if ( is_wp_error( $tmp_png ) ) {
-                continue;
-            }
+        $tmp_jpg = self::convert_to_jpg_under_400k( $tmp_png );
+        @unlink( $tmp_png ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
-            $tmp_jpg = self::convert_to_jpg_under_400k( $tmp_png );
-            @unlink( $tmp_png ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+        if ( ! $tmp_jpg ) {
+            $job['status'] = 'error';
+            $job['error']  = 'Image conversion failed.';
+            set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+            wp_die();
+        }
 
-            if ( ! $tmp_jpg ) {
-                continue;
-            }
+        $is_poster = ( 'cinematic_poster' === $prompt_style )
+            || ( stripos( $prompt, 'bold all-caps' ) !== false )
+            || ( stripos( $prompt, 'all-caps text' ) !== false )
+            || ( stripos( $prompt, 'poster layout' ) !== false )
+            || ( stripos( $prompt, 'movie poster' ) !== false );
+        if ( ! $is_poster ) {
+            self::overlay_title( $tmp_jpg, $title );
+        }
 
-            // Skip GD title overlay for cinematic poster style — text is already
-            // rendered inside the image by DALL-E as a design element.
-            $is_poster = ( $prompt_style === 'cinematic_poster' )
-                || ( stripos( $prompt, 'bold all-caps' ) !== false )
-                || ( stripos( $prompt, 'all-caps text' ) !== false )
-                || ( stripos( $prompt, 'poster layout' ) !== false )
-                || ( stripos( $prompt, 'movie poster' ) !== false );
-            if ( ! $is_poster ) {
-                self::overlay_title( $tmp_jpg, $title );
-            }
+        $file = [
+            'name'     => $slug . '-ai-header-1.jpg',
+            'tmp_name' => $tmp_jpg,
+        ];
+        $attach_id = media_handle_sideload( $file, $post_id, $title );
+        @unlink( $tmp_jpg ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 
-            $file = [
-                'name'     => $slug . '-ai-header-' . $i . '.jpg',
-                'tmp_name' => $tmp_jpg,
-            ];
+        if ( is_wp_error( $attach_id ) ) {
+            $job['status'] = 'error';
+            $job['error']  = $attach_id->get_error_message();
+            set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+            wp_die();
+        }
 
-            $attach_id = media_handle_sideload( $file, $post_id, $title );
-            @unlink( $tmp_jpg ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+        update_post_meta( $attach_id, '_wp_attachment_image_alt', sanitize_text_field( $title ) );
 
-            if ( is_wp_error( $attach_id ) ) {
-                continue;
-            }
-
-            update_post_meta( $attach_id, '_wp_attachment_image_alt', sanitize_text_field( $title ) );
-
-            $options[] = [
+        $job['status'] = 'done';
+        $job['result'] = [
+            'options' => [ [
                 'attach_id' => $attach_id,
                 'thumb_url' => wp_get_attachment_image_url( $attach_id, 'large' ),
                 'full_url'  => wp_get_attachment_url( $attach_id ),
-            ];
+            ] ],
+            'prompt' => $prompt,
+        ];
+        set_transient( "csdt_img_job_{$job_id}", $job, 300 );
+        wp_die();
+    }
+
+    // ─── AJAX: poll image generation job status ──────────────────────────
+
+    public static function ajax_ai_image_poll(): void {
+        check_ajax_referer( self::THUMB_NONCE, 'nonce' );
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( 'Unauthorized', 403 );
         }
 
-        if ( empty( $options ) ) {
-            wp_send_json_error( [ 'message' => $last_error ?: 'Failed to generate images.' ] );
+        $job_id = isset( $_POST['job_id'] ) ? sanitize_text_field( wp_unslash( $_POST['job_id'] ) ) : '';
+        $job    = get_transient( "csdt_img_job_{$job_id}" );
+
+        if ( ! $job ) {
+            wp_send_json_error( [ 'status' => 'expired' ] );
             return;
         }
 
-        wp_send_json_success( [ 'options' => $options, 'prompt' => $prompt ] );
+        wp_send_json_success( [
+            'status' => $job['status'],
+            'result' => $job['result'] ?? null,
+            'error'  => $job['error']  ?? null,
+        ] );
     }
 
     // ─── AJAX: pick one of the generated options as thumbnail ────────────

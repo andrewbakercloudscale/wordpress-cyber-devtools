@@ -54,7 +54,10 @@ function renderLeaderboard(game){
     }
     panel.innerHTML=html;
 }
-if(typeof CS_PCR_API!=='undefined'){
+var _s=document.querySelector('script[data-api]');
+var CS_PCR_API=_s?_s.getAttribute('data-api'):undefined;
+var CS_PCR_SCORE_NONCE=_s?_s.getAttribute('data-nonce'):undefined;
+if(CS_PCR_API){
     GNAMES.forEach(function(g){
         fetch(CS_PCR_API+'/hiscore/'+g)
             .then(function(r){return r.json();})
@@ -80,8 +83,8 @@ function saveName(){
     var g=pendingGame,s=pendingScore;
     lbInsert(g,s,n);
     renderLeaderboard(g);
-    if(typeof CS_PCR_API!=='undefined'){
-        fetch(CS_PCR_API+'/hiscore/'+g,{method:'POST',headers:{'Content-Type':'application/json','X-WP-Score-Nonce':typeof CS_PCR_SCORE_NONCE!=='undefined'?CS_PCR_SCORE_NONCE:''},
+    if(CS_PCR_API){
+        fetch(CS_PCR_API+'/hiscore/'+g,{method:'POST',headers:{'Content-Type':'application/json','X-WP-Score-Nonce':CS_PCR_SCORE_NONCE||''},
             body:JSON.stringify({game:g,score:s,name:n})})
             .then(function(r){return r.json();})
             .then(function(d){

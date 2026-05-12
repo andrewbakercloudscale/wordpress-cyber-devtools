@@ -201,8 +201,8 @@ class CSDT_Custom_404 {
     </div>
 </div>
 
-<?php echo '<script>var CS_PCR_API=' . wp_json_encode( rest_url( CloudScale_DevTools::HISCORE_NS ) ) . ';var CS_PCR_SCORE_NONCE=' . wp_json_encode( wp_create_nonce( CloudScale_DevTools::SCORE_NONCE_ACTION ) ) . ';</script>'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- standalone exit-page ?>
-<?php echo '<script src="' . esc_url( $js_url ) . '"></script>'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- standalone 404 exit-page, no wp_head/wp_footer ?>
+<?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- standalone 404 exit-page; data passed via data-* attributes to avoid inline scripts ?>
+<script src="<?php echo esc_url( $js_url ); ?>" data-api="<?php echo esc_attr( rest_url( CloudScale_DevTools::HISCORE_NS ) ); ?>" data-nonce="<?php echo esc_attr( wp_create_nonce( CloudScale_DevTools::SCORE_NONCE_ACTION ) ); ?>"></script>
 
 </body>
 </html>

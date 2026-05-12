@@ -104,8 +104,8 @@ async function generateImage(page, style = 'auto') {
         await page.locator('#csdt-gen-style').selectOption(style);
     }
     await page.locator('#csdt-gen-regen').click();
-    // Wait up to 90s for generation (DALL-E can be slow)
-    await expect(page.locator('#csdt-gen-msg')).not.toContainText('⏳', { timeout: 90000 });
+    // Wait up to 3 minutes for gpt-image-2 async generation
+    await expect(page.locator('#csdt-gen-msg')).not.toContainText('⏳', { timeout: 180000 });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
