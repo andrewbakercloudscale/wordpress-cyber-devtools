@@ -128,8 +128,13 @@
         entry.ts = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2)+'.'+('00'+d.getMilliseconds()).slice(-3);
         editorLogs.unshift(entry);
         if (editorLogs.length > 200) { editorLogs.pop(); }
-        var isCrossOriginErr = entry.type === 'jserr' && /^script error\./i.test(entry.detail || '');
-        if (entry.type === 'fail' || (entry.type === 'jserr' && !isCrossOriginErr)) {
+        var isCrossOriginErr    = entry.type === 'jserr' && /^script error\./i.test(entry.detail || '');
+        // Third-party ad/analytics scripts send fire-and-forget fetch pings (e.g. pagead/ping,
+        // GTM beacons). When the page navigates away these abort, producing "Failed to fetch" /
+        // "NetworkError" / "AbortError" unhandled rejections. They are not actionable and should
+        // not trigger the error badge or a critical issue.
+        var isThirdPartyFetch   = entry.type === 'jserr' && /^Promise rejection: (Failed to fetch|NetworkError|The operation was aborted\.|signal timed out)/i.test(entry.detail || '');
+        if (entry.type === 'fail' || (entry.type === 'jserr' && !isCrossOriginErr && !isThirdPartyFetch)) {
             editorFailCount++;
             if (editorBadgeEl) { editorBadgeEl.textContent = editorFailCount; }
             computeIssues();
@@ -148,7 +153,7 @@
             } else {
                 pendingFlash = true;
             }
-        } else if (isCrossOriginErr) {
+        } else if (isCrossOriginErr || isThirdPartyFetch) {
             computeIssues();
             renderIssues();
         }
@@ -1479,16 +1484,21 @@
                     title: 'Editor request failed — ' + (e.method||'GET') + ' ' + path + actionHint + ' → ' + e.status,
                     detail: e.detail ? e.detail.slice(0,100) : '', plugin: '' });
             } else if (e.type === 'jserr') {
-                var isCrossOrigin = /^script error\./i.test(e.detail || '');
+                var isCrossOrigin     = /^script error\./i.test(e.detail || '');
+                var isThirdPartyFetch = /^Promise rejection: (Failed to fetch|NetworkError|The operation was aborted\.|signal timed out)/i.test(e.detail || '');
                 issuesList.push({
-                    sev:    isCrossOrigin ? 'info' : 'critical',
+                    sev:    isCrossOrigin ? 'info' : (isThirdPartyFetch ? 'warning' : 'critical'),
                     tab:    'editor',
                     title:  isCrossOrigin
                         ? 'Script error. (cross-origin — details hidden by browser; check DevTools console)'
-                        : 'JS Error — ' + (e.detail||'').slice(0,120),
+                        : isThirdPartyFetch
+                            ? 'Third-party fetch failed — ' + (e.detail||'').slice(0,120)
+                            : 'JS Error — ' + (e.detail||'').slice(0,120),
                     detail: isCrossOrigin
                         ? 'Add crossorigin="anonymous" to the offending <script> tag if the CDN sends CORS headers. Use Site Audit → crossorigin check to find missing attributes.'
-                        : (e.file || ''),
+                        : isThirdPartyFetch
+                            ? 'A fire-and-forget network request from a third-party script (e.g. AdSense pagead/ping, GTM analytics beacon) timed out or was cancelled — this typically happens when the browser navigates away before the request completes. These are expected and do not affect site functionality, ad revenue, or analytics accuracy. No action needed.'
+                            : (e.file || ''),
                     plugin: ''
                 });
             }
