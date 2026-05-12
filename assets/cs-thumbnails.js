@@ -1895,6 +1895,11 @@
         { val: 'cartoon',              label: '🎨 Cartoon'                 },
         { val: 'flat_vector',          label: '▲ Flat Vector'              },
         { val: 'minimalist',           label: '⬜ Minimalist'              },
+        { val: 'neon_cyberpunk',       label: '🌆 Neon / Cyberpunk'        },
+        { val: 'blueprint',            label: '📐 Blueprint'               },
+        { val: 'retro_80s',            label: '📺 Retro / 80s'             },
+        { val: 'dark_abstract',        label: '🌑 Dark Abstract'           },
+        { val: 'comic_book',           label: '💥 Comic Book'              },
     ];
 
     function pickStyle( anchor ) {

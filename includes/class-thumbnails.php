@@ -512,7 +512,13 @@ The text rule is passed in the user message — follow it exactly.';
                             <option value="technical_infographic" <?php selected( $saved_style, 'technical_infographic' ); ?>><?php esc_html_e( 'Technical Infographic', 'cloudscale-devtools' ); ?></option>
                             <option value="isometric" <?php selected( $saved_style, 'isometric' ); ?>><?php esc_html_e( 'Isometric 3D', 'cloudscale-devtools' ); ?></option>
                             <option value="cartoon" <?php selected( $saved_style, 'cartoon' ); ?>><?php esc_html_e( 'Cartoon / Illustration', 'cloudscale-devtools' ); ?></option>
+                            <option value="flat_vector" <?php selected( $saved_style, 'flat_vector' ); ?>><?php esc_html_e( 'Flat Vector', 'cloudscale-devtools' ); ?></option>
                             <option value="minimalist" <?php selected( $saved_style, 'minimalist' ); ?>><?php esc_html_e( 'Minimalist', 'cloudscale-devtools' ); ?></option>
+                            <option value="neon_cyberpunk" <?php selected( $saved_style, 'neon_cyberpunk' ); ?>><?php esc_html_e( '🌆 Neon / Cyberpunk', 'cloudscale-devtools' ); ?></option>
+                            <option value="blueprint" <?php selected( $saved_style, 'blueprint' ); ?>><?php esc_html_e( '📐 Blueprint', 'cloudscale-devtools' ); ?></option>
+                            <option value="retro_80s" <?php selected( $saved_style, 'retro_80s' ); ?>><?php esc_html_e( '📺 Retro / 80s', 'cloudscale-devtools' ); ?></option>
+                            <option value="dark_abstract" <?php selected( $saved_style, 'dark_abstract' ); ?>><?php esc_html_e( '🌑 Dark Abstract', 'cloudscale-devtools' ); ?></option>
+                            <option value="comic_book" <?php selected( $saved_style, 'comic_book' ); ?>><?php esc_html_e( '💥 Comic Book', 'cloudscale-devtools' ); ?></option>
                         </select>
                         <span class="cs-hint"><?php esc_html_e( 'Override the visual style. "Auto" defers to your system prompt instructions below.', 'cloudscale-devtools' ); ?></span>
                     </div>
@@ -2250,10 +2256,15 @@ The text rule is passed in the user message — follow it exactly.';
             'cartoon'               => 'bold cartoon illustration',
             'flat_vector'           => 'flat vector illustration, bold shapes, clean lines',
             'minimalist'            => 'minimalist design, bold shapes, clean negative space',
+            'neon_cyberpunk'        => 'dark cyberpunk scene, glowing neon accents in electric blue, purple and pink, rain-slicked reflective surfaces, dramatic rim lighting against pure black, synthwave aesthetic, ultra-high contrast',
+            'blueprint'             => 'white technical line art on deep navy blue background, engineering blueprint style, precise geometric construction lines, subtle grid overlay, glowing key elements, no colour fill',
+            'retro_80s'             => '1980s retro computer aesthetic, CRT phosphor glow and scanlines, pixelated neon elements, synthwave sunset gradient in purple and orange, VHS noise texture, bold geometric shapes',
+            'dark_abstract'         => 'deep dark gradient background in rich blacks and midnight blues, floating abstract geometric shapes with subtle inner glow, premium modern tech aesthetic, minimal accent highlights in electric teal or amber',
+            'comic_book'            => 'bold comic book illustration, thick black ink outlines, halftone Ben-Day dot shading, vibrant primary colours, dynamic diagonal composition, graphic novel energy, high contrast',
         ];
 
         // Styles that make sense as blog headers — used when auto-varying on Regenerate.
-        $vary_pool = [ 'photorealistic', 'editorial', 'technical_infographic', 'minimalist', 'isometric', 'cartoon', 'flat_vector' ];
+        $vary_pool = [ 'photorealistic', 'editorial', 'technical_infographic', 'minimalist', 'isometric', 'cartoon', 'flat_vector', 'neon_cyberpunk', 'blueprint', 'retro_80s', 'dark_abstract', 'comic_book' ];
 
         // On force_vary, cycle through sensible blog-header styles only.
         if ( $force_vary ) {
