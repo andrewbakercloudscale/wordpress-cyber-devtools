@@ -2381,7 +2381,7 @@ The text rule is passed in the user message — follow it exactly.';
         $job['status'] = 'processing';
         set_transient( "csdt_img_job_{$job_id}", $job, 600 );
 
-        set_time_limit( 300 );
+        set_time_limit( 0 );
 
         $post_id       = $job['post_id'];
         $quality       = $job['quality'];

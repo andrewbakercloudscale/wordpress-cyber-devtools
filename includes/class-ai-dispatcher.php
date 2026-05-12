@@ -294,7 +294,7 @@ class CSDT_AI_Dispatcher {
         $api_quality = $quality_map[ $quality ] ?? $quality;
 
         $resp = wp_remote_post( 'https://api.openai.com/v1/images/generations', [
-            'timeout' => 180,
+            'timeout' => 600,
             'headers' => [
                 'Authorization' => 'Bearer ' . $key,
                 'Content-Type'  => 'application/json',
