@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-PI_KEY="${HOME}/Desktop/github/pi-monitor/deploy/pi_key"
+PI_KEY="${HOME}/Desktop/github/raspberry-pis/pi-monitor/deploy/pi_key"
 PI_USER="pi"
 PI_HOST="andrew-pi-5.local"
 NGINX_CONF="/home/pi/andrewbakerninja-pi/nginx/wordpress.conf"

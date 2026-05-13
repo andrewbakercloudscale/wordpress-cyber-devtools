@@ -1592,6 +1592,56 @@
         if ( qualityEl && window.csdtImgQuality ) { qualityEl.value  = window.csdtImgQuality; }
         if ( noTextEl  && window.csdtImgNoText  ) { noTextEl.checked = true; }
 
+        // ── Generation mode toggle ────────────────────────────────────────
+        const modeClassicBtn  = document.getElementById( 'cs-mode-btn-classic' );
+        const modeVisualBtn   = document.getElementById( 'cs-mode-btn-visual-summary' );
+        const articleStyleRow = document.getElementById( 'cs-ai-article-style-row' );
+        const articleStyleEl  = document.getElementById( 'cs-ai-img-article-style' );
+
+        // Populate article style options from PHP-injected data.
+        if ( articleStyleEl && window.csdtArticleStyleOptions ) {
+            articleStyleEl.innerHTML = '';
+            window.csdtArticleStyleOptions.forEach( o => {
+                const opt = document.createElement( 'option' );
+                opt.value       = o.val;
+                opt.textContent = o.label;
+                articleStyleEl.appendChild( opt );
+            } );
+        }
+
+        function applyModeToggle( mode ) {
+            const isVS = ( mode === 'visual_summary' );
+            if ( modeClassicBtn ) {
+                modeClassicBtn.style.background  = isVS ? '#f8fafc' : '#1565c0';
+                modeClassicBtn.style.color       = isVS ? '#475569' : '#fff';
+                modeClassicBtn.style.fontWeight  = isVS ? '400'     : '600';
+            }
+            if ( modeVisualBtn ) {
+                modeVisualBtn.style.background   = isVS ? '#1565c0' : '#f8fafc';
+                modeVisualBtn.style.color        = isVS ? '#fff'    : '#475569';
+                modeVisualBtn.style.fontWeight   = isVS ? '600'     : '400';
+            }
+            if ( articleStyleRow ) {
+                articleStyleRow.style.display = isVS ? '' : 'none';
+            }
+        }
+
+        const savedGenMode = localStorage.getItem( 'csdt_img_gen_mode' ) || 'visual_summary';
+        applyModeToggle( savedGenMode );
+
+        if ( modeClassicBtn ) {
+            modeClassicBtn.addEventListener( 'click', () => {
+                localStorage.setItem( 'csdt_img_gen_mode', 'classic' );
+                applyModeToggle( 'classic' );
+            } );
+        }
+        if ( modeVisualBtn ) {
+            modeVisualBtn.addEventListener( 'click', () => {
+                localStorage.setItem( 'csdt_img_gen_mode', 'visual_summary' );
+                applyModeToggle( 'visual_summary' );
+            } );
+        }
+
         // Auto-save whenever any setting changes.
         function saveSettings() {
             const style   = styleEl?.value    || 'auto';
@@ -1885,22 +1935,7 @@
         return { open, preview };
     }
 
-    const STYLE_OPTIONS = [
-        { val: 'auto',                 label: '🎲 Auto — AI chooses'      },
-        { val: 'cinematic_poster',     label: '🎬 Cinematic Poster'        },
-        { val: 'photorealistic',       label: '📷 Photorealistic'          },
-        { val: 'editorial',            label: '📰 Editorial'               },
-        { val: 'technical_infographic',label: '📊 Technical Infographic'   },
-        { val: 'isometric',            label: '🏗 Isometric 3D'            },
-        { val: 'cartoon',              label: '🎨 Cartoon'                 },
-        { val: 'flat_vector',          label: '▲ Flat Vector'              },
-        { val: 'minimalist',           label: '⬜ Minimalist'              },
-        { val: 'neon_cyberpunk',       label: '🌆 Neon / Cyberpunk'        },
-        { val: 'blueprint',            label: '📐 Blueprint'               },
-        { val: 'retro_80s',            label: '📺 Retro / 80s'             },
-        { val: 'dark_abstract',        label: '🌑 Dark Abstract'           },
-        { val: 'comic_book',           label: '💥 Comic Book'              },
-    ];
+    const STYLE_OPTIONS = ( window.csdtDevtoolsThumbs && csdtDevtoolsThumbs.styleOptions ) || [];
 
     function pickStyle( anchor ) {
         return new Promise( resolve => {
@@ -1969,13 +2004,15 @@
             const promptModel  = ( modelEl?.value || curModel || 'gpt-4o-mini' );
             const promptStyle  = chosenStyle || styleEl?.value || 'auto';
             const noText       = document.getElementById( 'cs-ai-img-no-text' )?.checked ? '1' : '0';
+            const genMode      = localStorage.getItem( 'csdt_img_gen_mode' ) || 'classic';
+            const articleStyle = document.getElementById( 'cs-ai-img-article-style' )?.value || 'general';
 
             btn.disabled    = true;
             btn.textContent = '⏳ Writing prompt…';
             if ( statusEl ) statusEl.textContent = '';
 
             // Step 1 — ask AI to write the image prompt.
-            post( 'csdt_devtools_ai_image_write_prompt', { post_id: postId, prompt_vendor: promptVendor, prompt_model: promptModel, prompt_style: promptStyle, no_text: noText, force_vary: forceVary ? '1' : '0' } )
+            post( 'csdt_devtools_ai_image_write_prompt', { post_id: postId, prompt_vendor: promptVendor, prompt_model: promptModel, prompt_style: promptStyle, no_text: noText, force_vary: forceVary ? '1' : '0', mode: genMode, article_style: articleStyle } )
                 .then( res => {
                     btn.disabled    = false;
                     btn.textContent = '✨ Generate';
@@ -1992,7 +2029,7 @@
                             btn.textContent = '⏳ Generating…';
                             if ( statusEl ) statusEl.innerHTML = '<span style="color:#94a3b8;font-size:11px">⏳ Generating…</span>';
 
-                            post( 'csdt_devtools_ai_image_generate', { post_id: postId, quality, prompt_vendor: promptVendor, prompt_model: promptModel, prompt: editedPrompt, no_text: noText } )
+                            post( 'csdt_devtools_ai_image_generate', { post_id: postId, quality, prompt_vendor: promptVendor, prompt_model: promptModel, prompt: editedPrompt, no_text: noText, mode: genMode, article_style: articleStyle } )
                                 .then( startRes => {
                                     if ( ! startRes.success ) {
                                         btn.disabled    = false;

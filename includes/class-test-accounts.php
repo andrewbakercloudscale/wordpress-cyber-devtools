@@ -650,6 +650,26 @@ class CSDT_Test_Accounts {
         wp_send_json_success( [ 'usage' => self::get_app_password_usage() ] );
     }
 
+    public static function ajax_bulk_delete_app_passwords(): void {
+        if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Forbidden', 403 ); }
+        check_ajax_referer( 'csdt_devtools_login_nonce', 'nonce' );
+
+        $items_raw = wp_unslash( $_POST['items'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON-decoded; user_id cast to int and uuid sanitized individually below
+        $items     = json_decode( $items_raw, true );
+        if ( ! is_array( $items ) || empty( $items ) ) { wp_send_json_error( 'Missing items' ); }
+
+        $deleted = 0;
+        foreach ( $items as $item ) {
+            $user_id = (int) ( $item['user_id'] ?? 0 );
+            $uuid    = sanitize_text_field( $item['uuid'] ?? '' );
+            if ( ! $user_id || ! $uuid ) { continue; }
+            $result = WP_Application_Passwords::delete_application_password( $user_id, $uuid );
+            if ( ! is_wp_error( $result ) ) { $deleted++; }
+        }
+
+        wp_send_json_success( [ 'deleted' => $deleted, 'usage' => self::get_app_password_usage() ] );
+    }
+
     public static function test_account_after_auth( $user, $app_password ): void {
         if ( get_user_meta( $user->ID, 'csdt_test_account', true ) !== '1' ) {
             return;

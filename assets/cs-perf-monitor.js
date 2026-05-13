@@ -113,7 +113,11 @@
             var blocked = e.blockedURI || '(inline)';
             var dir     = e.effectiveDirective || e.violatedDirective || '';
             var src     = e.sourceFile ? e.sourceFile.replace(/^https?:\/\/[^/]+\//, '') + ':' + e.lineNumber : '';
-            var disp    = e.disposition === 'report' ? '[report-only] ' : '';
+            var isReportOnly = e.disposition === 'report';
+            // Suppress report-only violations for same-origin paths — these come from
+            // Cloudflare's own injected report-only CSP on admin pages and are not actionable.
+            if ( isReportOnly && /^https?:\/\/[^/]+\/(cdn-cgi\/|wp-admin\/|wp-json\/)/.test( blocked ) ) { return; }
+            var disp = isReportOnly ? '[report-only] ' : '';
             pushEditorLog({
                 type:   'jserr',
                 detail: disp + 'CSP blocked: ' + blocked + (dir ? ' (' + dir + ')' : '') +

@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: CloudScale Cyber and Devtools
+ * Plugin Name: CloudScale DevTools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.880
+ * Version: 1.9.888
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.880';
+    const VERSION      = '1.9.888';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -470,6 +470,7 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_rename_wp_user',               [ __CLASS__, 'ajax_rename_wp_user' ] );
         add_action( 'wp_ajax_csdt_toggle_block_basic_auth',      [ 'CSDT_Test_Accounts', 'ajax_toggle_block_basic_auth' ] );
         add_action( 'wp_ajax_csdt_delete_app_password',          [ 'CSDT_Test_Accounts', 'ajax_delete_app_password' ] );
+        add_action( 'wp_ajax_csdt_bulk_delete_app_passwords',    [ 'CSDT_Test_Accounts', 'ajax_bulk_delete_app_passwords' ] );
         add_action( 'rest_api_init',                             [ 'CSDT_Test_Accounts', 'register_rest_routes' ] );
         self::cron_action( 'csdt_scheduled_scan',                [ 'CSDT_Site_Audit', 'run_scheduled_scan' ] );
         self::cron_action( 'csdt_ssh_monitor',                  [ 'CSDT_Monitor', 'monitor_ssh_failures' ] );
@@ -624,6 +625,7 @@ class CloudScale_DevTools {
         }
 
         // Custom 404 page + hiscore leaderboard.
+        add_action( 'template_redirect',                        [ 'CSDT_Custom_404', 'serve_scheme_css' ], 0 );
         add_action( 'template_redirect',                        [ 'CSDT_Custom_404', 'maybe_custom_404' ], 1 );
         add_action( 'rest_api_init',                            [ 'CSDT_Custom_404', 'register_hiscore_routes' ] );
         add_action( 'rest_api_init',                            [ 'CSDT_CSP', 'register_csp_report_route' ] );
@@ -4630,6 +4632,7 @@ class CloudScale_DevTools {
                         $usage_badge_text  = '✓ No app passwords in use — safe to enable block';
                     } else {
                         $usage_badge_bg    = '#fef2f2'; $usage_badge_border = '#fca5a5'; $usage_badge_color = '#991b1b';
+                        /* translators: %1$d: number of app passwords, %2$d: number of users */
                         $usage_badge_text  = sprintf(
                             _n( '%d app password across %d user — identify the integration before blocking', '%d app passwords across %d users — identify the integrations before blocking', $app_pw_total, 'cloudscale-devtools' ),
                             $app_pw_total, $app_pw_users
@@ -4651,6 +4654,7 @@ class CloudScale_DevTools {
                                     <table style="width:100%;border-collapse:collapse;font-size:11px;">
                                         <thead>
                                             <tr style="background:#f8fafc;border-bottom:1px solid #e5e7eb;">
+                                                <th style="padding:6px 10px;width:28px;"><input type="checkbox" id="cs-app-pw-select-all" title="Select all" style="cursor:pointer;"></th>
                                                 <th style="padding:6px 10px;text-align:left;color:#374151;font-weight:600;">App name</th>
                                                 <th style="padding:6px 10px;text-align:left;color:#374151;font-weight:600;">User</th>
                                                 <th style="padding:6px 10px;text-align:left;color:#374151;font-weight:600;">Created</th>
@@ -4668,6 +4672,7 @@ class CloudScale_DevTools {
                                                 $never         = ! $pw['last_used'];
                                         ?>
                                             <tr data-uuid="<?php echo esc_attr( $pw['uuid'] ); ?>" data-user="<?php echo esc_attr( (string) $u_entry['user_id'] ); ?>" style="border-bottom:1px solid #f1f5f9;">
+                                                <td style="padding:5px 10px;"><input type="checkbox" class="cs-app-pw-row-cb" style="cursor:pointer;"></td>
                                                 <td style="padding:5px 10px;color:#111827;font-weight:600;"><?php echo esc_html( $pw['name'] ?: '(unnamed)' ); ?></td>
                                                 <td style="padding:5px 10px;color:#6b7280;"><?php echo esc_html( $u_entry['display_name'] ); ?></td>
                                                 <td style="padding:5px 10px;color:#6b7280;"><?php echo esc_html( $created_str ); ?></td>
@@ -4680,6 +4685,11 @@ class CloudScale_DevTools {
                                         <?php endforeach; endforeach; ?>
                                         </tbody>
                                     </table>
+                                    <div style="padding:6px 10px;background:#f8fafc;border-top:1px solid #e5e7eb;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                        <span id="cs-app-pw-sel-count" style="display:none;font-size:11px;color:#374151;flex:1;"></span>
+                                        <button type="button" id="cs-app-pw-delete-selected" class="cs-btn-secondary cs-btn-sm" style="display:none;color:#dc2626;border-color:#fca5a5;font-size:10px;padding:2px 7px;">✕ Delete selected</button>
+                                        <button type="button" id="cs-app-pw-delete-all" class="cs-btn-secondary cs-btn-sm" style="color:#dc2626;border-color:#fca5a5;font-size:10px;padding:2px 7px;">✕ Delete all</button>
+                                    </div>
                                     <div id="cs-app-pw-delete-msg" style="display:none;padding:6px 10px;font-size:11px;"></div>
                                 </div>
                             </div>
@@ -4750,19 +4760,108 @@ class CloudScale_DevTools {
                     <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline delete handler ?>
                     <script>
                     (function() {
-                        var tbody = document.getElementById('cs-app-pw-tbody');
-                        var msgEl = document.getElementById('cs-app-pw-delete-msg');
+                        var tbody     = document.getElementById('cs-app-pw-tbody');
+                        var msgEl     = document.getElementById('cs-app-pw-delete-msg');
+                        var selectAll = document.getElementById('cs-app-pw-select-all');
+                        var selCount  = document.getElementById('cs-app-pw-sel-count');
+                        var delSelBtn = document.getElementById('cs-app-pw-delete-selected');
+                        var delAllBtn = document.getElementById('cs-app-pw-delete-all');
                         if (!tbody) { return; }
                         var ajaxUrl = '<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>';
                         var nonce   = (typeof csdtTestAccounts !== 'undefined' ? csdtTestAccounts.nonce : '<?php echo esc_js( wp_create_nonce( 'csdt_devtools_login_nonce' ) ); ?>');
+
+                        function updateBadgeAndPanel(usage) {
+                            var badge = document.getElementById('cs-app-pw-usage-badge');
+                            if (!badge || !usage) { return; }
+                            var n = usage.passwords, u = usage.users;
+                            if (n === 0) {
+                                badge.style.background = '#f0fdf4'; badge.style.borderColor = '#86efac'; badge.style.color = '#166534';
+                                badge.textContent = '✓ No app passwords in use — safe to enable block';
+                                var panel = document.getElementById('cs-app-pw-list');
+                                if (panel) { panel.closest('div').style.display = 'none'; }
+                            } else {
+                                badge.style.background = '#fef2f2'; badge.style.borderColor = '#fca5a5'; badge.style.color = '#991b1b';
+                                badge.textContent = n + ' app password' + (n !== 1 ? 's' : '') + ' across ' + u + ' user' + (u !== 1 ? 's' : '') + ' — identify the integration' + (n !== 1 ? 's' : '') + ' before blocking';
+                            }
+                        }
+
+                        function syncSelectionUI() {
+                            var all     = tbody.querySelectorAll('.cs-app-pw-row-cb');
+                            var checked = tbody.querySelectorAll('.cs-app-pw-row-cb:checked');
+                            var n = checked.length;
+                            if (selCount) { selCount.style.display = n > 0 ? 'inline' : 'none'; selCount.textContent = n + ' selected'; }
+                            if (delSelBtn) { delSelBtn.style.display = n > 0 ? 'inline-block' : 'none'; }
+                            if (selectAll) {
+                                selectAll.checked       = all.length > 0 && n === all.length;
+                                selectAll.indeterminate = n > 0 && n < all.length;
+                            }
+                        }
+
+                        if (selectAll) {
+                            selectAll.addEventListener('change', function() {
+                                tbody.querySelectorAll('.cs-app-pw-row-cb').forEach(function(cb) { cb.checked = selectAll.checked; });
+                                syncSelectionUI();
+                            });
+                        }
+
+                        tbody.addEventListener('change', function(e) {
+                            if (e.target.classList.contains('cs-app-pw-row-cb')) { syncSelectionUI(); }
+                        });
+
+                        function bulkDelete(rows) {
+                            if (!rows.length) { return; }
+                            var label = rows.length + ' app password' + (rows.length !== 1 ? 's' : '');
+                            if (!confirm('Delete ' + label + '?\n\nAny integration using them will stop working immediately.')) { return; }
+                            var items = rows.map(function(r) { return { user_id: r.dataset.user, uuid: r.dataset.uuid }; });
+                            if (delSelBtn) { delSelBtn.disabled = true; }
+                            if (delAllBtn) { delAllBtn.disabled = true; }
+                            var fd = new FormData();
+                            fd.append('action', 'csdt_bulk_delete_app_passwords');
+                            fd.append('nonce',  nonce);
+                            fd.append('items',  JSON.stringify(items));
+                            fetch(ajaxUrl, { method: 'POST', body: fd })
+                                .then(function(r) { return r.json(); })
+                                .then(function(resp) {
+                                    if (delSelBtn) { delSelBtn.disabled = false; }
+                                    if (delAllBtn) { delAllBtn.disabled = false; }
+                                    if (resp && resp.success) {
+                                        rows.forEach(function(r) { r.style.transition = 'opacity .3s'; r.style.opacity = '0'; setTimeout(function() { r.remove(); }, 300); });
+                                        setTimeout(function() { syncSelectionUI(); }, 350);
+                                        updateBadgeAndPanel(resp.data && resp.data.usage);
+                                        var n = (resp.data && resp.data.deleted) || rows.length;
+                                        if (msgEl) { msgEl.style.display = 'block'; msgEl.style.color = '#166534'; msgEl.textContent = '✓ Deleted ' + n + ' password' + (n !== 1 ? 's' : ''); setTimeout(function(){ msgEl.style.display = 'none'; }, 3000); }
+                                    } else {
+                                        if (msgEl) { msgEl.style.display = 'block'; msgEl.style.color = '#dc2626'; msgEl.textContent = '✗ ' + (resp && resp.data ? resp.data : 'Error'); }
+                                    }
+                                })
+                                .catch(function(e) {
+                                    if (delSelBtn) { delSelBtn.disabled = false; }
+                                    if (delAllBtn) { delAllBtn.disabled = false; }
+                                    if (msgEl) { msgEl.style.display = 'block'; msgEl.style.color = '#dc2626'; msgEl.textContent = '✗ ' + (e && e.message ? e.message : 'network error'); }
+                                });
+                        }
+
+                        if (delSelBtn) {
+                            delSelBtn.addEventListener('click', function() {
+                                var rows = Array.from(tbody.querySelectorAll('.cs-app-pw-row-cb:checked')).map(function(cb) { return cb.closest('tr'); });
+                                bulkDelete(rows);
+                            });
+                        }
+
+                        if (delAllBtn) {
+                            delAllBtn.addEventListener('click', function() {
+                                bulkDelete(Array.from(tbody.querySelectorAll('tr')));
+                            });
+                        }
+
                         tbody.addEventListener('click', function(e) {
                             var btn = e.target.closest('.cs-app-pw-delete-btn');
                             if (!btn) { return; }
                             var row    = btn.closest('tr');
-                            var uuid   = row ? row.dataset.uuid   : '';
-                            var userId = row ? row.dataset.user   : '';
+                            var uuid   = row ? row.dataset.uuid : '';
+                            var userId = row ? row.dataset.user : '';
                             if (!uuid || !userId) { return; }
-                            var appName = row.cells[0] ? row.cells[0].textContent.trim() : uuid;
+                            var appName = row.cells[1] ? row.cells[1].textContent.trim() : uuid;
                             if (!confirm('Delete app password "' + appName + '"?\n\nAny integration using it will stop working immediately.')) { return; }
                             btn.disabled = true;
                             btn.textContent = '…';
@@ -4777,20 +4876,8 @@ class CloudScale_DevTools {
                                     if (resp && resp.success) {
                                         row.style.transition = 'opacity .3s';
                                         row.style.opacity = '0';
-                                        setTimeout(function() { row.remove(); }, 300);
-                                        var usage = resp.data && resp.data.usage;
-                                        var badge = document.getElementById('cs-app-pw-usage-badge');
-                                        if (badge && usage) {
-                                            var n = usage.passwords, u = usage.users;
-                                            if (n === 0) {
-                                                badge.style.background = '#f0fdf4'; badge.style.borderColor = '#86efac'; badge.style.color = '#166534';
-                                                badge.textContent = '✓ No app passwords in use — safe to enable block';
-                                                var panel = document.getElementById('cs-app-pw-list');
-                                                if (panel) { panel.closest('div').style.display = 'none'; }
-                                            } else {
-                                                badge.textContent = n + ' app password' + (n !== 1 ? 's' : '') + ' across ' + u + ' user' + (u !== 1 ? 's' : '') + ' — identify the integration' + (n !== 1 ? 's' : '') + ' before blocking';
-                                            }
-                                        }
+                                        setTimeout(function() { row.remove(); syncSelectionUI(); }, 300);
+                                        updateBadgeAndPanel(resp.data && resp.data.usage);
                                         if (msgEl) { msgEl.style.display = 'block'; msgEl.style.color = '#166534'; msgEl.textContent = '✓ Deleted "' + appName + '"'; setTimeout(function(){ msgEl.style.display = 'none'; }, 3000); }
                                     } else {
                                         btn.disabled = false; btn.textContent = '✕ Delete';
@@ -5536,6 +5623,12 @@ class CloudScale_DevTools {
                 $ev_title  = (string) ( $ev['title'] ?? '' );
                 $ev_detail = (string) ( $ev['detail'] ?? '' );
                 $age       = $ev_time ? human_time_diff( $ev_time ) . ' ago' : '';
+                $ev_title_safe = (string) preg_replace( "/[:\s]*'[^']*'\s*→\s*'[^']*'/u", '', $ev_title );
+                $ev_title_safe = trim( rtrim( trim( $ev_title_safe ), ':' ) );
+                if ( $ev_title_safe === '' ) { $ev_title_safe = $ev_title; }
+                $ev_detail_show = ( $ev_title_safe !== $ev_title )
+                    ? $ev_title . ( $ev_detail ? ' · ' . $ev_detail : '' )
+                    : $ev_detail;
                 $today_bucket = ( $ev_type === 'rest_fail' ) ? 'api_attack' : $ev_type;
                 $today_n   = (int) ( $today_counts[ $today_bucket ] ?? 0 );
                 if ( $ev_type === 'downgrade' ) {
@@ -5560,14 +5653,14 @@ class CloudScale_DevTools {
                 <span style="font-size:13px;flex-shrink:0;line-height:1.4"><?php echo $icon; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                 <div style="flex:1;min-width:0">
                     <div style="font-size:11px;font-weight:700;color:<?php echo esc_attr( $tx ); ?>;line-height:1.3;display:flex;align-items:center;gap:5px;">
-                        <?php echo esc_html( $ev_title ); ?>
+                        <?php echo esc_html( $ev_title_safe ); ?>
                         <?php if ( $today_n > 0 ) : ?>
                         <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;background:<?php echo esc_attr( $border ); ?>;color:<?php echo esc_attr( $tx ); ?>;white-space:nowrap;"><?php echo esc_html( $today_n ); ?> today</span>
                         <?php endif; ?>
                     </div>
-                    <?php if ( $ev_detail ) : ?>
+                    <?php if ( $ev_detail_show ) : ?>
                     <span onclick="event.preventDefault();event.stopPropagation();var d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▶ Details':'▼ Hide details';" style="font-size:10px;color:#94a3b8;margin-top:2px;cursor:pointer;display:block;">▶ Details</span>
-                    <div style="font-size:10px;color:#64748b;margin-top:2px;display:none;"><?php echo esc_html( $ev_detail ); ?></div>
+                    <div style="font-size:10px;color:#64748b;margin-top:2px;display:none;"><?php echo esc_html( $ev_detail_show ); ?></div>
                     <?php endif; ?>
                 </div>
                 <?php if ( $age ) : ?>

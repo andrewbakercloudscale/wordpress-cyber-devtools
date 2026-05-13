@@ -15,7 +15,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 NGINX_SRC="${REPO_ROOT}/andrewbakerninja/nginx/default.conf"
-PI_KEY="${HOME}/Desktop/github/pi-monitor/deploy/pi_key"
+PI_KEY="${HOME}/Desktop/github/raspberry-pis/pi-monitor/deploy/pi_key"
 PI_USER="pi"
 PI_HOST="andrew-pi-5.local"
 NGINX_DEST="/home/pi/andrewbakerninja-pi/nginx/wordpress.conf"
