@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale Cyber and Devtools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.874
+ * Version: 1.9.880
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.874';
+    const VERSION      = '1.9.880';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -469,6 +469,7 @@ class CloudScale_DevTools {
         add_action( 'wp_ajax_csdt_rename_test_user',             [ 'CSDT_Test_Accounts', 'ajax_rename_test_user' ] );
         add_action( 'wp_ajax_csdt_rename_wp_user',               [ __CLASS__, 'ajax_rename_wp_user' ] );
         add_action( 'wp_ajax_csdt_toggle_block_basic_auth',      [ 'CSDT_Test_Accounts', 'ajax_toggle_block_basic_auth' ] );
+        add_action( 'wp_ajax_csdt_delete_app_password',          [ 'CSDT_Test_Accounts', 'ajax_delete_app_password' ] );
         add_action( 'rest_api_init',                             [ 'CSDT_Test_Accounts', 'register_rest_routes' ] );
         self::cron_action( 'csdt_scheduled_scan',                [ 'CSDT_Site_Audit', 'run_scheduled_scan' ] );
         self::cron_action( 'csdt_ssh_monitor',                  [ 'CSDT_Monitor', 'monitor_ssh_failures' ] );
@@ -1605,10 +1606,11 @@ class CloudScale_DevTools {
                 true
             );
             wp_localize_script( 'csdt-thumbnails', 'csdtDevtoolsThumbs', [
-                'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
-                'nonce'      => wp_create_nonce( 'csdt_devtools_thumbnails' ),
-                'siteUrl'    => home_url( '/' ),
-                'defimgNonce'=> wp_create_nonce( 'csdt_defimg' ),
+                'ajaxUrl'      => admin_url( 'admin-ajax.php' ),
+                'nonce'        => wp_create_nonce( 'csdt_devtools_thumbnails' ),
+                'siteUrl'      => home_url( '/' ),
+                'defimgNonce'  => wp_create_nonce( 'csdt_defimg' ),
+                'styleOptions' => CSDT_Thumbnails::get_image_style_options(),
             ] );
             // Thumbnails-tab-specific CSS — injected as inline style to avoid an
             // extra HTTP request and keep the render method free of <style> tags.
@@ -3408,14 +3410,25 @@ class CloudScale_DevTools {
             <div class="cs-section-header" style="background:linear-gradient(135deg,#1e3a5f 0%,#0f2942 100%)">
                 <span>✏️ <?php esc_html_e( 'RENAME WP USER', 'cloudscale-devtools' ); ?></span>
                 <span class="cs-header-hint"><?php esc_html_e( 'Change the WordPress username of any account — use after a compromise', 'cloudscale-devtools' ); ?></span>
+                <?php self::render_explain_btn( 'rename-wp-user', 'Rename WP User', [
+                    [ 'name' => 'What it does',   'rec' => 'Info',     'html' => 'Updates the <code>user_login</code> column in <code>wp_users</code> directly. The display name and nicename are also updated to match. All active sessions for the renamed account are immediately invalidated — the user must log in again with the new username.' ],
+                    [ 'name' => 'When to use it', 'rec' => 'Critical', 'html' => 'Use immediately after a compromise or credential leak. Changing the username invalidates any saved credentials an attacker may hold, and forces all active sessions to expire. Pair this with a forced password reset for maximum effect.' ],
+                    [ 'name' => 'Safe to use',    'rec' => 'Info',     'html' => 'Works for any WordPress account — not just administrators. The rename is instant and reversible (just rename it back). It does <strong>not</strong> change the user\'s email, password, or role.' ],
+                ] ); ?>
             </div>
             <div class="cs-panel-body">
                 <div class="cs-field-row">
                     <div class="cs-field">
                         <label class="cs-label" for="cs-rename-current"><?php esc_html_e( 'Current username:', 'cloudscale-devtools' ); ?></label>
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                            <input type="text" id="cs-rename-current" class="cs-input" placeholder="e.g. admin007"
-                                   maxlength="60" autocomplete="off" spellcheck="false" style="max-width:220px;">
+                            <select id="cs-rename-current" class="cs-input" style="max-width:220px;">
+                                <option value=""><?php esc_html_e( '— select user —', 'cloudscale-devtools' ); ?></option>
+                                <?php foreach ( get_users( [ 'orderby' => 'login', 'order' => 'ASC', 'number' => -1 ] ) as $wp_u ) : ?>
+                                    <option value="<?php echo esc_attr( $wp_u->user_login ); ?>">
+                                        <?php echo esc_html( $wp_u->user_login . ' (' . implode( ', ', $wp_u->roles ) . ')' ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
                             <span style="font-size:12px;color:#94a3b8;"><?php esc_html_e( '→', 'cloudscale-devtools' ); ?></span>
                             <input type="text" id="cs-rename-new" class="cs-input" placeholder="new-username"
                                    maxlength="60" autocomplete="off" spellcheck="false" style="max-width:220px;">
@@ -3450,7 +3463,10 @@ class CloudScale_DevTools {
                         submitBtn.disabled = false; submitBtn.textContent = '✏️ Rename';
                         if (res.success) {
                             if (msgEl) { msgEl.style.cssText = 'display:block;color:#166534;'; msgEl.textContent = '✓ Renamed "' + current + '" → "' + newName + '". All sessions terminated.'; }
-                            document.getElementById('cs-rename-current').value = '';
+                            var sel = document.getElementById('cs-rename-current');
+                            var opt = sel ? sel.querySelector('option[value="' + current.replace(/"/g, '\\"') + '"]') : null;
+                            if (opt) { opt.value = newName; opt.textContent = opt.textContent.replace(current, newName); }
+                            if (sel) sel.value = '';
                             document.getElementById('cs-rename-new').value = '';
                         } else {
                             if (msgEl) { msgEl.style.cssText = 'display:block;color:#dc2626;'; msgEl.textContent = '✗ ' + (res.data || 'Error'); }
@@ -4626,6 +4642,48 @@ class CloudScale_DevTools {
                             <div id="cs-app-pw-usage-badge" style="display:inline-block;background:<?php echo esc_attr( $usage_badge_bg ); ?>;border:1px solid <?php echo esc_attr( $usage_badge_border ); ?>;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:<?php echo esc_attr( $usage_badge_color ); ?>;margin-bottom:8px;">
                                 <?php echo esc_html( $usage_badge_text ); ?>
                             </div>
+                            <?php if ( $app_pw_total > 0 ) :
+                                $app_pw_details = CSDT_Test_Accounts::get_app_password_details();
+                            ?>
+                            <div style="margin-bottom:8px;">
+                                <button type="button" id="cs-app-pw-list-toggle" class="cs-btn-secondary cs-btn-sm" onclick="var d=document.getElementById('cs-app-pw-list');var open=d.style.display==='none';d.style.display=open?'block':'none';this.textContent=open?'▼ Hide app passwords':'▶ Show app passwords';">▶ Show app passwords</button>
+                                <div id="cs-app-pw-list" style="display:none;margin-top:8px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+                                    <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                                        <thead>
+                                            <tr style="background:#f8fafc;border-bottom:1px solid #e5e7eb;">
+                                                <th style="padding:6px 10px;text-align:left;color:#374151;font-weight:600;">App name</th>
+                                                <th style="padding:6px 10px;text-align:left;color:#374151;font-weight:600;">User</th>
+                                                <th style="padding:6px 10px;text-align:left;color:#374151;font-weight:600;">Created</th>
+                                                <th style="padding:6px 10px;text-align:left;color:#374151;font-weight:600;">Last used</th>
+                                                <th style="padding:6px 10px;text-align:left;color:#374151;font-weight:600;">Last IP</th>
+                                                <th style="padding:6px 2px;"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="cs-app-pw-tbody">
+                                        <?php foreach ( $app_pw_details as $u_entry ) :
+                                            foreach ( $u_entry['passwords'] as $pw ) :
+                                                $created_str   = $pw['created']   ? gmdate( 'j M Y', $pw['created'] )   : '—';
+                                                $last_used_str = $pw['last_used'] ? human_time_diff( $pw['last_used'] ) . ' ago' : 'Never';
+                                                $last_ip_str   = $pw['last_ip']   ?: '—';
+                                                $never         = ! $pw['last_used'];
+                                        ?>
+                                            <tr data-uuid="<?php echo esc_attr( $pw['uuid'] ); ?>" data-user="<?php echo esc_attr( (string) $u_entry['user_id'] ); ?>" style="border-bottom:1px solid #f1f5f9;">
+                                                <td style="padding:5px 10px;color:#111827;font-weight:600;"><?php echo esc_html( $pw['name'] ?: '(unnamed)' ); ?></td>
+                                                <td style="padding:5px 10px;color:#6b7280;"><?php echo esc_html( $u_entry['display_name'] ); ?></td>
+                                                <td style="padding:5px 10px;color:#6b7280;"><?php echo esc_html( $created_str ); ?></td>
+                                                <td style="padding:5px 10px;color:<?php echo $never ? '#9ca3af' : '#374151'; ?>;"><?php echo esc_html( $last_used_str ); ?></td>
+                                                <td style="padding:5px 10px;color:#6b7280;font-family:monospace;"><?php echo esc_html( $last_ip_str ); ?></td>
+                                                <td style="padding:5px 8px;text-align:right;">
+                                                    <button type="button" class="cs-btn-secondary cs-btn-sm cs-app-pw-delete-btn" style="color:#dc2626;border-color:#fca5a5;font-size:10px;padding:2px 7px;">✕ Delete</button>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                    <div id="cs-app-pw-delete-msg" style="display:none;padding:6px 10px;font-size:11px;"></div>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                                 <label class="cs-toggle-label" style="margin:0;">
                                     <input type="checkbox" id="cs-block-basic-auth-toggle" <?php checked( get_option( 'csdt_block_basic_auth', '0' ), '1' ); ?>>
@@ -4685,6 +4743,63 @@ class CloudScale_DevTools {
                                     btn.disabled = false;
                                     btn.textContent = '<?php esc_html_e( 'Save', 'cloudscale-devtools' ); ?>';
                                     if (hint) { hint.textContent = '✗ ' + (e && e.message ? e.message : 'network error'); hint.style.color = '#dc2626'; }
+                                });
+                        });
+                    }());
+                    </script>
+                    <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline delete handler ?>
+                    <script>
+                    (function() {
+                        var tbody = document.getElementById('cs-app-pw-tbody');
+                        var msgEl = document.getElementById('cs-app-pw-delete-msg');
+                        if (!tbody) { return; }
+                        var ajaxUrl = '<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>';
+                        var nonce   = (typeof csdtTestAccounts !== 'undefined' ? csdtTestAccounts.nonce : '<?php echo esc_js( wp_create_nonce( 'csdt_devtools_login_nonce' ) ); ?>');
+                        tbody.addEventListener('click', function(e) {
+                            var btn = e.target.closest('.cs-app-pw-delete-btn');
+                            if (!btn) { return; }
+                            var row    = btn.closest('tr');
+                            var uuid   = row ? row.dataset.uuid   : '';
+                            var userId = row ? row.dataset.user   : '';
+                            if (!uuid || !userId) { return; }
+                            var appName = row.cells[0] ? row.cells[0].textContent.trim() : uuid;
+                            if (!confirm('Delete app password "' + appName + '"?\n\nAny integration using it will stop working immediately.')) { return; }
+                            btn.disabled = true;
+                            btn.textContent = '…';
+                            var fd = new FormData();
+                            fd.append('action',  'csdt_delete_app_password');
+                            fd.append('nonce',   nonce);
+                            fd.append('user_id', userId);
+                            fd.append('uuid',    uuid);
+                            fetch(ajaxUrl, { method: 'POST', body: fd })
+                                .then(function(r) { return r.json(); })
+                                .then(function(resp) {
+                                    if (resp && resp.success) {
+                                        row.style.transition = 'opacity .3s';
+                                        row.style.opacity = '0';
+                                        setTimeout(function() { row.remove(); }, 300);
+                                        var usage = resp.data && resp.data.usage;
+                                        var badge = document.getElementById('cs-app-pw-usage-badge');
+                                        if (badge && usage) {
+                                            var n = usage.passwords, u = usage.users;
+                                            if (n === 0) {
+                                                badge.style.background = '#f0fdf4'; badge.style.borderColor = '#86efac'; badge.style.color = '#166534';
+                                                badge.textContent = '✓ No app passwords in use — safe to enable block';
+                                                var panel = document.getElementById('cs-app-pw-list');
+                                                if (panel) { panel.closest('div').style.display = 'none'; }
+                                            } else {
+                                                badge.textContent = n + ' app password' + (n !== 1 ? 's' : '') + ' across ' + u + ' user' + (u !== 1 ? 's' : '') + ' — identify the integration' + (n !== 1 ? 's' : '') + ' before blocking';
+                                            }
+                                        }
+                                        if (msgEl) { msgEl.style.display = 'block'; msgEl.style.color = '#166534'; msgEl.textContent = '✓ Deleted "' + appName + '"'; setTimeout(function(){ msgEl.style.display = 'none'; }, 3000); }
+                                    } else {
+                                        btn.disabled = false; btn.textContent = '✕ Delete';
+                                        if (msgEl) { msgEl.style.display = 'block'; msgEl.style.color = '#dc2626'; msgEl.textContent = '✗ ' + (resp && resp.data ? resp.data : 'Error'); }
+                                    }
+                                })
+                                .catch(function(e) {
+                                    btn.disabled = false; btn.textContent = '✕ Delete';
+                                    if (msgEl) { msgEl.style.display = 'block'; msgEl.style.color = '#dc2626'; msgEl.textContent = '✗ ' + (e && e.message ? e.message : 'network error'); }
                                 });
                         });
                     }());
@@ -5451,7 +5566,8 @@ class CloudScale_DevTools {
                         <?php endif; ?>
                     </div>
                     <?php if ( $ev_detail ) : ?>
-                    <div style="font-size:10px;color:#64748b;margin-top:1px"><?php echo esc_html( $ev_detail ); ?></div>
+                    <span onclick="event.preventDefault();event.stopPropagation();var d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▶ Details':'▼ Hide details';" style="font-size:10px;color:#94a3b8;margin-top:2px;cursor:pointer;display:block;">▶ Details</span>
+                    <div style="font-size:10px;color:#64748b;margin-top:2px;display:none;"><?php echo esc_html( $ev_detail ); ?></div>
                     <?php endif; ?>
                 </div>
                 <?php if ( $age ) : ?>
@@ -5542,8 +5658,8 @@ class CloudScale_DevTools {
 
         CSDT_Login::record_security_event(
             'downgrade',
-            "Username renamed: '{$current_login}' → '{$new_login}'",
-            'By: ' . wp_get_current_user()->user_login
+            'Username renamed',
+            "'{$current_login}' → '{$new_login}' · By: " . wp_get_current_user()->user_login
         );
 
         wp_send_json_success( [
@@ -6165,6 +6281,16 @@ class CloudScale_DevTools {
                 $ev_title  = (string) ( $ev['title'] ?? '' );
                 $ev_detail = (string) ( $ev['detail'] ?? '' );
                 $age       = $ev_time ? human_time_diff( $ev_time ) . ' ago' : '';
+                // Strip inline identifiers (usernames) from the summary title —
+                // full details are only revealed when the user clicks Details.
+                $ev_title_safe = (string) preg_replace( "/[:\s]*'[^']*'\s*→\s*'[^']*'/u", '', $ev_title );
+                $ev_title_safe = trim( rtrim( trim( $ev_title_safe ), ':' ) );
+                if ( $ev_title_safe === '' ) { $ev_title_safe = $ev_title; }
+                // For old stored events where names were in the title, surface the original
+                // title in the Details panel so nothing is permanently lost.
+                $ev_detail_show = ( $ev_title_safe !== $ev_title )
+                    ? $ev_title . ( $ev_detail ? ' · ' . $ev_detail : '' )
+                    : $ev_detail;
                 if ( $ev_type === 'downgrade' ) {
                     $icon = '🔓'; $tx = '#991b1b'; $bg = '#fef2f2'; $bd = '#fca5a5';
                 } elseif ( $ev_type === 'api_attack' || $ev_type === 'rest_fail' ) {
@@ -6178,8 +6304,11 @@ class CloudScale_DevTools {
             <div style="display:flex;align-items:flex-start;gap:7px;background:<?php echo esc_attr( $bg ); ?>;border:1px solid <?php echo esc_attr( $bd ); ?>;border-radius:5px;padding:5px 8px;">
                 <span style="font-size:12px;line-height:1.5;flex-shrink:0"><?php echo $icon; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                 <div style="flex:1;min-width:0">
-                    <span style="font-size:11px;font-weight:700;color:<?php echo esc_attr( $tx ); ?>"><?php echo esc_html( $ev_title ); ?></span>
-                    <?php if ( $ev_detail ) : ?><span style="font-size:10px;color:#6b7280;margin-left:5px"><?php echo esc_html( $ev_detail ); ?></span><?php endif; ?>
+                    <span style="font-size:11px;font-weight:700;color:<?php echo esc_attr( $tx ); ?>"><?php echo esc_html( $ev_title_safe ); ?></span>
+                    <?php if ( $ev_detail_show ) : ?>
+                    <span onclick="var d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.textContent=d.style.display==='none'?'▶ Details':'▼ Hide details';" style="font-size:10px;color:#94a3b8;margin-top:2px;cursor:pointer;display:block;">▶ Details</span>
+                    <div style="font-size:10px;color:#6b7280;margin-top:2px;display:none;"><?php echo esc_html( $ev_detail_show ); ?></div>
+                    <?php endif; ?>
                 </div>
                 <?php if ( $age ) : ?><span style="font-size:9px;color:#94a3b8;white-space:nowrap;flex-shrink:0;margin-top:2px"><?php echo esc_html( $age ); ?></span><?php endif; ?>
             </div>
