@@ -374,7 +374,7 @@ class CSDT_Test_Accounts {
         if ( ! $ntfy_url ) { return; }
         $site    = (string) get_option( 'siteurl', '' );
         $host    = $site ? wp_parse_url( $site, PHP_URL_HOST ) : '';
-        $title   = '[CS Cyber] ' . ( $host ? "[{$host}] " : '' ) . 'Security Alert';
+        $title   = 'CS > Cyber: ' . ( $host ?: '' ) . ': Security Alert';
         $headers = [ 'Title' => $title, 'Priority' => 'urgent', 'Tags' => 'rotating_light' ];
         $tok     = get_option( 'csdt_scan_schedule_ntfy_token', '' );
         if ( $tok ) { $headers['Authorization'] = 'Bearer ' . $tok; }
@@ -595,6 +595,59 @@ class CSDT_Test_Accounts {
             return true;
         }
         return false;
+    }
+
+    public static function get_app_password_details(): array {
+        global $wpdb;
+        $rows = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+            "SELECT user_id, meta_value FROM {$wpdb->usermeta}
+             WHERE meta_key = '_application_passwords' AND meta_value NOT LIKE 'a:0:%'"
+        );
+        $result = [];
+        foreach ( $rows as $row ) {
+            if ( get_user_meta( (int) $row->user_id, 'csdt_test_account', true ) === '1' ) {
+                continue;
+            }
+            $list = maybe_unserialize( $row->meta_value );
+            if ( ! is_array( $list ) || empty( $list ) ) {
+                continue;
+            }
+            $user = get_userdata( (int) $row->user_id );
+            if ( ! $user ) { continue; }
+            $passwords = [];
+            foreach ( $list as $pw ) {
+                $passwords[] = [
+                    'uuid'      => (string) ( $pw['uuid'] ?? '' ),
+                    'name'      => (string) ( $pw['name'] ?? '' ),
+                    'created'   => (int) ( $pw['created'] ?? 0 ),
+                    'last_used' => isset( $pw['last_used'] ) ? (int) $pw['last_used'] : null,
+                    'last_ip'   => isset( $pw['last_ip'] )   ? (string) $pw['last_ip'] : null,
+                ];
+            }
+            $result[] = [
+                'user_id'      => (int) $row->user_id,
+                'display_name' => $user->display_name,
+                'passwords'    => $passwords,
+            ];
+        }
+        return $result;
+    }
+
+    public static function ajax_delete_app_password(): void {
+        if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Forbidden', 403 ); }
+        check_ajax_referer( 'csdt_devtools_login_nonce', 'nonce' );
+
+        $user_id = (int) ( $_POST['user_id'] ?? 0 );
+        $uuid    = sanitize_text_field( wp_unslash( $_POST['uuid'] ?? '' ) );
+
+        if ( ! $user_id || ! $uuid ) { wp_send_json_error( 'Missing params' ); }
+
+        $deleted = WP_Application_Passwords::delete_application_password( $user_id, $uuid );
+        if ( is_wp_error( $deleted ) ) {
+            wp_send_json_error( $deleted->get_error_message() );
+        }
+
+        wp_send_json_success( [ 'usage' => self::get_app_password_usage() ] );
     }
 
     public static function test_account_after_auth( $user, $app_password ): void {

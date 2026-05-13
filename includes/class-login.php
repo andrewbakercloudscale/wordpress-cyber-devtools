@@ -242,7 +242,9 @@ class CSDT_Login {
     public static function login_error_styles(): void {
         $css = '#login_error,div.error{background:#0f172a!important;border-left:4px solid #ef4444!important;border-radius:6px!important;color:#f1f5f9!important;padding:12px 16px!important;box-shadow:0 2px 8px rgba(0,0,0,.35)!important}'
              . '#login_error a,div.error a{color:#93c5fd!important}'
-             . '#login_error strong,div.error strong{color:#fca5a5!important}';
+             . '#login_error strong,div.error strong{color:#fca5a5!important}'
+             . '#login{width:380px!important;max-width:calc(100vw - 32px)!important}'
+             . '.login form{margin-top:16px!important}';
         wp_add_inline_style( 'login', $css );
     }
 
@@ -1996,7 +1998,7 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
         $site    = (string) get_option( 'siteurl', '' );
         $host    = $site ? wp_parse_url( $site, PHP_URL_HOST ) : '';
         $headers = [
-            'Title'    => '[CS Cyber] ' . ( $host ? "[{$host}] " : '' ) . $title,
+            'Title'    => 'CS > Cyber: ' . ( $host ?: '' ) . ': ' . $title,
             'Priority' => $priority,
             'Tags'     => $tags,
         ];

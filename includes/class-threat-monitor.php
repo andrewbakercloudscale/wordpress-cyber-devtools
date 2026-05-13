@@ -241,7 +241,7 @@ class CSDT_Threat_Monitor {
         if ( get_option( 'csdt_ntfy_threat_monitor', '1' ) === '1' ) {
             $ntfy_url = get_option( 'csdt_scan_schedule_ntfy_url', '' );
             if ( $ntfy_url ) {
-                $headers = [ 'Title' => '[CS Cyber] ' . $subject, 'Priority' => $priority, 'Tags' => $tags, 'Click' => $click_url ];
+                $headers = [ 'Title' => 'CS > Cyber: ' . ( parse_url( get_site_url(), PHP_URL_HOST ) ?: '' ) . ': ' . $subject, 'Priority' => $priority, 'Tags' => $tags, 'Click' => $click_url ];
                 $ntfy_tok = get_option( 'csdt_scan_schedule_ntfy_token', '' );
                 if ( $ntfy_tok ) {
                     $headers['Authorization'] = 'Bearer ' . $ntfy_tok;
