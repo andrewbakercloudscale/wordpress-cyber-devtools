@@ -1899,10 +1899,10 @@
             '  </select>',
             '</div>',
             '<div style="' + FR + '">',
-            '  <label style="' + LBL + '">Title overlay</label>',
+            '  <label style="' + LBL + '">Post title</label>',
             '  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#3c434a">',
             '    <input type="checkbox" id="cs-adm-gen-overlay" style="width:16px;height:16px;cursor:pointer">',
-            '    Include title bar in image',
+            '    Include Post Title in image',
             '  </label>',
             '</div>',
 
