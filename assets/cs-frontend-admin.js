@@ -105,6 +105,13 @@
         '        <option value="hd">HD</option>',
         '      </select>',
         '    </div>',
+        '    <div class="csdt-gen-row">',
+        '      <label>Title overlay</label>',
+        '      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#3c434a">',
+        '        <input type="checkbox" id="csdt-gen-overlay" style="width:16px;height:16px;cursor:pointer">',
+        '        Include title bar in image',
+        '      </label>',
+        '    </div>',
         '    <div class="csdt-gen-prompt-row" id="csdt-gen-prompt-row" style="display:none;">',
         '      <button type="button" class="csdt-gen-prompt-toggle" id="csdt-gen-prompt-toggle">▶ View prompt</button>',
         '      <div class="csdt-gen-prompt-text" id="csdt-gen-prompt-text"></div>',
@@ -144,6 +151,7 @@
 
     var articleStyleEl = document.getElementById( 'csdt-gen-article-style' );
     var bgColorEl      = document.getElementById( 'csdt-gen-bg-color' );
+    var overlayEl      = document.getElementById( 'csdt-gen-overlay' );
 
     // Pre-fill style from saved settings; quality always defaults to standard
     if ( cfg.imgStyle && styleEl ) { styleEl.value = cfg.imgStyle; }
@@ -187,13 +195,14 @@
         var bgColor      = bgColorEl      ? bgColorEl.value      : 'auto';
 
         post( 'csdt_devtools_ai_image_generate', {
-            post_id:       currentPostId,
-            quality:       quality,
-            prompt_vendor: cfg.promptVendor || 'openai',
-            prompt_model:  cfg.promptModel  || 'gpt-4o-mini',
-            prompt_style:  style,
-            article_style: articleStyle,
-            bg_color:      bgColor,
+            post_id:         currentPostId,
+            quality:         quality,
+            prompt_vendor:   cfg.promptVendor || 'openai',
+            prompt_model:    cfg.promptModel  || 'gpt-4o-mini',
+            prompt_style:    style,
+            article_style:   articleStyle,
+            bg_color:        bgColor,
+            include_overlay: overlayEl && overlayEl.checked ? '1' : '0',
         }, function ( startResp ) {
             if ( ! startResp.success || ! startResp.data || ! startResp.data.job_id ) {
                 setBusy( false );

@@ -2276,7 +2276,7 @@ The text rule is passed in the user message — follow it exactly.';
         $prompt_model  = isset( $_POST['prompt_model'] )  ? sanitize_text_field( wp_unslash( $_POST['prompt_model'] ) ) : 'gpt-4o';
         $style         = isset( $_POST['prompt_style'] )  ? sanitize_key( wp_unslash( $_POST['prompt_style'] ) )  : 'auto';
         $article_style = isset( $_POST['article_style'] ) ? sanitize_key( wp_unslash( $_POST['article_style'] ) ) : 'general';
-        $bg_color      = isset( $_POST['bg_color'] )      ? sanitize_key( wp_unslash( $_POST['bg_color'] ) )      : 'auto';
+        $bg_color        = isset( $_POST['bg_color'] )        ? sanitize_key( wp_unslash( $_POST['bg_color'] ) )              : 'auto';
 
         if ( ! $post_id ) {
             wp_send_json_error( [ 'message' => 'Invalid post ID.' ] );
@@ -2390,7 +2390,8 @@ The text rule is passed in the user message — follow it exactly.';
         $prompt_model  = isset( $_POST['prompt_model'] )  ? sanitize_text_field( wp_unslash( $_POST['prompt_model'] ) )     : 'gpt-4o';
         $prompt_style  = isset( $_POST['prompt_style'] )  ? sanitize_key( wp_unslash( $_POST['prompt_style'] ) )  : 'auto';
         $article_style = isset( $_POST['article_style'] ) ? sanitize_key( wp_unslash( $_POST['article_style'] ) ) : 'general';
-        $bg_color      = isset( $_POST['bg_color'] )      ? sanitize_key( wp_unslash( $_POST['bg_color'] ) )      : 'auto';
+        $bg_color        = isset( $_POST['bg_color'] )        ? sanitize_key( wp_unslash( $_POST['bg_color'] ) )        : 'auto';
+        $include_overlay = ! isset( $_POST['include_overlay'] ) || '1' === $_POST['include_overlay'];
 
         if ( ! $post_id ) {
             wp_send_json_error( [ 'message' => 'Invalid post ID.' ] );
@@ -2407,9 +2408,10 @@ The text rule is passed in the user message — follow it exactly.';
             'prompt_vendor' => $prompt_vendor,
             'prompt_model'  => $prompt_model,
             'prompt_style'  => $prompt_style,
-            'article_style' => $article_style,
-            'bg_color'      => $bg_color,
-            'created_at'    => time(),
+            'article_style'  => $article_style,
+            'bg_color'       => $bg_color,
+            'include_overlay' => $include_overlay,
+            'created_at'     => time(),
         ], false );
 
         // Fire non-blocking loopback so the generation runs in its own PHP process.
@@ -2459,8 +2461,9 @@ The text rule is passed in the user message — follow it exactly.';
         $prompt_vendor = $job['prompt_vendor'];
         $prompt_model  = $job['prompt_model'];
         $prompt_style  = $job['prompt_style'];
-        $article_style = $job['article_style'] ?? 'general';
-        $bg_color      = $job['bg_color']      ?? 'auto';
+        $article_style   = $job['article_style']   ?? 'general';
+        $bg_color        = $job['bg_color']        ?? 'auto';
+        $include_overlay = $job['include_overlay'] ?? true;
 
         $post = get_post( $post_id );
         if ( ! $post ) {
@@ -2595,7 +2598,7 @@ The text rule is passed in the user message — follow it exactly.';
             || ( stripos( $prompt, 'all-caps text' ) !== false )
             || ( stripos( $prompt, 'poster layout' ) !== false )
             || ( stripos( $prompt, 'movie poster' ) !== false );
-        if ( ! $is_poster ) {
+        if ( $include_overlay && ! $is_poster ) {
             self::overlay_title( $tmp_jpg, $title );
         }
 

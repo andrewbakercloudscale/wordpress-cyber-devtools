@@ -1898,6 +1898,13 @@
             '    <option value="hd">HD</option>',
             '  </select>',
             '</div>',
+            '<div style="' + FR + '">',
+            '  <label style="' + LBL + '">Title overlay</label>',
+            '  <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#3c434a">',
+            '    <input type="checkbox" id="cs-adm-gen-overlay" style="width:16px;height:16px;cursor:pointer">',
+            '    Include title bar in image',
+            '  </label>',
+            '</div>',
 
             '<p id="cs-adm-gen-msg" style="margin:4px 0 12px 132px;font-size:12px;color:#787c82;min-height:18px">Click Generate to create an image for this post.</p>',
             '<div id="cs-adm-gen-imgs" style="margin-left:132px;display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px"></div>',
@@ -1921,8 +1928,9 @@
         const artEl_    = modal.querySelector( '#cs-adm-gen-article' );
         const bgEl_     = modal.querySelector( '#cs-adm-gen-bg' );
         const styleEl__ = modal.querySelector( '#cs-adm-gen-style' );
-        const qualEl_   = modal.querySelector( '#cs-adm-gen-quality' );
-        const msgEl_    = modal.querySelector( '#cs-adm-gen-msg' );
+        const qualEl_    = modal.querySelector( '#cs-adm-gen-quality' );
+        const overlayEl_ = modal.querySelector( '#cs-adm-gen-overlay' );
+        const msgEl_     = modal.querySelector( '#cs-adm-gen-msg' );
         const imgsEl_   = modal.querySelector( '#cs-adm-gen-imgs' );
         const saveBtn_  = modal.querySelector( '#cs-adm-gen-save' );
         const regenBtn_ = modal.querySelector( '#cs-adm-gen-regen' );
@@ -1979,8 +1987,9 @@
                 prompt_vendor: curVendor          || 'openai',
                 prompt_model:  modelEl?.value     || curModel || 'gpt-4o-mini',
                 prompt_style:  styleEl__?.value   || 'auto',
-                article_style: artEl_?.value      || 'general',
-                bg_color:      bgEl_?.value       || 'auto',
+                article_style:   artEl_?.value      || 'general',
+                bg_color:        bgEl_?.value       || 'auto',
+                include_overlay: overlayEl_?.checked ? '1' : '0',
             } ).then( startRes => {
                 if ( ! startRes.success || ! startRes.data?.job_id ) {
                     setBusy( false );
