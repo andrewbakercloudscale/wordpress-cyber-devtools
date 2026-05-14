@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale DevTools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.896
+ * Version: 1.9.904
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.896';
+    const VERSION      = '1.9.904';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -6169,18 +6169,27 @@ class CloudScale_DevTools {
     function wrap(arr){
         if(!arr||arr.__adsDedupWrapped)return;
         arr.__adsDedupWrapped=true;
-        var _p=arr.push.bind(arr);
-        arr.push=function(o){
+        // Use native Array push as the initial delegate.
+        var _p=function(o){return Array.prototype.push.call(arr,o);};
+        var guard=function(o){
             if(o&&o.enable_page_level_ads){if(_done)return;_done=true;}
             return _p(o);
         };
+        try{
+            // Define push via a getter/setter so that when adsbygoogle.js overwrites
+            // arr.push with its own implementation, our setter intercepts the replacement
+            // and updates _p — keeping the _done guard active on all future calls.
+            Object.defineProperty(arr,'push',{
+                configurable:true,enumerable:false,
+                get:function(){return guard;},
+                set:function(v){_p=function(o){return v.call(arr,o);};}
+            });
+        }catch(e){arr.push=guard;}
     }
-    // Wrap the initial placeholder array immediately.
     var _cur=window.adsbygoogle=window.adsbygoogle||[];
     wrap(_cur);
-    // Re-wrap whenever adsbygoogle.js replaces window.adsbygoogle with its own object.
+    // Re-wrap whenever adsbygoogle.js replaces window.adsbygoogle with a new object.
     try{Object.defineProperty(window,'adsbygoogle',{configurable:true,get:function(){return _cur;},set:function(v){_cur=v;wrap(_cur);}});}catch(e){}
-    // Also guard against bfcache page restores re-triggering the library's own push.
     window.addEventListener('pageshow',function(e){if(e.persisted){_done=true;}});
 }());
 </script>
@@ -6756,7 +6765,7 @@ class CloudScale_DevTools {
                     <p><?php echo wp_kses( __( 'The <strong>AI Cyber Audit</strong> uses frontier AI &#8212; Anthropic Claude or Google Gemini &#8212; to analyse your WordPress installation and produce a prioritised, scored security report in under 60 seconds. Configure your provider and API key in the <strong>AI Settings</strong> panel below, then run a scan from the <strong>AI Cyber Audit</strong> panel. A free Gemini tier is available with no credit card required.', 'cloudscale-devtools' ), [ 'strong' => [] ] ); ?></p>
 
                 <!-- AI Security Scan vs Site Audit comparison -->
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;font-size:12px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;margin-bottom:16px;font-size:12px;">
                     <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;">
                         <div style="font-weight:700;color:#15803d;margin-bottom:4px;">🛡️ AI Security Scan — this tab</div>
                         <div style="color:#374151;line-height:1.5;"><?php esc_html_e( 'Security misconfigurations, exposed endpoints, headers, brute-force exposure. Finds issues attackers exploit.', 'cloudscale-devtools' ); ?></div>
