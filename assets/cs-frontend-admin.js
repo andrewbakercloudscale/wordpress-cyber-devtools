@@ -9,55 +9,51 @@
     var ajaxUrl = cfg.ajaxUrl || '';
     var nonce   = cfg.nonce   || '';
 
-    /* ── Pill button CSS ─────────────────────────────────────────────────── */
+    /* ── Pill button + modal CSS ─────────────────────────────────────────── */
     var css = [
+        /* pill */
         '.csdt-gen-bar{display:block!important;text-align:right!important;padding:0 0 20px!important;width:100%!important;box-sizing:border-box!important;}',
-        '.csdt-gen-img-pill{',
-        '  display:inline-flex;align-items:center;gap:6px;',
-        '  background:#0057ff;color:#fff;border:none;border-radius:20px;',
-        '  padding:5px 15px;font-size:12px;font-weight:600;cursor:pointer;',
-        '  font-family:inherit;line-height:1.5;transition:opacity .15s;',
-        '}',
-        '.csdt-gen-img-pill:hover{opacity:.85;}',
+        '.csdt-gen-img-pill{display:inline-flex;align-items:center;gap:6px;background:#2271b1;color:#fff;border:none;border-radius:3px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.5;transition:background .15s;}',
+        '.csdt-gen-img-pill:hover{background:#135e96;}',
         '.csdt-gen-img-pill:disabled{opacity:.55;cursor:not-allowed;}',
-        /* modal */
-        '.csdt-gen-modal-bg{',
-        '  display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);',
-        '  z-index:999999;overflow-y:auto;padding:40px 16px;box-sizing:border-box;',
-        '}',
-        '.csdt-gen-modal{',
-        '  background:#fff;border-radius:12px;max-width:640px;margin:0 auto;',
-        '  padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.4);',
-        '}',
-        '.csdt-gen-modal h3{margin:0 0 16px;font-size:16px;color:#111827;}',
-        '.csdt-gen-modal-imgs{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;}',
-        '.csdt-gen-img-opt{',
-        '  flex:1 1 240px;border-radius:8px;overflow:hidden;cursor:pointer;',
-        '  border:3px solid transparent;transition:border-color .15s;',
-        '}',
-        '.csdt-gen-img-opt.selected{border-color:#2563eb;}',
+        /* overlay */
+        '.csdt-gen-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999999;overflow-y:auto;padding:60px 20px;box-sizing:border-box;}',
+        /* modal card — WP admin style */
+        '.csdt-gen-modal{background:#fff;border-radius:4px;max-width:500px;margin:0 auto;box-shadow:0 4px 32px rgba(0,0,0,.35);font-size:13px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#3c434a;}',
+        /* header */
+        '.csdt-gen-modal-hdr{padding:14px 16px;border-bottom:1px solid #dcdcde;background:#f6f7f7;border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:space-between;}',
+        '.csdt-gen-modal-hdr h3{margin:0;font-size:14px;font-weight:600;color:#1d2327;}',
+        '.csdt-gen-modal-hdr button{background:none;border:none;cursor:pointer;padding:2px 6px;color:#787c82;font-size:22px;line-height:1;border-radius:3px;}',
+        /* body */
+        '.csdt-gen-modal-body{padding:20px 24px;}',
+        /* grid rows: fixed label col + fluid control col */
+        '.csdt-gen-row{display:grid;grid-template-columns:120px 1fr;align-items:center;gap:0 12px;margin-bottom:12px;}',
+        '.csdt-gen-row label{font-size:13px;font-weight:600;color:#3c434a;text-align:right;}',
+        '.csdt-gen-row select{width:100%;padding:5px 8px;font-size:13px;border:1px solid #8c8f94;border-radius:3px;background:#fff;color:#3c434a;line-height:1.8;}',
+        '.csdt-gen-row .csdt-sel-pair{display:flex;gap:8px;align-items:center;}',
+        '.csdt-gen-row .csdt-sel-pair select:first-child{flex:1;}',
+        '.csdt-gen-row .csdt-sel-pair select:last-child{width:100px;}',
+        /* status + images — indent to align with controls */
+        '.csdt-gen-modal-msg{margin:4px 0 12px 132px;font-size:12px;color:#787c82;min-height:18px;}',
+        '.csdt-gen-modal-imgs{margin-left:132px;display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;}',
+        '.csdt-gen-img-opt{flex:1 1 200px;border-radius:4px;overflow:hidden;cursor:pointer;border:3px solid transparent;transition:border-color .15s;}',
+        '.csdt-gen-img-opt.selected{border-color:#2271b1;}',
         '.csdt-gen-img-opt img{width:100%;display:block;height:auto;}',
-        '.csdt-gen-modal-actions{display:flex;gap:8px;flex-wrap:wrap;}',
-        '.csdt-gen-btn-save{',
-        '  background:#16a34a;color:#fff;border:none;border-radius:20px;',
-        '  padding:7px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;',
-        '}',
-        '.csdt-gen-btn-save:disabled{opacity:.5;cursor:not-allowed;}',
-        '.csdt-gen-btn-regen,.csdt-gen-btn-cancel{',
-        '  background:#111827;color:#fff;border:none;border-radius:20px;',
-        '  padding:7px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;',
-        '}',
-        '.csdt-gen-btn-regen:disabled,.csdt-gen-btn-cancel:disabled{opacity:.5;cursor:not-allowed;}',
-        '.csdt-gen-modal-msg{font-size:12px;color:#64748b;margin-bottom:8px;min-height:18px;}',
-        '.csdt-gen-style-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}',
-        '.csdt-gen-style-row label{font-size:12px;font-weight:600;color:#374151;}',
-        '.csdt-gen-style-row select{font-size:12px;border:1px solid #d1d5db;border-radius:6px;padding:3px 8px;background:#fff;}',
-        '.csdt-gen-prompt-row{margin-top:10px;}',
-        '.csdt-gen-prompt-toggle{font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;}',
-        '.csdt-gen-prompt-text{display:none;margin-top:6px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;color:#374151;line-height:1.5;white-space:pre-wrap;word-break:break-word;}',
-        '.csdt-gen-article-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}',
-        '.csdt-gen-article-row label{font-size:12px;font-weight:600;color:#374151;}',
-        '.csdt-gen-article-row select{font-size:12px;border:1px solid #d1d5db;border-radius:6px;padding:3px 8px;background:#fff;}',
+        /* prompt toggle */
+        '.csdt-gen-prompt-row{margin:0 0 8px 132px;}',
+        '.csdt-gen-prompt-toggle{font-size:11px;color:#787c82;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;}',
+        '.csdt-gen-prompt-text{display:none;margin-top:6px;padding:8px 10px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:3px;font-size:11px;color:#3c434a;line-height:1.5;white-space:pre-wrap;word-break:break-word;}',
+        /* footer */
+        '.csdt-gen-modal-actions{padding:12px 16px;border-top:1px solid #dcdcde;background:#f6f7f7;border-radius:0 0 4px 4px;display:flex;align-items:center;gap:8px;}',
+        '.csdt-gen-btn-regen{background:#2271b1;color:#fff;border:1px solid #135e96;border-radius:3px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}',
+        '.csdt-gen-btn-regen:hover{background:#135e96;}',
+        '.csdt-gen-btn-regen:disabled{opacity:.5;cursor:not-allowed;}',
+        '.csdt-gen-btn-cancel{background:#fff;color:#3c434a;border:1px solid #c3c4c7;border-radius:3px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;}',
+        '.csdt-gen-btn-cancel:disabled{opacity:.5;cursor:not-allowed;}',
+        '.csdt-gen-btn-spacer{flex:1;}',
+        '.csdt-gen-btn-save{background:#00a32a;color:#fff;border:1px solid #00a32a;border-radius:3px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}',
+        '.csdt-gen-btn-save:hover{background:#007017;}',
+        '.csdt-gen-btn-save:disabled{opacity:.35;cursor:not-allowed;}',
     ].join( '' );
 
     var style = document.createElement( 'style' );
@@ -77,40 +73,50 @@
     bg.className = 'csdt-gen-modal-bg';
     bg.innerHTML = [
         '<div class="csdt-gen-modal">',
-        '  <h3>🎨 Generate Featured Image</h3>',
-        '  <div class="csdt-gen-article-row" id="csdt-gen-article-row">',
-        '    <label for="csdt-gen-article-style">Article style:</label>',
-        '    <select id="csdt-gen-article-style">' + articleStyleOptHtml + '</select>',
-        '    <label for="csdt-gen-bg-color" style="margin-left:10px;">Background:</label>',
-        '    <select id="csdt-gen-bg-color">',
-        '      <option value="auto">Auto (match style)</option>',
-        '      <option value="light_grey">⬜ Light grey / off-white</option>',
-        '      <option value="warm_cream">🟡 Warm cream / golden</option>',
-        '      <option value="white">◻ Clean white</option>',
-        '      <option value="sky_blue">🔵 Sky blue / outdoor</option>',
-        '      <option value="gradient">🌅 Soft gradient</option>',
-        '      <option value="dark">⬛ Dark / dramatic</option>',
-        '    </select>',
+        '  <div class="csdt-gen-modal-hdr">',
+        '    <h3>🎨 Generate Featured Image</h3>',
+        '    <button type="button" id="csdt-gen-close" title="Close">&times;</button>',
         '  </div>',
-        '  <div class="csdt-gen-style-row">',
-        '    <label for="csdt-gen-style">Style:</label>',
-        '    <select id="csdt-gen-style">' + styleOptHtml + '</select>',
-        '    <label for="csdt-gen-quality">Quality:</label>',
-        '    <select id="csdt-gen-quality">',
-        '      <option value="standard" selected>Standard</option>',
-        '      <option value="hd">HD</option>',
-        '    </select>',
+        '  <div class="csdt-gen-modal-body">',
+        '    <div class="csdt-gen-row">',
+        '      <label for="csdt-gen-article-style">Article style</label>',
+        '      <select id="csdt-gen-article-style">' + articleStyleOptHtml + '</select>',
+        '    </div>',
+        '    <div class="csdt-gen-row">',
+        '      <label for="csdt-gen-bg-color">Background</label>',
+        '      <select id="csdt-gen-bg-color">',
+        '        <option value="auto">Auto (match style)</option>',
+        '        <option value="light_grey">⬜ Light grey / off-white</option>',
+        '        <option value="warm_cream">🟡 Warm cream / golden</option>',
+        '        <option value="white">◻ Clean white</option>',
+        '        <option value="sky_blue">🔵 Sky blue / outdoor</option>',
+        '        <option value="gradient">🌅 Soft gradient</option>',
+        '        <option value="dark">⬛ Dark / dramatic</option>',
+        '      </select>',
+        '    </div>',
+        '    <div class="csdt-gen-row">',
+        '      <label for="csdt-gen-style">Image style</label>',
+        '      <select id="csdt-gen-style">' + styleOptHtml + '</select>',
+        '    </div>',
+        '    <div class="csdt-gen-row">',
+        '      <label for="csdt-gen-quality">Quality</label>',
+        '      <select id="csdt-gen-quality">',
+        '        <option value="standard" selected>Standard</option>',
+        '        <option value="hd">HD</option>',
+        '      </select>',
+        '    </div>',
+        '    <div class="csdt-gen-prompt-row" id="csdt-gen-prompt-row" style="display:none;">',
+        '      <button type="button" class="csdt-gen-prompt-toggle" id="csdt-gen-prompt-toggle">▶ View prompt</button>',
+        '      <div class="csdt-gen-prompt-text" id="csdt-gen-prompt-text"></div>',
+        '    </div>',
+        '    <div class="csdt-gen-modal-msg" id="csdt-gen-msg">Click Generate to create an image for this post.</div>',
+        '    <div class="csdt-gen-modal-imgs" id="csdt-gen-imgs"></div>',
         '  </div>',
-        '  <div class="csdt-gen-prompt-row" id="csdt-gen-prompt-row" style="display:none;">',
-        '    <button type="button" class="csdt-gen-prompt-toggle" id="csdt-gen-prompt-toggle">▶ View prompt</button>',
-        '    <div class="csdt-gen-prompt-text" id="csdt-gen-prompt-text"></div>',
-        '  </div>',
-        '  <div class="csdt-gen-modal-msg" id="csdt-gen-msg">Click Generate to create an image for this post.</div>',
-        '  <div class="csdt-gen-modal-imgs" id="csdt-gen-imgs"></div>',
         '  <div class="csdt-gen-modal-actions">',
         '    <button type="button" class="csdt-gen-btn-save" id="csdt-gen-save" disabled>✔ Save as Featured Image</button>',
+        '    <span class="csdt-gen-btn-spacer"></span>',
         '    <button type="button" class="csdt-gen-btn-regen" id="csdt-gen-regen">⚙ Generate</button>',
-        '    <button type="button" class="csdt-gen-btn-cancel" id="csdt-gen-cancel">✕ Cancel</button>',
+        '    <button type="button" class="csdt-gen-btn-cancel" id="csdt-gen-cancel">Cancel</button>',
         '  </div>',
         '</div>',
     ].join( '' );
@@ -121,6 +127,7 @@
     var saveBtn       = document.getElementById( 'csdt-gen-save' );
     var regenBtn      = document.getElementById( 'csdt-gen-regen' );
     var cancelBtn     = document.getElementById( 'csdt-gen-cancel' );
+    var closeBtn      = document.getElementById( 'csdt-gen-close' );
     var styleEl       = document.getElementById( 'csdt-gen-style' );
     var qualEl        = document.getElementById( 'csdt-gen-quality' );
     var promptRow     = document.getElementById( 'csdt-gen-prompt-row' );
@@ -310,6 +317,7 @@
     if ( regenBtn  ) { regenBtn.addEventListener(  'click', generate ); }
     if ( saveBtn   ) { saveBtn.addEventListener(   'click', save ); }
     if ( cancelBtn ) { cancelBtn.addEventListener( 'click', discard ); }
+    if ( closeBtn  ) { closeBtn.addEventListener(  'click', discard ); }
 
     bg.addEventListener( 'click', function ( e ) {
         if ( e.target === bg ) discard();

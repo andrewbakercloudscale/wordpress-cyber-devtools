@@ -1345,6 +1345,7 @@
     let styleEl        = null;
     let imageModal        = null;
     let promptReviewModal = null;
+    let adminGenModal     = null;
 
     // ── Concurrency queue ──────────────────────────────────────────────
     const MAX_CONCURRENT = 4;
@@ -1421,7 +1422,15 @@
     function init() {
         const saveKeyBtn = document.getElementById( 'cs-ai-img-save-key' );
         const scanBtn    = document.getElementById( 'cs-ai-img-scan-btn' );
+        const withImgBtn = document.getElementById( 'cs-ai-img-scan-with-btn' );
         const results    = document.getElementById( 'cs-ai-img-results' );
+        const sortEl     = document.getElementById( 'cs-ai-img-sort' );
+        let   activeMode = 'missing';
+
+        // Bind scan buttons before the saveKeyBtn guard so they work even when
+        // the API-settings section is absent (e.g. vendor = none).
+        if ( scanBtn )    scanBtn.addEventListener(    'click', () => doScan( 'missing' ) );
+        if ( withImgBtn ) withImgBtn.addEventListener( 'click', () => doScan( 'with_image' ) );
 
         if ( ! saveKeyBtn ) return;
 
@@ -1604,12 +1613,9 @@
         }
 
         // ── Auto re-scan when sort changes and results are visible ───────
-        const sortEl      = document.getElementById( 'cs-ai-img-sort' );
-        const withImgBtn  = document.getElementById( 'cs-ai-img-scan-with-btn' );
-                styleEl         = document.getElementById( 'cs-ai-img-style' );
+                styleEl   = document.getElementById( 'cs-ai-img-style' );
         const qualityEl = document.getElementById( 'cs-ai-img-quality' );
         const noTextEl  = document.getElementById( 'cs-ai-img-no-text' );
-        let   activeMode = 'missing';
 
         // Initialise style / quality / no_text from saved PHP values.
         if ( styleEl   && window.csdtImgStyle   ) { styleEl.value    = window.csdtImgStyle; }
@@ -1686,10 +1692,6 @@
                     if ( results ) results.innerHTML = '<p style="color:#c62828">Request failed.</p>';
                 } );
         }
-
-        // ── Scan buttons ──────────────────────────────────────────────────
-        scanBtn.addEventListener( 'click', () => doScan( 'missing' ) );
-        if ( withImgBtn ) withImgBtn.addEventListener( 'click', () => doScan( 'with_image' ) );
 
         // ── System prompt save / reset ────────────────────────────────────
         const saveSyspromptBtn  = document.getElementById( 'cs-ai-img-save-sysprompt' );
@@ -1834,6 +1836,268 @@
 
     }   // end init()
 
+    function makeAdminGenModal() {
+        const ART_OPTS   = window.csdtArticleStyleOptions || [];
+        const STYLE_OPTS = ( window.csdtDevtoolsThumbs && window.csdtDevtoolsThumbs.styleOptions ) || [];
+        const BG_OPTS    = [
+            { val: 'auto',       label: 'Auto (match style)' },
+            { val: 'light_grey', label: '⬜ Light grey / off-white' },
+            { val: 'warm_cream', label: '🟡 Warm cream / golden' },
+            { val: 'white',      label: '◻ Clean white' },
+            { val: 'sky_blue',   label: '🔵 Sky blue / outdoor' },
+            { val: 'gradient',   label: '🌅 Soft gradient' },
+            { val: 'dark',       label: '⬛ Dark / dramatic' },
+        ];
+
+        const overlay = document.createElement( 'div' );
+        overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999999;overflow-y:auto;padding:60px 20px;box-sizing:border-box';
+        const modal = document.createElement( 'div' );
+        modal.style.cssText = 'background:#fff;border-radius:4px;max-width:500px;margin:0 auto;box-shadow:0 4px 32px rgba(0,0,0,.35);font-size:13px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#3c434a';
+
+        // CSS grid row: 120px label | remaining control
+        const FR  = 'display:grid;grid-template-columns:120px 1fr;align-items:center;gap:0 12px;margin-bottom:12px';
+        const LBL = 'font-size:13px;font-weight:600;color:#3c434a;text-align:right';
+        const SEL = 'width:100%;padding:5px 8px;font-size:13px;border:1px solid #8c8f94;border-radius:3px;background:#fff;color:#3c434a;line-height:1.8';
+
+        function mkSel( id, opts ) {
+            return '<select id="' + id + '" style="' + SEL + '">'
+                + opts.map( o => '<option value="' + esc( o.val ) + '">' + esc( o.label ) + '</option>' ).join( '' )
+                + '</select>';
+        }
+
+        modal.innerHTML = [
+            // ── Header ──────────────────────────────────────────────────────
+            '<div style="padding:14px 16px;border-bottom:1px solid #dcdcde;display:flex;align-items:center;justify-content:space-between;background:#f6f7f7;border-radius:4px 4px 0 0">',
+            '  <strong id="cs-adm-gen-title" style="font-size:14px;color:#1d2327">🎨 Generate Featured Image</strong>',
+            '  <button type="button" id="cs-adm-gen-x" style="background:none;border:none;cursor:pointer;padding:2px 6px;color:#787c82;font-size:22px;line-height:1;border-radius:3px" title="Close">&times;</button>',
+            '</div>',
+
+            // ── Body ─────────────────────────────────────────────────────────
+            '<div style="padding:20px 24px">',
+
+            '<div style="' + FR + '">',
+            '  <label for="cs-adm-gen-article" style="' + LBL + '">Article style</label>',
+            mkSel( 'cs-adm-gen-article', ART_OPTS ),
+            '</div>',
+
+            '<div style="' + FR + '">',
+            '  <label for="cs-adm-gen-bg" style="' + LBL + '">Background</label>',
+            mkSel( 'cs-adm-gen-bg', BG_OPTS ),
+            '</div>',
+
+            '<div style="' + FR + '">',
+            '  <label for="cs-adm-gen-style" style="' + LBL + '">Image style</label>',
+            '  <select id="cs-adm-gen-style" style="' + SEL + '">',
+            STYLE_OPTS.map( o => '<option value="' + esc( o.val ) + '">' + esc( o.label ) + '</option>' ).join( '' ),
+            '  </select>',
+            '</div>',
+            '<div style="' + FR + '">',
+            '  <label for="cs-adm-gen-quality" style="' + LBL + '">Quality</label>',
+            '  <select id="cs-adm-gen-quality" style="' + SEL + '">',
+            '    <option value="standard">Standard</option>',
+            '    <option value="hd">HD</option>',
+            '  </select>',
+            '</div>',
+
+            '<p id="cs-adm-gen-msg" style="margin:4px 0 12px 132px;font-size:12px;color:#787c82;min-height:18px">Click Generate to create an image for this post.</p>',
+            '<div id="cs-adm-gen-imgs" style="margin-left:132px;display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px"></div>',
+
+            '</div>',
+
+            // ── Footer ───────────────────────────────────────────────────────
+            '<div style="padding:12px 16px;border-top:1px solid #dcdcde;background:#f6f7f7;border-radius:0 0 4px 4px;display:flex;align-items:center;gap:8px">',
+            '  <button type="button" id="cs-adm-gen-save" disabled style="background:#00a32a;color:#fff;border:1px solid #00a32a;border-radius:3px;padding:6px 16px;font-size:13px;font-weight:600;cursor:not-allowed;font-family:inherit;opacity:.35">✔ Save as Featured Image</button>',
+            '  <span style="flex:1"></span>',
+            '  <button type="button" id="cs-adm-gen-regen" style="background:#2271b1;color:#fff;border:1px solid #135e96;border-radius:3px;padding:6px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">⚙ Generate</button>',
+            '  <button type="button" id="cs-adm-gen-cancel" style="background:#fff;color:#3c434a;border:1px solid #c3c4c7;border-radius:3px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit">Cancel</button>',
+            '</div>',
+        ].join( '' );
+
+        overlay.appendChild( modal );
+        document.body.appendChild( overlay );
+
+        const titleEl_  = modal.querySelector( '#cs-adm-gen-title' );
+        const xBtn_     = modal.querySelector( '#cs-adm-gen-x' );
+        const artEl_    = modal.querySelector( '#cs-adm-gen-article' );
+        const bgEl_     = modal.querySelector( '#cs-adm-gen-bg' );
+        const styleEl__ = modal.querySelector( '#cs-adm-gen-style' );
+        const qualEl_   = modal.querySelector( '#cs-adm-gen-quality' );
+        const msgEl_    = modal.querySelector( '#cs-adm-gen-msg' );
+        const imgsEl_   = modal.querySelector( '#cs-adm-gen-imgs' );
+        const saveBtn_  = modal.querySelector( '#cs-adm-gen-save' );
+        const regenBtn_ = modal.querySelector( '#cs-adm-gen-regen' );
+        const cancelBtn_= modal.querySelector( '#cs-adm-gen-cancel' );
+
+        let _postId     = null;
+        let _btn        = null;
+        let _pendingIds = [];
+        let _selectedId = 0;
+        let _pollTimer  = null;
+
+        function setMsg( t ) { if ( msgEl_ ) msgEl_.textContent = t; }
+
+        function setSave( on ) {
+            if ( ! saveBtn_ ) return;
+            saveBtn_.disabled    = ! on;
+            saveBtn_.style.opacity = on ? '1' : '.5';
+            saveBtn_.style.cursor  = on ? 'pointer' : 'not-allowed';
+        }
+
+        function setBusy( busy ) {
+            if ( regenBtn_  ) regenBtn_.disabled  = busy;
+            if ( cancelBtn_ ) cancelBtn_.disabled = busy;
+            setSave( ! busy && !! _selectedId );
+        }
+
+        overlay.addEventListener( 'click', e => { if ( e.target === overlay ) doCancel(); } );
+        document.addEventListener( 'keydown', e => { if ( e.key === 'Escape' && overlay.style.display !== 'none' ) doCancel(); } );
+        xBtn_?.addEventListener( 'click', doCancel );
+
+        function doCancel() {
+            if ( _pollTimer ) { clearInterval( _pollTimer ); _pollTimer = null; }
+            overlay.style.display = 'none';
+            if ( _btn ) { _btn.disabled = false; _btn.textContent = '✨ Generate'; }
+            if ( _pendingIds.length && ! _selectedId ) {
+                post( 'csdt_devtools_ai_image_discard', { attach_ids: _pendingIds.join( ',' ) } ).catch( () => {} );
+            }
+            _pendingIds = [];
+            _selectedId = 0;
+        }
+
+        function doGenerate() {
+            if ( ! _postId ) return;
+            if ( imgsEl_ ) imgsEl_.innerHTML = '';
+            _pendingIds = [];
+            _selectedId = 0;
+            setSave( false );
+            setBusy( true );
+            setMsg( '⏳ Generating…' );
+
+            post( 'csdt_devtools_ai_image_generate', {
+                post_id:       _postId,
+                quality:       qualEl_?.value    || 'standard',
+                prompt_vendor: curVendor          || 'openai',
+                prompt_model:  modelEl?.value     || curModel || 'gpt-4o-mini',
+                prompt_style:  styleEl__?.value   || 'auto',
+                article_style: artEl_?.value      || 'general',
+                bg_color:      bgEl_?.value       || 'auto',
+            } ).then( startRes => {
+                if ( ! startRes.success || ! startRes.data?.job_id ) {
+                    setBusy( false );
+                    setMsg( '✕ ' + ( startRes.data?.message || 'Failed to start generation.' ) );
+                    return;
+                }
+                const jobId = startRes.data.job_id;
+                let elapsed = 0;
+                setMsg( '⏳ Generating… (0s)' );
+                _pollTimer = setInterval( () => {
+                    elapsed += 4;
+                    if ( elapsed > 300 ) {
+                        clearInterval( _pollTimer ); _pollTimer = null;
+                        setBusy( false );
+                        setMsg( '✕ Timed out — try again' );
+                        return;
+                    }
+                    const m = Math.floor( elapsed / 60 ), s = elapsed % 60;
+                    setMsg( '⏳ Generating… (' + ( m > 0 ? m + 'm ' + s + 's' : s + 's' ) + ')' );
+                    post( 'csdt_devtools_ai_image_poll', { job_id: jobId } ).then( pollRes => {
+                        const st = pollRes.data?.status;
+                        if ( st === 'pending' || st === 'processing' ) return;
+                        clearInterval( _pollTimer ); _pollTimer = null;
+                        setBusy( false );
+                        if ( ! pollRes.success || st === 'error' ) {
+                            setMsg( '✕ ' + ( pollRes.data?.error || pollRes.data?.message || 'Generation failed' ) );
+                            return;
+                        }
+                        const options = pollRes.data?.result?.options || [];
+                        if ( ! options.length ) { setMsg( '✕ No images returned' ); return; }
+                        _pendingIds = options.map( o => String( o.attach_id ) );
+                        showImgs( options );
+                    } ).catch( () => {} );
+                }, 4000 );
+            } ).catch( () => { setBusy( false ); setMsg( '✕ Request failed' ); } );
+        }
+
+        function showImgs( options ) {
+            if ( ! imgsEl_ ) return;
+            setMsg( 'Click an image to select it, then Save.' );
+            imgsEl_.innerHTML = '';
+            options.forEach( opt => {
+                const item = document.createElement( 'div' );
+                item.dataset.attachId = String( opt.attach_id );
+                item.style.cssText = 'flex:1 1 240px;border-radius:8px;overflow:hidden;cursor:pointer;border:3px solid transparent;transition:border-color .15s';
+                item.innerHTML = '<img src="' + esc( opt.thumb_url ) + '?v=' + Date.now() + '" style="width:100%;display:block;height:auto">';
+                item.addEventListener( 'click', () => {
+                    imgsEl_.querySelectorAll( '[data-attach-id]' ).forEach( w => { w.style.borderColor = 'transparent'; } );
+                    item.style.borderColor = '#2563eb';
+                    _selectedId = opt.attach_id;
+                    setSave( true );
+                } );
+                imgsEl_.appendChild( item );
+            } );
+            if ( options.length === 1 ) {
+                const item = imgsEl_.querySelector( '[data-attach-id]' );
+                if ( item ) item.style.borderColor = '#2563eb';
+                _selectedId = options[0].attach_id;
+                setSave( true );
+            }
+        }
+
+        function doSave() {
+            if ( ! _selectedId || ! _postId ) return;
+            const discard = _pendingIds.filter( id => id !== String( _selectedId ) ).join( ',' );
+            setBusy( true );
+            setMsg( '⏳ Saving…' );
+            post( 'csdt_devtools_ai_image_pick', { post_id: _postId, attach_id: _selectedId, discard } )
+                .then( res => {
+                    setBusy( false );
+                    if ( res.success ) {
+                        const statusEl = document.getElementById( 'cs-ai-status-' + _postId );
+                        const thumbEl  = document.getElementById( 'cs-ai-thumb-'  + _postId );
+                        if ( _btn ) _btn.textContent = '↺ Regenerate';
+                        if ( thumbEl && res.data?.thumb_url ) {
+                            thumbEl.innerHTML = '<img src="' + esc( res.data.thumb_url ) + '" style="width:80px;height:42px;object-fit:cover;border-radius:3px;border:1px solid #ddd;cursor:zoom-in" class="cs-ai-list-thumb" data-full-url="' + esc( res.data.full_url || res.data.thumb_url ) + '" title="Featured image">';
+                        }
+                        if ( statusEl ) statusEl.innerHTML = '<span style="color:#2e7d32">✓ Saved</span>';
+                        _pendingIds = [];
+                        overlay.style.display = 'none';
+                    } else {
+                        setMsg( '✕ ' + ( res.data?.message || 'Save failed' ) );
+                    }
+                } )
+                .catch( () => { setBusy( false ); setMsg( '✕ Request failed' ); } );
+        }
+
+        regenBtn_?.addEventListener(  'click', () => {
+            if ( _pendingIds.length ) {
+                post( 'csdt_devtools_ai_image_discard', { attach_ids: _pendingIds.join( ',' ) } ).catch( () => {} );
+                _pendingIds = [];
+                _selectedId = 0;
+            }
+            doGenerate();
+        } );
+        cancelBtn_?.addEventListener( 'click', doCancel );
+        saveBtn_?.addEventListener(   'click', doSave );
+
+        function open( postId, postTitle, btn ) {
+            _postId     = String( postId );
+            _btn        = btn;
+            _pendingIds = [];
+            _selectedId = 0;
+            if ( _pollTimer ) { clearInterval( _pollTimer ); _pollTimer = null; }
+            if ( imgsEl_ ) imgsEl_.innerHTML = '';
+            if ( titleEl_ ) titleEl_.textContent = '🎨 ' + ( postTitle || 'Post #' + postId );
+            setMsg( 'Click Generate to create an image for this post.' );
+            setSave( false );
+            setBusy( false );
+            // Pre-fill image style from current admin panel setting.
+            if ( styleEl__ && styleEl && styleEl.value ) styleEl__.value = styleEl.value;
+            overlay.style.display = 'block';
+        }
+
+        return { open };
+    }
+
     function makeImageModal() {
         const overlay = document.createElement( 'div' );
         overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;overflow-y:auto;padding:32px 16px;box-sizing:border-box';
@@ -1974,12 +2238,11 @@
         } );
     }
 
-    function triggerGenerate( btn, forceVary = false ) {
-        if ( ! imageModal ) imageModal = makeImageModal();
-        pickStyle( btn ).then( style => {
-            if ( style === null ) return;
-            enqueueJob( btn, () => _doGenerate( btn, forceVary, style ) );
-        } );
+    function triggerGenerate( btn ) {
+        if ( ! adminGenModal ) adminGenModal = makeAdminGenModal();
+        const postId    = btn.dataset.postId;
+        const postTitle = document.querySelector( '#cs-ai-row-' + postId + ' a' )?.textContent || 'Post #' + postId;
+        adminGenModal.open( postId, postTitle, btn );
     }
 
     function _doGenerate( btn, forceVary, chosenStyle ) {
