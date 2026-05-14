@@ -411,6 +411,7 @@ The text rule is passed in the user message — follow it exactly.';
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 16px;"><?php esc_html_e( 'Uses gpt-image-2 to generate a 1200&times;675 landscape header image tailored to each post — no stock photo needed. Configure your AI provider and API key below, then use the scan panel to find posts missing a featured image and generate one with a single click.', 'cloudscale-devtools' ); ?></p>
 
                 <?php // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- inline config vars for image generator; wp_add_inline_script not available at this render point ?>
                 <script>

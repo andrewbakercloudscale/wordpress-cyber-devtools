@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale DevTools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.904
+ * Version: 1.9.905
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.904';
+    const VERSION      = '1.9.905';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -2021,6 +2021,7 @@ class CloudScale_DevTools {
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 16px;"><?php esc_html_e( 'Customise the appearance of code blocks across your site — choose a syntax highlighting theme and set the default display mode for visitors.', 'cloudscale-devtools' ); ?></p>
                 <div class="cs-field-row">
                     <div class="cs-field">
                         <label class="cs-label" for="cs-settings-pair"><?php esc_html_e( 'Color Theme:', 'cloudscale-devtools' ); ?></label>
@@ -2294,7 +2295,9 @@ class CloudScale_DevTools {
                     [ 'name' => 'Removing the drop-in',   'rec' => 'Info',        'html' => 'The <strong>Remove</strong> button deletes <code>wp-content/object-cache.php</code> only when it is our own drop-in. Third-party drop-ins (Redis, Memcached) must be removed manually to prevent accidental data loss.' ],
                 ] ); ?>
             </div>
-            <div class="cs-panel-body" style="padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <div class="cs-panel-body" style="padding:14px 20px;">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 14px;"><?php esc_html_e( 'APCu object cache stores frequently-read database results in PHP shared memory, reducing database round-trips on every page request. Requires the APCu PHP extension to be installed on your server.', 'cloudscale-devtools' ); ?></p>
+                <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
                 <!-- Status badge -->
                 <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:220px;">
                     <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:<?php echo esc_attr( $oc_dot_color ); ?>;flex-shrink:0;"></span>
@@ -2355,6 +2358,7 @@ class CloudScale_DevTools {
                     <?php endif; ?>
                     <span id="csdt-obj-cache-msg" style="font-size:12px;"></span>
                 </div>
+                </div><!-- /flex row -->
             </div>
         </div>
 
@@ -2826,6 +2830,7 @@ class CloudScale_DevTools {
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 14px;"><?php esc_html_e( 'OPcache compiles PHP files once and stores the bytecode in server memory, so subsequent requests skip the parse-and-compile step entirely. Flush it after a deployment to ensure the latest code is running.', 'cloudscale-devtools' ); ?></p>
 
                 <div id="csdt-opcache-stats-wrap">
                     <div id="csdt-opcache-stats" style="font-size:.82em;color:#64748b;"><?php esc_html_e( 'Loading…', 'cloudscale-devtools' ); ?></div>
@@ -3150,6 +3155,7 @@ class CloudScale_DevTools {
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 14px;"><?php esc_html_e( 'Run SELECT queries directly against your WordPress database. Results are shown in a sortable table below. Write access is restricted — use this for read-only diagnostics and data lookups, not structural changes.', 'cloudscale-devtools' ); ?></p>
                 <textarea id="cs-sql-input" class="cs-sql-textarea" placeholder="SELECT option_name, option_value FROM <?php echo esc_attr( $prefix ); ?>options WHERE option_name = 'siteurl';"></textarea>
                 <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
                     <button type="button" class="cs-btn-primary" id="cs-sql-run" style="padding:8px 20px;font-size:13px">▶ <?php esc_html_e( 'Run Query', 'cloudscale-devtools' ); ?></button>
@@ -3380,6 +3386,7 @@ class CloudScale_DevTools {
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 16px;"><?php esc_html_e( 'Controls how long WordPress keeps you logged in before requiring a password again. A shorter session reduces exposure if a device is left unattended or a session cookie is stolen.', 'cloudscale-devtools' ); ?></p>
                 <div class="cs-field-row">
                     <div class="cs-field">
                         <label class="cs-label" for="cs-session-duration"><?php esc_html_e( 'Session expires after:', 'cloudscale-devtools' ); ?></label>
@@ -3496,6 +3503,7 @@ class CloudScale_DevTools {
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 16px;"><?php esc_html_e( 'Locks a username after too many consecutive failed login attempts, stopping automated password-guessing attacks. Lockouts are per-username, not per IP — so legitimate users on shared networks are never collateral damage.', 'cloudscale-devtools' ); ?></p>
                 <div class="cs-field-row">
                     <div class="cs-field">
                         <label class="cs-label">
@@ -4326,6 +4334,7 @@ class CloudScale_DevTools {
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 16px;"><?php esc_html_e( 'Add a second verification step to your account. Even if your password is stolen, an attacker still can\'t get in without this second factor. Authenticator app is the most secure option; email code requires no app but depends on reliable outgoing mail.', 'cloudscale-devtools' ); ?></p>
 
                 <!-- Email 2FA status -->
                 <?php
@@ -4523,6 +4532,7 @@ class CloudScale_DevTools {
                 ] ); ?>
             </div>
             <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 16px;"><?php esc_html_e( 'Passkeys replace your password entirely — or act as your 2FA step — using Face ID, Touch ID, Windows Hello, or a hardware key. Once registered, your device\'s biometric sensor is the only thing needed to log in. Register one passkey per device and keep at least two so you always have a backup.', 'cloudscale-devtools' ); ?></p>
                 <?php CSDT_DevTools_Passkey::render_section( $user_id ); ?>
             </div>
         </div>
@@ -6896,6 +6906,7 @@ class CloudScale_DevTools {
                     ] ); ?>
                 </div>
                 <div class="cs-panel-body">
+                <p style="color:#6b7280;font-size:13px;line-height:1.65;margin:0 0 16px;"><?php esc_html_e( 'Choose an AI provider and paste your API key to enable the security scan. A free Google Gemini tier is available with no credit card required — ideal for getting started.', 'cloudscale-devtools' ); ?></p>
                 <div class="cs-sec-settings">
 
                     <div class="cs-sec-row">
