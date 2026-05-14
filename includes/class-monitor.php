@@ -13,35 +13,18 @@ class CSDT_Monitor {
         check_ajax_referer( CloudScale_DevTools::SECURITY_NONCE, 'nonce' );
         if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( 'Unauthorized', 403 ); }
 
-        if ( ! function_exists( 'exec' ) ) {
-            wp_send_json_error( 'exec() is disabled on this server — run the command manually.' );
-        }
+        // Shell-level group management (usermod) cannot run from PHP without exec().
+        // Return the manual commands and attempt a PHP-FPM signal reload where possible.
+        $manual_cmds = [
+            'sudo usermod -a -G adm www-data',
+            'sudo systemctl restart php-fpm   # or php8.2-fpm / php8.3-fpm',
+        ];
 
-        // Add www-data to adm group (try with sudo first, then direct for root-in-container).
-        $out = []; $rc = 1;
-        exec( 'sudo usermod -a -G adm www-data 2>&1', $out, $rc ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- hardcoded OS group management; no WP Filesystem equivalent
-        if ( $rc !== 0 ) {
-            $out = []; $rc = 1;
-            exec( 'usermod -a -G adm www-data 2>&1', $out, $rc ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- hardcoded OS group management; no WP Filesystem equivalent
-        }
-        if ( $rc !== 0 ) {
-            wp_send_json_error( 'usermod failed: ' . implode( ' ', $out ) );
-        }
-
-        // Reload php-fpm so the new group membership takes effect.
-        // Try several service names used across distros / Docker setups.
-        foreach ( [ 'php-fpm', 'php8.2-fpm', 'php8.1-fpm', 'php8.3-fpm' ] as $svc ) {
-            $tmp = []; $src = 0;
-            exec( 'sudo systemctl restart ' . $svc . ' 2>&1', $tmp, $src ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec -- hardcoded service list; no WP Filesystem equivalent for systemctl
-            if ( $src === 0 ) { break; }
-        }
-        if ( $src !== 0 ) {
-            // Inside Docker, systemctl won't work — send SIGUSR2 to php-fpm master.
-            $pid_files = glob( '/var/run/php/php*-fpm.pid' );
-            if ( $pid_files ) {
-                $pid = (int) file_get_contents( $pid_files[0] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading local OS PID file
-                if ( $pid > 0 ) { posix_kill( $pid, SIGUSR2 ); }
-            }
+        // Attempt SIGUSR2 to reload PHP-FPM in case the group change was done manually.
+        $pid_files = glob( '/var/run/php/php*-fpm.pid' );
+        if ( $pid_files ) {
+            $pid = (int) file_get_contents( $pid_files[0] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading local OS PID file
+            if ( $pid > 0 && function_exists( 'posix_kill' ) ) { posix_kill( $pid, SIGUSR2 ); }
         }
 
         // Re-check readability after attempting restart.
@@ -52,10 +35,11 @@ class CSDT_Monitor {
         }
 
         wp_send_json_success( [
-            'readable' => $readable,
-            'note'     => $readable
-                ? 'Auth log is now readable — refresh the page to activate monitoring.'
-                : 'Group updated. If the log is still unreadable, PHP-FPM may need a full restart to pick up the new group membership.',
+            'readable'     => $readable,
+            'manual_cmds'  => $manual_cmds,
+            'note'         => $readable
+                ? 'Auth log is readable. If it was not before, run the manual commands below and restart PHP-FPM.'
+                : 'Auth log is not yet readable. Run the manual commands below in your terminal, then reload.',
         ] );
     }
 

@@ -63,6 +63,29 @@ class CSDT_Custom_404 {
     }
 
     /**
+     * Serves the dynamic colour-scheme CSS for the custom 404 page.
+     *
+     * Hooked on template_redirect at priority 0 (before the 404 handler at priority 1).
+     * The 404 template references this endpoint via <link> to avoid echoing a <style> tag.
+     *
+     * @since 1.9.882
+     * @return void
+     */
+    public static function serve_scheme_css(): void {
+        if ( empty( $_GET['csdt_404_css'] ) ) { return; } // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- public read-only CSS endpoint
+        $scheme = sanitize_key( wp_unslash( $_GET['csdt_404_css'] ) );
+        $css    = self::get_404_scheme_css( $scheme );
+        if ( ! $css ) {
+            wp_die( esc_html__( 'Not found', 'cloudscale-devtools' ), '', [ 'response' => 404 ] );
+        }
+        nocache_headers();
+        header( 'Content-Type: text/css; charset=utf-8' );
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pre-validated hex colours from hardcoded palette; no user input reaches the CSS string
+        echo $css;
+        exit;
+    }
+
+    /**
      * Intercepts WordPress 404 responses and outputs the custom games page.
      *
      * Hooked on `template_redirect` at priority 1.
@@ -105,7 +128,9 @@ class CSDT_Custom_404 {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?php echo esc_html__( 'Page Not Found', 'cloudscale-devtools' ); ?> &mdash; <?php echo esc_html( $site_name ); ?></title>
 <link rel="stylesheet" href="<?php echo esc_url( $css_url ); ?>">
-<?php if ( $scheme_css ) : ?><style><?php echo $scheme_css; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- pre-validated hex colours and static CSS property names ?></style><?php endif; ?>
+<?php if ( $scheme_css ) : ?>
+<link rel="stylesheet" href="<?php echo esc_url( add_query_arg( [ 'csdt_404_css' => $active_scheme, 'ver' => CloudScale_DevTools::VERSION ], home_url( '/' ) ) ); ?>">
+<?php endif; ?>
 </head>
 <body>
 <div class="cs404-heading-row">

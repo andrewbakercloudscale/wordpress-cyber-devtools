@@ -2,8 +2,7 @@
 /**
  * AI Dispatcher — single entry point for all Anthropic / Gemini calls.
  *
- * Replaces the duplicated provider logic that previously lived in both
- * dispatch_ai_call() (wp_remote_post) and build_ai_curl_handle() (curl_multi).
+ * Single entry point for all Anthropic / Gemini API calls using wp_remote_post().
  * All callers should use this class instead of rolling their own HTTP.
  *
  * @package CloudScale_DevTools
@@ -137,40 +136,10 @@ class CSDT_AI_Dispatcher {
      * @throws \RuntimeException on build or parse error.
      */
     public static function call_parallel( array $calls ): array {
-        $provider = get_option( 'csdt_devtools_ai_provider', 'anthropic' );
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_init -- wp_remote_* has no parallel multi-handle equivalent; curl_multi is required for concurrent AI calls.
-        $mh       = curl_multi_init();
-        $handles  = [];
-
-        foreach ( $calls as $i => $call ) {
-            $req  = self::build_request( $provider, $call['system'], $call['user'], $call['model'], $call['max_tokens'] );
-            $ch   = curl_init();
-            curl_setopt_array( $ch, [
-                CURLOPT_URL            => $req['url'],
-                CURLOPT_POST           => true,
-                CURLOPT_POSTFIELDS     => $req['body'],
-                CURLOPT_HTTPHEADER     => $req['headers'],
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 180,
-                CURLOPT_SSL_VERIFYPEER => true,
-            ] );
-            $handles[ $i ] = $ch;
-            curl_multi_add_handle( $mh, $ch );
-        }
-
-        $running = null;
-        do {
-            curl_multi_exec( $mh, $running );
-            if ( $running ) { curl_multi_select( $mh, 1.0 ); }
-        } while ( $running > 0 );
-
         $texts = [];
-        foreach ( $handles as $i => $ch ) {
-            $texts[ $i ] = self::parse_response_text( $provider, (string) curl_multi_getcontent( $ch ) );
-            curl_multi_remove_handle( $mh, $ch );
-            curl_close( $ch );
+        foreach ( $calls as $i => $call ) {
+            $texts[ $i ] = self::call( $call['system'], $call['user'], $call['model'], $call['max_tokens'] );
         }
-        curl_multi_close( $mh );
         return $texts;
     }
 

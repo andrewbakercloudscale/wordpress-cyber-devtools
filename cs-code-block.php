@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale DevTools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.888
+ * Version: 1.9.896
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.888';
+    const VERSION      = '1.9.896';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -914,6 +914,10 @@ class CloudScale_DevTools {
             '#csdt_security_summary .cs-dw-chip{display:flex;align-items:center;gap:7px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 9px;font-size:12px;font-weight:600;color:#334155}' .
             '#csdt_security_summary .cs-dw-chip .cs-dw-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}' .
             '#csdt_security_summary .cs-dw-chip-label{font-size:10px;color:#94a3b8;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' .
+            '#csdt_security_summary .cs-dw-chip details summary{font-size:11px;color:#6366f1;cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:3px;}' .
+            '#csdt_security_summary .cs-dw-chip details summary::-webkit-details-marker{display:none}' .
+            '#csdt_security_summary .cs-dw-chip details[open] .csdt-2fa-chevron{transform:rotate(90deg)}' .
+            '#csdt_security_summary .cs-dw-chip .csdt-2fa-chevron{display:inline-block;transition:transform .15s}' .
 
             /* Timestamps row */
             '#csdt_security_summary .cs-dw-times{display:flex;gap:10px;margin-top:4px}' .
@@ -5176,14 +5180,17 @@ class CloudScale_DevTools {
         $login_slug = get_option( 'csdt_devtools_login_slug', '' );
         $force_2fa  = get_option( 'csdt_devtools_2fa_force_admins', '0' ) === '1';
         $email_2fa  = get_option( 'csdt_devtools_2fa_method', 'off' ) === 'email';
-        $admins     = get_users( [ 'role' => 'administrator' ] );
-        $adm_tot    = count( $admins );
-        $adm_2fa    = 0;
+        $admins             = get_users( [ 'role' => 'administrator' ] );
+        $adm_tot            = count( $admins );
+        $adm_2fa            = 0;
+        $admins_missing_2fa = [];
         foreach ( $admins as $u ) {
             if ( get_user_meta( $u->ID, 'csdt_devtools_totp_enabled', true ) === '1'
                  || ! empty( get_user_meta( $u->ID, 'csdt_devtools_passkeys', true ) )
                  || $email_2fa ) {
                 $adm_2fa++;
+            } else {
+                $admins_missing_2fa[] = $u->user_login;
             }
         }
 
@@ -5438,12 +5445,33 @@ class CloudScale_DevTools {
                     <?php echo $bf_on ? esc_html__( 'Protected', 'cloudscale-devtools' ) : esc_html__( 'Off', 'cloudscale-devtools' ); ?>
                 </span>
             </div>
-            <div class="cs-dw-chip">
-                <span class="cs-dw-dot" style="background:<?php echo esc_attr( $tfa_dot ); ?>;"></span>
-                <span>
-                    <span class="cs-dw-chip-label"><?php esc_html_e( '2FA Admins', 'cloudscale-devtools' ); ?></span><br>
-                    <?php echo esc_html( $adm_2fa . ' / ' . $adm_tot ); ?>
-                </span>
+            <div class="cs-dw-chip" style="flex-direction:column;align-items:flex-start;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="cs-dw-dot" style="background:<?php echo esc_attr( $tfa_dot ); ?>;flex-shrink:0;"></span>
+                    <span>
+                        <span class="cs-dw-chip-label"><?php esc_html_e( '2FA Admins', 'cloudscale-devtools' ); ?></span><br>
+                        <?php echo esc_html( $adm_2fa . ' / ' . $adm_tot ); ?>
+                    </span>
+                </div>
+                <?php if ( ! empty( $admins_missing_2fa ) ) : ?>
+                <details style="margin-top:6px;width:100%;">
+                    <summary style="font-size:11px;color:#6366f1;cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:3px;user-select:none;">
+                        <span class="csdt-2fa-chevron" style="font-size:9px;">&#9654;</span>
+                        <?php esc_html_e( 'Details', 'cloudscale-devtools' ); ?>
+                    </summary>
+                    <ul style="margin:5px 0 0 2px;padding:0;list-style:none;font-size:11px;color:#374151;">
+                        <?php foreach ( $admins_missing_2fa as $login ) : ?>
+                        <li style="padding:2px 0;display:flex;align-items:center;gap:4px;">
+                            <span style="color:#dc2626;font-size:9px;">&#x26A0;</span>
+                            <span><?php echo esc_html( $login ); ?></span>
+                            <span style="color:#9ca3af;font-size:10px;"><?php esc_html_e( '— no 2FA', 'cloudscale-devtools' ); ?></span>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </details>
+                <?php elseif ( $adm_tot > 0 ) : ?>
+                <div style="margin-top:4px;font-size:11px;color:#16a34a;">&#x2713; <?php esc_html_e( 'All covered', 'cloudscale-devtools' ); ?></div>
+                <?php endif; ?>
             </div>
             <div class="cs-dw-chip">
                 <span class="cs-dw-dot" style="background:<?php echo ! empty( $login_slug ) ? '#16a34a' : '#dc2626'; ?>;"></span>
@@ -6352,6 +6380,40 @@ class CloudScale_DevTools {
             </div>
             <?php endif; ?>
 
+            <!-- Card 8: Plugin Stack Scanner -->
+            <?php
+            $optimizer_url     = admin_url( 'tools.php?page=' . self::TOOLS_SLUG . '&tab=optimizer' );
+            $stack_last        = get_transient( 'csdt_plugin_stack_last' );
+            $stack_match_count = $stack_last ? (int) $stack_last['match_count'] : -1;
+            $stack_at          = $stack_last ? (int) $stack_last['at'] : 0;
+            if ( $stack_last ) :
+                $stack_bg = $stack_match_count > 0 ? '#fffbeb' : '#f0fdf4';
+                $stack_bd = $stack_match_count > 0 ? '#fcd34d' : '#86efac';
+                $stack_tx = $stack_match_count > 0 ? '#92400e' : '#15803d';
+            ?>
+            <div style="background:<?php echo esc_attr( $stack_bg ); ?>;border:1px solid <?php echo esc_attr( $stack_bd ); ?>;border-radius:6px;padding:12px 14px;">
+                <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;"><?php esc_html_e( 'Plugin Stack', 'cloudscale-devtools' ); ?></div>
+                <div style="font-size:13px;font-weight:700;color:<?php echo esc_attr( $stack_tx ); ?>;">
+                    <?php if ( $stack_match_count > 0 ) : ?>
+                        &#x26A0;&#xFE0F; <?php /* translators: %d number of redundant plugins found */ printf( esc_html__( '%d replaceable', 'cloudscale-devtools' ), $stack_match_count ); ?>
+                    <?php else : ?>
+                        &#x2705; <?php esc_html_e( 'Stack optimised', 'cloudscale-devtools' ); ?>
+                    <?php endif; ?>
+                </div>
+                <div style="font-size:11px;color:#6b7280;margin-top:2px;line-height:1.4;">
+                    <?php /* translators: %s time difference e.g. "3 days" */ printf( esc_html__( 'Scanned %s ago', 'cloudscale-devtools' ), esc_html( human_time_diff( $stack_at ) ) ); ?>
+                </div>
+                <a href="<?php echo esc_url( $optimizer_url ); ?>" style="font-size:11px;color:#6366f1;font-weight:600;display:inline-block;margin-top:6px;text-decoration:none;"><?php esc_html_e( 'View Details', 'cloudscale-devtools' ); ?> &rarr;</a>
+            </div>
+            <?php else : ?>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;">
+                <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;"><?php esc_html_e( 'Plugin Stack', 'cloudscale-devtools' ); ?></div>
+                <div style="font-size:13px;font-weight:700;color:#374151;">&#x1F50D; <?php esc_html_e( 'Not yet scanned', 'cloudscale-devtools' ); ?></div>
+                <div style="font-size:11px;color:#6b7280;margin-top:2px;line-height:1.4;"><?php esc_html_e( 'Find plugins CloudScale already replaces.', 'cloudscale-devtools' ); ?></div>
+                <a href="<?php echo esc_url( $optimizer_url ); ?>" style="font-size:11px;color:#6366f1;font-weight:600;display:inline-block;margin-top:6px;text-decoration:none;"><?php esc_html_e( 'Scan Now', 'cloudscale-devtools' ); ?> &rarr;</a>
+            </div>
+            <?php endif; ?>
+
         </div><!-- /status grid -->
 
         <!-- ── Recent Security Events ─────────────────────────────────────── -->
@@ -6633,6 +6695,45 @@ class CloudScale_DevTools {
                     </div>
                 </div>
 
+            </div>
+        </div>
+
+        <!-- ── AI Debugging Assistant ────────────────────────────────────── -->
+        <div class="cs-panel" id="cs-panel-ai-debug">
+            <div class="cs-section-header" style="background:linear-gradient(90deg,#312e81 0%,#4f46e5 100%);border-left:3px solid #a5b4fc;">
+                <span>🤖 <?php esc_html_e( 'AI Debugging Assistant', 'cloudscale-devtools' ); ?></span>
+                <span class="cs-header-hint"><?php esc_html_e( 'Paste an error message or log snippet — get an AI diagnosis and fix steps', 'cloudscale-devtools' ); ?></span>
+                <?php self::render_explain_btn( 'ai-debug', 'AI Debugging Assistant', [
+                    [ 'name' => 'What to paste',    'rec' => 'Overview',   'html' => 'Paste a PHP fatal error, WordPress debug.log entry, browser console error, or a plain-English description of unexpected behaviour. The AI reads context, identifies the root cause, and explains how to fix it step by step.' ],
+                    [ 'name' => 'Privacy note',     'rec' => 'Important',  'html' => 'Text you enter here is sent to the configured AI provider (Anthropic or Gemini). Do not paste stack traces that contain passwords, API keys, or other secrets. Redact sensitive values before submitting.' ],
+                ] ); ?>
+            </div>
+            <div class="cs-panel-body">
+                <?php if ( $has_key ) : ?>
+                <p style="color:#4b5563;margin:0 0 14px;line-height:1.65;font-size:.95em;">
+                    <?php esc_html_e( 'Paste an error message, log entry, or describe the problem below. The AI will identify the root cause and provide fix steps.', 'cloudscale-devtools' ); ?>
+                </p>
+                <textarea id="csdt-debug-input"
+                    rows="6"
+                    style="width:100%;box-sizing:border-box;font-family:monospace;font-size:.85em;padding:10px 12px;border:1px solid #d1d5db;border-radius:6px;resize:vertical;background:#f8fafc;color:#1e293b;line-height:1.6;"
+                    placeholder="<?php esc_attr_e( 'Paste error message, debug.log entry, or describe the issue…', 'cloudscale-devtools' ); ?>"></textarea>
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;">
+                    <button id="csdt-debug-analyze-btn" type="button" class="cs-btn-primary">
+                        🤖 <?php esc_html_e( 'Diagnose with AI', 'cloudscale-devtools' ); ?>
+                    </button>
+                    <span id="csdt-debug-analyzing" style="display:none;color:#6b7280;font-size:13px;">
+                        ⏳ <?php esc_html_e( 'Analysing…', 'cloudscale-devtools' ); ?>
+                    </span>
+                </div>
+                <div id="csdt-debug-result" style="display:none;margin-top:20px;"></div>
+                <?php else : ?>
+                <p style="color:#6b7280;font-size:.93em;margin:0;">
+                    <?php echo wp_kses(
+                        __( 'An AI API key is required. Configure <strong>Anthropic Claude</strong> or <strong>Google Gemini</strong> on the <a href="#" data-cs-tab="security">Security tab</a> to use the AI Debugging Assistant.', 'cloudscale-devtools' ),
+                        [ 'strong' => [], 'a' => [ 'href' => [], 'data-cs-tab' => [] ] ]
+                    ); ?>
+                </p>
+                <?php endif; ?>
             </div>
         </div>
         <?php

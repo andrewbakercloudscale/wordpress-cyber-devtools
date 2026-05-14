@@ -369,11 +369,7 @@ class CSDT_Site_Audit {
                     if ( $mtime && ( time() - $mtime ) < 7200 ) {
                         // File touched in last 2 h — read tail to find last lifecycle event
                         $tail = '';
-                        if ( function_exists( 'exec' ) ) {
-                            $out = [];
-                            @exec( 'tail -20 ' . escapeshellarg( $f2b_log ) . ' 2>/dev/null', $out ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
-                            $tail = implode( "\n", $out );
-                        } elseif ( is_readable( $f2b_log ) && ( $fh = fopen( $f2b_log, 'r' ) ) ) {
+                        if ( is_readable( $f2b_log ) && ( $fh = fopen( $f2b_log, 'r' ) ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen -- reading local OS log file; WP Filesystem API not available in non-admin context
                             $sz = (int) filesize( $f2b_log );
                             if ( $sz > 2048 ) { fseek( $fh, -2048, SEEK_END ); }
                             $tail = (string) fread( $fh, 2048 );
@@ -398,22 +394,11 @@ class CSDT_Site_Audit {
                                  '/opt/fail2ban/bin/fail2ban-client' ] as $p ) {
                         if ( file_exists( $p ) ) { $installed = true; break; }
                     }
-                    if ( ! $installed && function_exists( 'exec' ) ) {
-                        $out = [];
-                        @exec( 'which fail2ban-client 2>/dev/null', $out ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
-                        $installed = ! empty( trim( $out[0] ?? '' ) );
-                    }
-
                     if ( $installed ) {
                         $running = false;
                         foreach ( [ '/var/run/fail2ban/fail2ban.pid', '/run/fail2ban/fail2ban.pid',
                                      '/var/run/fail2ban/fail2ban.sock', '/run/fail2ban/fail2ban.sock' ] as $p ) {
                             if ( file_exists( $p ) ) { $running = true; break; }
-                        }
-                        if ( ! $running && function_exists( 'exec' ) ) {
-                            $out = [];
-                            @exec( 'systemctl is-active fail2ban 2>/dev/null', $out ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec
-                            $running = ( trim( $out[0] ?? '' ) === 'active' );
                         }
                         $state = $running ? 'running' : 'installed_stopped';
                     } else {
@@ -643,6 +628,73 @@ class CSDT_Site_Audit {
                     'fixed'     => $count === 0,
                     'fix_label' => 'Add crossorigin via wp_script_attributes',
                     'risk'      => $count > 0 ? 'low' : null,
+                ];
+            } )(),
+            ( function () {
+                $mu_file = WP_CONTENT_DIR . '/mu-plugins/csdt-disable-xmlrpc.php';
+                $fixed   = file_exists( $mu_file );
+                return [
+                    'id'        => 'disable_xmlrpc',
+                    'title'     => $fixed
+                        ? 'XML-RPC is disabled — remote exploit surface eliminated'
+                        : 'XML-RPC is enabled — brute-force and DDoS amplification risk',
+                    'detail'    => $fixed
+                        ? 'A must-use plugin blocks xmlrpc_enabled so the endpoint is inaccessible. REST API is unaffected.'
+                        : "XML-RPC (xmlrpc.php) supports remote procedure calls and has been exploited in credential-stuffing amplification attacks. Unless you use the Jetpack mobile app or a remote blogging client, disable it.",
+                    'fixed'     => $fixed,
+                    'fix_label' => 'Disable XML-RPC',
+                ];
+            } )(),
+            ( function () {
+                $fixed = defined( 'DISALLOW_FILE_EDIT' ) && DISALLOW_FILE_EDIT;
+                if ( ! $fixed ) {
+                    $fixed = file_exists( WP_CONTENT_DIR . '/mu-plugins/csdt-no-file-edit.php' );
+                }
+                return [
+                    'id'        => 'disable_file_edit',
+                    'title'     => $fixed
+                        ? 'Theme/plugin file editor is locked — DISALLOW_FILE_EDIT active'
+                        : 'Theme and plugin file editor is accessible from wp-admin',
+                    'detail'    => $fixed
+                        ? 'DISALLOW_FILE_EDIT is set. The Appearance → Theme File Editor and Plugins → Plugin File Editor menus are hidden.'
+                        : "The built-in code editor lets any administrator modify PHP files from the browser. A compromised admin account or XSS attack could execute arbitrary code. Disabling it forces file changes via SSH, leaving an audit trail.",
+                    'fixed'     => $fixed,
+                    'fix_label' => 'Lock File Editor',
+                ];
+            } )(),
+            ( function () {
+                $fixed = defined( 'WP_POST_REVISIONS' ) && WP_POST_REVISIONS !== true && (int) WP_POST_REVISIONS <= 10;
+                if ( ! $fixed ) {
+                    $fixed = file_exists( WP_CONTENT_DIR . '/mu-plugins/csdt-limit-revisions.php' );
+                }
+                global $wpdb;
+                $rev_count = (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+                    "SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type = 'revision'"
+                );
+                return [
+                    'id'        => 'limit_revisions',
+                    'title'     => $fixed
+                        ? 'Post revision limit is set — wp_posts stays lean'
+                        : sprintf( 'Post revisions are unlimited — %s revision rows in database', number_format( $rev_count ) ),
+                    'detail'    => $fixed
+                        ? 'WP_POST_REVISIONS is set. WordPress keeps at most 5 revisions per post and prunes older ones automatically.'
+                        : sprintf( 'WordPress stores unlimited revisions by default. With %s revision rows, every edit adds another row. Setting WP_POST_REVISIONS to 5 keeps the table manageable.', number_format( $rev_count ) ),
+                    'fixed'     => $fixed,
+                    'fix_label' => 'Limit to 5 Revisions',
+                ];
+            } )(),
+            ( function () {
+                $fixed = file_exists( WP_CONTENT_DIR . '/mu-plugins/csdt-no-user-enum.php' );
+                return [
+                    'id'        => 'disable_user_enumeration',
+                    'title'     => $fixed
+                        ? 'Author enumeration is blocked — usernames protected'
+                        : 'Author enumeration is open — usernames exposed via ?author=N',
+                    'detail'    => $fixed
+                        ? 'A must-use plugin intercepts ?author= requests, preventing username disclosure via author archive URLs.'
+                        : "Visiting /?author=1 redirects to /author/adminusername — revealing admin usernames to anyone scanning your site. Attackers use this for credential-stuffing attacks.",
+                    'fixed'     => $fixed,
+                    'fix_label' => 'Block Author Enumeration',
                 ];
             } )(),
         ];
@@ -1277,6 +1329,117 @@ bantime  = 86400</pre>
                 wp_send_json_success( [
                     'fixes'   => self::get_quick_fixes(),
                     'message' => 'AdSense deduplication patch enabled — duplicate push calls will be silently dropped on every page load.',
+                ] );
+                return;
+            case 'disable_xmlrpc':
+                $mu_dir = WP_CONTENT_DIR . '/mu-plugins';
+                if ( ! is_dir( $mu_dir ) ) { wp_mkdir_p( $mu_dir ); }
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+                file_put_contents(
+                    $mu_dir . '/csdt-disable-xmlrpc.php',
+                    '<?php' . "\n" .
+                    '// Disable XML-RPC — installed by CloudScale DevTools Quick Fixes.' . "\n" .
+                    'add_filter( \'xmlrpc_enabled\', \'__return_false\' );' . "\n"
+                );
+                wp_send_json_success( [
+                    'fixes'   => self::get_quick_fixes(),
+                    'message' => 'XML-RPC disabled via must-use plugin. The REST API is unaffected.',
+                ] );
+                return;
+            case 'disable_file_edit':
+                $mu_dir  = WP_CONTENT_DIR . '/mu-plugins';
+                if ( ! is_dir( $mu_dir ) ) { wp_mkdir_p( $mu_dir ); }
+                $cfg_file = ABSPATH . 'wp-config.php';
+                $cfg_done = false;
+                if ( is_readable( $cfg_file ) && is_writable( $cfg_file ) ) {
+                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+                    $cfg     = file_get_contents( $cfg_file );
+                    $pattern = "/define\s*\(\s*['\"]DISALLOW_FILE_EDIT['\"]\s*,[^)]+\)\s*;/i";
+                    $define  = "define( 'DISALLOW_FILE_EDIT', true );";
+                    if ( ! preg_match( $pattern, $cfg ) ) {
+                        $cfg = preg_replace(
+                            '/\/\*\s*That\'s all[^*]*\*\//is',
+                            $define . "\n\n/* That's all, stop editing! Happy publishing. */",
+                            $cfg, 1
+                        );
+                        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+                        if ( $cfg && file_put_contents( $cfg_file, $cfg ) !== false ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_put_contents_file_put_contents
+                            $cfg_done = true;
+                        }
+                    } else {
+                        $cfg_done = true; // already set
+                    }
+                }
+                if ( ! $cfg_done ) {
+                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+                    file_put_contents(
+                        $mu_dir . '/csdt-no-file-edit.php',
+                        '<?php' . "\n" .
+                        '// Lock theme/plugin file editor — installed by CloudScale DevTools Quick Fixes.' . "\n" .
+                        "define( 'DISALLOW_FILE_EDIT', true );\n"
+                    );
+                }
+                wp_send_json_success( [
+                    'fixes'   => self::get_quick_fixes(),
+                    'message' => 'File editor locked. The Appearance → Theme File Editor and Plugins → Plugin File Editor menus are now hidden.',
+                ] );
+                return;
+            case 'limit_revisions':
+                $mu_dir   = WP_CONTENT_DIR . '/mu-plugins';
+                if ( ! is_dir( $mu_dir ) ) { wp_mkdir_p( $mu_dir ); }
+                $cfg_file = ABSPATH . 'wp-config.php';
+                $cfg_done = false;
+                if ( is_readable( $cfg_file ) && is_writable( $cfg_file ) ) {
+                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+                    $cfg     = file_get_contents( $cfg_file );
+                    $pattern = "/define\s*\(\s*['\"]WP_POST_REVISIONS['\"]\s*,[^)]+\)\s*;/i";
+                    $define  = "define( 'WP_POST_REVISIONS', 5 );";
+                    if ( ! preg_match( $pattern, $cfg ) ) {
+                        $cfg = preg_replace(
+                            '/\/\*\s*That\'s all[^*]*\*\//is',
+                            $define . "\n\n/* That's all, stop editing! Happy publishing. */",
+                            $cfg, 1
+                        );
+                        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+                        if ( $cfg && file_put_contents( $cfg_file, $cfg ) !== false ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_put_contents_file_put_contents
+                            $cfg_done = true;
+                        }
+                    } else {
+                        $cfg_done = true;
+                    }
+                }
+                if ( ! $cfg_done ) {
+                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+                    file_put_contents(
+                        $mu_dir . '/csdt-limit-revisions.php',
+                        '<?php' . "\n" .
+                        '// Limit post revisions — installed by CloudScale DevTools Quick Fixes.' . "\n" .
+                        "define( 'WP_POST_REVISIONS', 5 );\n"
+                    );
+                }
+                wp_send_json_success( [
+                    'fixes'   => self::get_quick_fixes(),
+                    'message' => 'Post revisions limited to 5 per post. Old revisions are pruned automatically by WordPress on the next save.',
+                ] );
+                return;
+            case 'disable_user_enumeration':
+                $mu_dir = WP_CONTENT_DIR . '/mu-plugins';
+                if ( ! is_dir( $mu_dir ) ) { wp_mkdir_p( $mu_dir ); }
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+                file_put_contents(
+                    $mu_dir . '/csdt-no-user-enum.php',
+                    '<?php' . "\n" .
+                    '// Block author enumeration — installed by CloudScale DevTools Quick Fixes.' . "\n" .
+                    'add_action( \'template_redirect\', function () {' . "\n" .
+                    '    if ( ! is_admin() && isset( $_GET[\'author\'] ) ) {' . "\n" .
+                    '        wp_safe_redirect( home_url( \'/\' ), 301 );' . "\n" .
+                    '        exit;' . "\n" .
+                    '    }' . "\n" .
+                    '} );' . "\n"
+                );
+                wp_send_json_success( [
+                    'fixes'   => self::get_quick_fixes(),
+                    'message' => 'Author enumeration blocked. Requests to /?author=N now redirect to the home page.',
                 ] );
                 return;
             default:
@@ -4216,17 +4379,11 @@ PROMPT;
                 'code_triage'      => $code_triage,
             ], JSON_PRETTY_PRINT );
 
-            if ( function_exists( 'curl_multi_init' ) ) {
-                $texts    = CSDT_AI_Dispatcher::call_parallel( [
-                    [ 'system' => self::default_internal_scan_prompt(), 'user' => $msg_internal, 'model' => $model, 'max_tokens' => 4096 ],
-                    [ 'system' => self::default_external_scan_prompt(), 'user' => $msg_external, 'model' => $model, 'max_tokens' => 4096 ],
-                ] );
-                $report = CSDT_AI_Dispatcher::merge_reports( CSDT_AI_Dispatcher::parse_json_report( $texts[0] ), CSDT_AI_Dispatcher::parse_json_report( $texts[1] ) );
-            } else {
-                // Fallback: single sequential call
-                $text   = CSDT_AI_Dispatcher::call( self::default_deep_scan_prompt(), 'WordPress site full security data (JSON):' . "\n\n" . wp_json_encode( [ 'internal' => $base_data, 'external_checks' => $external, 'plugin_code_scan' => $code_scan, 'code_triage' => $code_triage ], JSON_PRETTY_PRINT ), $model, 8192 );
-                $report = CSDT_AI_Dispatcher::parse_json_report( $text );
-            }
+            $texts  = CSDT_AI_Dispatcher::call_parallel( [
+                [ 'system' => self::default_internal_scan_prompt(), 'user' => $msg_internal, 'model' => $model, 'max_tokens' => 4096 ],
+                [ 'system' => self::default_external_scan_prompt(), 'user' => $msg_external, 'model' => $model, 'max_tokens' => 4096 ],
+            ] );
+            $report = CSDT_AI_Dispatcher::merge_reports( CSDT_AI_Dispatcher::parse_json_report( $texts[0] ), CSDT_AI_Dispatcher::parse_json_report( $texts[1] ) );
 
         } catch ( \Throwable $e ) {
             set_transient( 'csdt_deep_scan_status', [ 'status' => 'error', 'message' => $e->getMessage() ], 300 );

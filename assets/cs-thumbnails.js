@@ -71,7 +71,31 @@
             : t.warn > 0 ? `${t.warn} warning(s) — review recommended` : 'All checks passed';
 
         const icons = { pass: '✔', warn: '⚠', fail: '✘', info: 'ℹ' };
-        let html = `
+
+        // OG image thumbnail preview
+        let thumbHtml = '';
+        if ( data.og_image ) {
+            const dims = ( data.img_w && data.img_h ) ? ` · ${data.img_w}×${data.img_h}px` : '';
+            const kb   = data.img_kb ? ` · ${Math.round( data.img_kb )}KB` : '';
+            thumbHtml = `<div style="display:flex;align-items:flex-start;gap:14px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:10px;">
+                <a href="${esc( data.og_image )}" target="_blank" rel="noopener" style="flex-shrink:0;">
+                    <img src="${esc( data.og_image )}" alt="og:image preview"
+                         style="width:160px;height:84px;object-fit:cover;border-radius:5px;border:1px solid #cbd5e1;display:block;"
+                         onerror="this.parentElement.style.display='none'">
+                </a>
+                <div style="min-width:0;">
+                    <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:3px;">og:image</div>
+                    <div style="font-size:11px;color:#64748b;word-break:break-all;line-height:1.4;">${esc( data.og_image )}</div>
+                    ${dims || kb ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;">${esc( dims + kb ).replace( /^ · /, '' )}</div>` : ''}
+                </div>
+            </div>`;
+        } else {
+            thumbHtml = `<div style="padding:10px 14px;background:#fff5f5;border:1px solid #fca5a5;border-radius:8px;margin-bottom:10px;font-size:12px;color:#7f1d1d;">
+                ✘ No og:image found — social platforms will not show a preview image for this URL.
+            </div>`;
+        }
+
+        let html = thumbHtml + `
             <div class="cs-thumb-report-hdr cs-thumb-${cls}-hdr">
                 <strong>${esc( msg )}</strong>
                 <span class="cs-thumb-tally">
@@ -1592,10 +1616,6 @@
         if ( qualityEl && window.csdtImgQuality ) { qualityEl.value  = window.csdtImgQuality; }
         if ( noTextEl  && window.csdtImgNoText  ) { noTextEl.checked = true; }
 
-        // ── Generation mode toggle ────────────────────────────────────────
-        const modeClassicBtn  = document.getElementById( 'cs-mode-btn-classic' );
-        const modeVisualBtn   = document.getElementById( 'cs-mode-btn-visual-summary' );
-        const articleStyleRow = document.getElementById( 'cs-ai-article-style-row' );
         const articleStyleEl  = document.getElementById( 'cs-ai-img-article-style' );
 
         // Populate article style options from PHP-injected data.
@@ -1606,39 +1626,6 @@
                 opt.value       = o.val;
                 opt.textContent = o.label;
                 articleStyleEl.appendChild( opt );
-            } );
-        }
-
-        function applyModeToggle( mode ) {
-            const isVS = ( mode === 'visual_summary' );
-            if ( modeClassicBtn ) {
-                modeClassicBtn.style.background  = isVS ? '#f8fafc' : '#1565c0';
-                modeClassicBtn.style.color       = isVS ? '#475569' : '#fff';
-                modeClassicBtn.style.fontWeight  = isVS ? '400'     : '600';
-            }
-            if ( modeVisualBtn ) {
-                modeVisualBtn.style.background   = isVS ? '#1565c0' : '#f8fafc';
-                modeVisualBtn.style.color        = isVS ? '#fff'    : '#475569';
-                modeVisualBtn.style.fontWeight   = isVS ? '600'     : '400';
-            }
-            if ( articleStyleRow ) {
-                articleStyleRow.style.display = isVS ? '' : 'none';
-            }
-        }
-
-        const savedGenMode = localStorage.getItem( 'csdt_img_gen_mode' ) || 'visual_summary';
-        applyModeToggle( savedGenMode );
-
-        if ( modeClassicBtn ) {
-            modeClassicBtn.addEventListener( 'click', () => {
-                localStorage.setItem( 'csdt_img_gen_mode', 'classic' );
-                applyModeToggle( 'classic' );
-            } );
-        }
-        if ( modeVisualBtn ) {
-            modeVisualBtn.addEventListener( 'click', () => {
-                localStorage.setItem( 'csdt_img_gen_mode', 'visual_summary' );
-                applyModeToggle( 'visual_summary' );
             } );
         }
 
@@ -2004,7 +1991,6 @@
             const promptModel  = ( modelEl?.value || curModel || 'gpt-4o-mini' );
             const promptStyle  = chosenStyle || styleEl?.value || 'auto';
             const noText       = document.getElementById( 'cs-ai-img-no-text' )?.checked ? '1' : '0';
-            const genMode      = localStorage.getItem( 'csdt_img_gen_mode' ) || 'classic';
             const articleStyle = document.getElementById( 'cs-ai-img-article-style' )?.value || 'general';
 
             btn.disabled    = true;
@@ -2012,7 +1998,7 @@
             if ( statusEl ) statusEl.textContent = '';
 
             // Step 1 — ask AI to write the image prompt.
-            post( 'csdt_devtools_ai_image_write_prompt', { post_id: postId, prompt_vendor: promptVendor, prompt_model: promptModel, prompt_style: promptStyle, no_text: noText, force_vary: forceVary ? '1' : '0', mode: genMode, article_style: articleStyle } )
+            post( 'csdt_devtools_ai_image_write_prompt', { post_id: postId, prompt_vendor: promptVendor, prompt_model: promptModel, prompt_style: promptStyle, no_text: noText, force_vary: forceVary ? '1' : '0', article_style: articleStyle } )
                 .then( res => {
                     btn.disabled    = false;
                     btn.textContent = '✨ Generate';
@@ -2029,7 +2015,7 @@
                             btn.textContent = '⏳ Generating…';
                             if ( statusEl ) statusEl.innerHTML = '<span style="color:#94a3b8;font-size:11px">⏳ Generating…</span>';
 
-                            post( 'csdt_devtools_ai_image_generate', { post_id: postId, quality, prompt_vendor: promptVendor, prompt_model: promptModel, prompt: editedPrompt, no_text: noText, mode: genMode, article_style: articleStyle } )
+                            post( 'csdt_devtools_ai_image_generate', { post_id: postId, quality, prompt_vendor: promptVendor, prompt_model: promptModel, prompt: editedPrompt, no_text: noText, article_style: articleStyle } )
                                 .then( startRes => {
                                     if ( ! startRes.success ) {
                                         btn.disabled    = false;

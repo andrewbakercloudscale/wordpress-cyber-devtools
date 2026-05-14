@@ -463,6 +463,13 @@ class CSDT_Optimizer {
             }
         }
 
+        $match_count = count( $matched );
+        set_transient( 'csdt_plugin_stack_last', [
+            'match_count'  => $match_count,
+            'total_saving' => $total_saving,
+            'at'           => time(),
+        ], 7 * DAY_IN_SECONDS );
+
         wp_send_json_success( [
             'matched'      => $matched,
             'total_saving' => $total_saving,

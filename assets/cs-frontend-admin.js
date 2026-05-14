@@ -55,11 +55,6 @@
         '.csdt-gen-prompt-row{margin-top:10px;}',
         '.csdt-gen-prompt-toggle{font-size:11px;color:#6b7280;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;}',
         '.csdt-gen-prompt-text{display:none;margin-top:6px;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;color:#374151;line-height:1.5;white-space:pre-wrap;word-break:break-word;}',
-        '.csdt-gen-mode-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}',
-        '.csdt-gen-mode-row label{font-size:12px;font-weight:600;color:#374151;}',
-        '.csdt-gen-mode-toggle{display:inline-flex;border:1px solid #d1d5db;border-radius:6px;overflow:hidden;}',
-        '.csdt-gen-mode-btn{padding:4px 12px;font-size:12px;font-weight:400;cursor:pointer;border:none;background:#f9fafb;color:#374151;font-family:inherit;}',
-        '.csdt-gen-mode-btn.active{background:#1565c0;color:#fff;font-weight:600;}',
         '.csdt-gen-article-row{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}',
         '.csdt-gen-article-row label{font-size:12px;font-weight:600;color:#374151;}',
         '.csdt-gen-article-row select{font-size:12px;border:1px solid #d1d5db;border-radius:6px;padding:3px 8px;background:#fff;}',
@@ -83,16 +78,19 @@
     bg.innerHTML = [
         '<div class="csdt-gen-modal">',
         '  <h3>🎨 Generate Featured Image</h3>',
-        '  <div class="csdt-gen-mode-row">',
-        '    <label>Mode:</label>',
-        '    <div class="csdt-gen-mode-toggle">',
-        '      <button type="button" class="csdt-gen-mode-btn active" id="csdt-gen-mode-classic" data-mode="classic">📸 Classic</button>',
-        '      <button type="button" class="csdt-gen-mode-btn" id="csdt-gen-mode-visual" data-mode="visual_summary">🎯 Visual Summary</button>',
-        '    </div>',
-        '  </div>',
-        '  <div class="csdt-gen-article-row" id="csdt-gen-article-row" style="display:none">',
+        '  <div class="csdt-gen-article-row" id="csdt-gen-article-row">',
         '    <label for="csdt-gen-article-style">Article style:</label>',
         '    <select id="csdt-gen-article-style">' + articleStyleOptHtml + '</select>',
+        '    <label for="csdt-gen-bg-color" style="margin-left:10px;">Background:</label>',
+        '    <select id="csdt-gen-bg-color">',
+        '      <option value="auto">Auto (match style)</option>',
+        '      <option value="light_grey">⬜ Light grey / off-white</option>',
+        '      <option value="warm_cream">🟡 Warm cream / golden</option>',
+        '      <option value="white">◻ Clean white</option>',
+        '      <option value="sky_blue">🔵 Sky blue / outdoor</option>',
+        '      <option value="gradient">🌅 Soft gradient</option>',
+        '      <option value="dark">⬛ Dark / dramatic</option>',
+        '    </select>',
         '  </div>',
         '  <div class="csdt-gen-style-row">',
         '    <label for="csdt-gen-style">Style:</label>',
@@ -137,25 +135,8 @@
         } );
     }
 
-    // ── Mode toggle ───────────────────────────────────────────────────────
-    var modeClassicBtn  = document.getElementById( 'csdt-gen-mode-classic' );
-    var modeVisualBtn   = document.getElementById( 'csdt-gen-mode-visual' );
-    var articleRow      = document.getElementById( 'csdt-gen-article-row' );
-    var articleStyleEl  = document.getElementById( 'csdt-gen-article-style' );
-
-    function applyGenMode( mode ) {
-        var isVS = ( mode === 'visual_summary' );
-        if ( modeClassicBtn ) { modeClassicBtn.classList.toggle( 'active', ! isVS ); }
-        if ( modeVisualBtn  ) { modeVisualBtn.classList.toggle( 'active',   isVS ); }
-        if ( articleRow     ) { articleRow.style.display = isVS ? '' : 'none'; }
-        localStorage.setItem( 'csdt_img_gen_mode', mode );
-    }
-
-    var initMode = localStorage.getItem( 'csdt_img_gen_mode' ) || 'visual_summary';
-    applyGenMode( initMode );
-
-    if ( modeClassicBtn ) { modeClassicBtn.addEventListener( 'click', function () { applyGenMode( 'classic' ); } ); }
-    if ( modeVisualBtn  ) { modeVisualBtn.addEventListener(  'click', function () { applyGenMode( 'visual_summary' ); } ); }
+    var articleStyleEl = document.getElementById( 'csdt-gen-article-style' );
+    var bgColorEl      = document.getElementById( 'csdt-gen-bg-color' );
 
     // Pre-fill style from saved settings; quality always defaults to standard
     if ( cfg.imgStyle && styleEl ) { styleEl.value = cfg.imgStyle; }
@@ -193,10 +174,10 @@
         setBusy( true );
         setMsg( '⏳ Writing prompt…' );
 
-        var style        = styleEl       ? styleEl.value       : ( cfg.imgStyle || 'auto' );
-        var quality      = qualEl        ? qualEl.value        : 'standard';
-        var genMode      = localStorage.getItem( 'csdt_img_gen_mode' ) || 'classic';
+        var style        = styleEl        ? styleEl.value        : ( cfg.imgStyle || 'auto' );
+        var quality      = qualEl         ? qualEl.value         : 'standard';
         var articleStyle = articleStyleEl ? articleStyleEl.value : 'general';
+        var bgColor      = bgColorEl      ? bgColorEl.value      : 'auto';
 
         post( 'csdt_devtools_ai_image_generate', {
             post_id:       currentPostId,
@@ -204,8 +185,8 @@
             prompt_vendor: cfg.promptVendor || 'openai',
             prompt_model:  cfg.promptModel  || 'gpt-4o-mini',
             prompt_style:  style,
-            mode:          genMode,
             article_style: articleStyle,
+            bg_color:      bgColor,
         }, function ( startResp ) {
             if ( ! startResp.success || ! startResp.data || ! startResp.data.job_id ) {
                 setBusy( false );

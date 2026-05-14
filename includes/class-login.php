@@ -772,13 +772,9 @@ h1{font-size:22px;font-weight:700;color:#f1f5f9;margin-bottom:8px;line-height:1.
                 delete_transient( CloudScale_DevTools::LOGIN_2FA_TRANSIENT . $token );
                 wp_set_auth_cookie( $user_id, self::login_should_remember( $pending ) );
                 $redirect = isset( $_POST['redirect_to'] ) ? esc_url_raw( wp_unslash( $_POST['redirect_to'] ) ) : admin_url();
-                // Use JS top-level navigation: on macOS/Windows, the browser runs the passkey
-                // ceremony inside an OS overlay. wp_safe_redirect() navigates that overlay's
-                // frame instead of the main tab, painting the dashboard inside the sheet.
-                // window.top.location.href escapes any sub-frame and lands the user correctly.
-                echo '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>';
-                echo '<script>window.top.location.href=' . wp_json_encode( $redirect ) . ';</script>'; // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript -- minimal inline redirect in a raw HTML exit page; wp_enqueue_script not available after output has started.
-                echo '</body></html>';
+                // Hooked on login_init — no output has started, so wp_safe_redirect() works correctly.
+                nocache_headers();
+                wp_safe_redirect( $redirect );
                 exit;
             }
             // Verification failed — re-render challenge with error.

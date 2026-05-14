@@ -154,33 +154,8 @@ class CSDT_Code_Migrator {
         }
 
         $manual_cmd = 'docker exec pi_wordpress sh -c "apk add --no-cache php-apcu && kill -USR2 1"';
-
-        if ( ! function_exists( 'exec' ) ) {
-            wp_send_json_error( [ 'message' => 'exec() is disabled — run manually: ' . $manual_cmd, 'manual_cmd' => $manual_cmd ] );
-        }
-
-        // Try each installer in order: sudo apk (Alpine), sudo apt-get (Debian), bare apk, bare apt-get.
-        $candidates = [
-            'sudo apk add --no-cache php-apcu 2>&1',
-            'sudo apt-get install -y php-apcu 2>&1',
-            'apk add --no-cache php-apcu 2>&1',
-            'apt-get install -y php-apcu 2>&1',
-        ];
-        $out  = [];
-        $code = 1;
-        foreach ( $candidates as $cmd ) {
-            exec( $cmd, $out, $code );
-            if ( 0 === $code ) { break; }
-        }
-        if ( 0 !== $code ) {
-            wp_send_json_error( [
-                'message'    => 'Automatic install failed (permission denied) — run this in your terminal: ' . $manual_cmd,
-                'manual_cmd' => $manual_cmd,
-            ] );
-        }
-
-        exec( 'phpenmod apcu 2>&1' );
-
+        // Automatic installation requires shell access which is unavailable in this environment.
+        // Signal PHP-FPM directly if APCu is already installed and only a reload is needed.
         $reloaded = false;
         $pid_files = array_merge(
             glob( '/var/run/php/php*-fpm.pid' ) ?: [],
@@ -188,20 +163,24 @@ class CSDT_Code_Migrator {
         );
         foreach ( $pid_files as $pf ) {
             if ( ! file_exists( $pf ) ) { continue; }
-            $pid = (int) trim( (string) file_get_contents( $pf ) );
-            if ( $pid > 0 ) {
-                exec( "kill -USR2 {$pid} 2>&1", $o2, $c2 );
-                $reloaded = ( 0 === $c2 );
+            $pid = (int) trim( (string) file_get_contents( $pf ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- reading local OS PID file
+            if ( $pid > 0 && function_exists( 'posix_kill' ) ) {
+                $reloaded = posix_kill( $pid, SIGUSR2 );
                 break;
             }
         }
 
-        wp_send_json_success( [
-            'reloaded' => $reloaded,
-            'message'  => $reloaded
-                ? 'APCu installed and PHP-FPM reloaded.'
-                : 'APCu installed — container restart required to activate. Run: docker restart pi_wordpress',
-            'status'   => self::get_object_cache_status(),
+        if ( $reloaded ) {
+            wp_send_json_success( [
+                'reloaded' => true,
+                'message'  => 'PHP-FPM reloaded — if APCu was already installed it is now active.',
+                'status'   => self::get_object_cache_status(),
+            ] );
+        }
+
+        wp_send_json_error( [
+            'message'    => 'Run this command in your terminal to install APCu: ' . $manual_cmd,
+            'manual_cmd' => $manual_cmd,
         ] );
     }
 

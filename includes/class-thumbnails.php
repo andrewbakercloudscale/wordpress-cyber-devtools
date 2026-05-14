@@ -38,20 +38,21 @@ class CSDT_Thumbnails {
 
     public static function get_image_style_options(): array {
         return [
-            [ 'val' => 'auto',                  'label' => 'Auto (AI picks)' ],
-            [ 'val' => 'cinematic_poster',      'label' => '🎬 Cinematic Poster (bold text)' ],
-            [ 'val' => 'photorealistic',        'label' => '📷 Photorealistic' ],
-            [ 'val' => 'editorial',             'label' => '📰 Editorial Photography' ],
-            [ 'val' => 'technical_infographic', 'label' => '📊 Technical Infographic' ],
-            [ 'val' => 'isometric',             'label' => '🏗 Isometric 3D' ],
-            [ 'val' => 'cartoon',               'label' => '🎨 Cartoon / Illustration' ],
-            [ 'val' => 'flat_vector',           'label' => '▲ Flat Vector' ],
-            [ 'val' => 'minimalist',            'label' => '⬜ Minimalist' ],
-            [ 'val' => 'neon_cyberpunk',        'label' => '🌆 Neon / Cyberpunk' ],
-            [ 'val' => 'blueprint',             'label' => '📐 Blueprint' ],
-            [ 'val' => 'retro_80s',             'label' => '📺 Retro / 80s' ],
-            [ 'val' => 'dark_abstract',         'label' => '🌑 Dark Abstract' ],
-            [ 'val' => 'comic_book',            'label' => '💥 Comic Book' ],
+            [ 'val' => 'strong_metaphor',       'label' => '⚡ Strong Metaphor — one dramatic central scene' ],
+            [ 'val' => 'cinematic_poster',      'label' => '🎬 Cinematic Poster — bold text overlay, movie quality' ],
+            [ 'val' => 'photorealistic',        'label' => '📷 Photorealistic Scene — lifelike, no illustration' ],
+            [ 'val' => 'editorial',             'label' => '📰 Editorial Photography — documentary, human, grounded' ],
+            [ 'val' => 'technical_infographic', 'label' => '📊 Icons & Symbols — infographic grid, no scenes' ],
+            [ 'val' => 'flat_vector',           'label' => '▲ Flat Vector Icons — clean shapes, brand logos' ],
+            [ 'val' => 'isometric',             'label' => '🏗 Isometric 3D Icons — geometric, technical' ],
+            [ 'val' => 'minimalist',            'label' => '⬜ Minimalist — single bold symbol, lots of space' ],
+            [ 'val' => 'cartoon',               'label' => '🎨 Cartoon / Illustration — expressive characters' ],
+            [ 'val' => 'comic_book',            'label' => '💥 Comic Book — action panels, bold outlines' ],
+            [ 'val' => 'neon_cyberpunk',        'label' => '🌆 Neon Cyberpunk — dark glowing city scene' ],
+            [ 'val' => 'retro_80s',             'label' => '📺 Retro 80s — synthwave grid, chrome gradients' ],
+            [ 'val' => 'dark_abstract',         'label' => '🌑 Dark Abstract — moody, dramatic lighting' ],
+            [ 'val' => 'blueprint',             'label' => '📐 Blueprint — technical line-art on blue' ],
+            [ 'val' => 'auto',                  'label' => '🤖 Auto (AI picks style)' ],
         ];
     }
 
@@ -368,13 +369,7 @@ Describe brands and products by their physical form, never by name as text. For 
 
 The text rule is passed in the user message — follow it exactly.';
 
-    private const DEFAULT_VISUAL_SUMMARY_SYSTEM_PROMPT = 'You are a visual prompt writer for gpt-image-2 blog header images (1536×1024 landscape).
-
-Write a single concise image prompt that visually summarises the article using icons, symbols, and brand shapes — no people, no scenes. Pick the 3–5 key concepts and give each a recognisable visual symbol. Compose them so a viewer understands the article topic at a glance.
-
-No rendered text or words in the image. Bold shapes. High contrast. Must read clearly at thumbnail size.
-
-Output ONLY the image prompt — no preamble, no explanation.';
+    private const DEFAULT_VISUAL_SUMMARY_SYSTEM_PROMPT = 'You are a visual prompt writer for gpt-image-2 blog header images (1536×1024 landscape). Output ONLY the image prompt — no preamble, no explanation.';
 
     private static function get_img_system_prompt(): string {
         $saved = (string) get_option( 'csdt_devtools_img_system_prompt', self::DEFAULT_IMG_SYSTEM_PROMPT );
@@ -544,24 +539,8 @@ Output ONLY the image prompt — no preamble, no explanation.';
                     </div>
                 </div>
 
-                <!-- Generation mode toggle -->
-                <div class="cs-sec-row">
-                    <span class="cs-sec-label"><?php esc_html_e( 'Generation mode:', 'cloudscale-devtools' ); ?></span>
-                    <div class="cs-sec-control">
-                        <div id="cs-ai-mode-toggle" style="display:inline-flex;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;font-size:13px">
-                            <button type="button" id="cs-mode-btn-classic"
-                                    style="padding:6px 16px;cursor:pointer;font-weight:600;background:#1565c0;color:#fff;border:none;border-right:1px solid #cbd5e1"
-                                    data-mode="classic">📸 Classic</button>
-                            <button type="button" id="cs-mode-btn-visual-summary"
-                                    style="padding:6px 16px;cursor:pointer;font-weight:400;background:#f8fafc;color:#475569;border:none"
-                                    data-mode="visual_summary">🎯 Visual Summary</button>
-                        </div>
-                        <span class="cs-hint"><?php esc_html_e( 'Classic: cinematic/photorealistic image based on article narrative. Visual Summary: icon and symbol composition that visually represents the article\'s key concepts.', 'cloudscale-devtools' ); ?></span>
-                    </div>
-                </div>
-
-                <!-- Article style (only shown in Visual Summary mode) -->
-                <div class="cs-sec-row" id="cs-ai-article-style-row" style="display:none">
+                <!-- Article style -->
+                <div class="cs-sec-row" id="cs-ai-article-style-row">
                     <span class="cs-sec-label"><?php esc_html_e( 'Article style:', 'cloudscale-devtools' ); ?></span>
                     <div class="cs-sec-control">
                         <select id="cs-ai-img-article-style" class="cs-sec-select">
@@ -1119,8 +1098,8 @@ Output ONLY the image prompt — no preamble, no explanation.';
                     $results[ $key ] = [ 'success' => false, 'label' => $platform['label'], 'error' => $editor->get_error_message() ];
                     continue 2;
                 }
-                // Scale to fit within target dimensions — no crop, no content lost.
-                $editor->resize( $platform['w'], $platform['h'], false );
+                // Crop to exact platform dimensions from centre — social platforms expect exact sizes.
+                $editor->resize( $platform['w'], $platform['h'], true );
                 $editor->set_quality( $quality );
                 $saved = $editor->save( $filename );
                 if ( is_wp_error( $saved ) ) {
@@ -2295,11 +2274,9 @@ Output ONLY the image prompt — no preamble, no explanation.';
         $post_id       = isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0;
         $prompt_vendor = isset( $_POST['prompt_vendor'] ) ? sanitize_key( wp_unslash( $_POST['prompt_vendor'] ) ) : 'openai';
         $prompt_model  = isset( $_POST['prompt_model'] )  ? sanitize_text_field( wp_unslash( $_POST['prompt_model'] ) ) : 'gpt-4o';
-        $style         = isset( $_POST['prompt_style'] )  ? sanitize_key( wp_unslash( $_POST['prompt_style'] ) ) : 'auto';
-        $no_text       = ! empty( $_POST['no_text'] ) && '1' === $_POST['no_text'];
-        $force_vary    = ! empty( $_POST['force_vary'] ) && '1' === $_POST['force_vary'];
-        $mode          = isset( $_POST['mode'] )          ? sanitize_key( wp_unslash( $_POST['mode'] ) )          : 'classic';
+        $style         = isset( $_POST['prompt_style'] )  ? sanitize_key( wp_unslash( $_POST['prompt_style'] ) )  : 'auto';
         $article_style = isset( $_POST['article_style'] ) ? sanitize_key( wp_unslash( $_POST['article_style'] ) ) : 'general';
+        $bg_color      = isset( $_POST['bg_color'] )      ? sanitize_key( wp_unslash( $_POST['bg_color'] ) )      : 'auto';
 
         if ( ! $post_id ) {
             wp_send_json_error( [ 'message' => 'Invalid post ID.' ] );
@@ -2311,130 +2288,68 @@ Output ONLY the image prompt — no preamble, no explanation.';
             return;
         }
 
-        $title      = $post->post_title;
-        $content    = wp_strip_all_tags( $post->post_content );
-        $excerpt    = $post->post_excerpt ?: wp_trim_words( $content, 80 );
-        $categories = implode( ', ', wp_list_pluck( get_the_category( $post_id ), 'name' ) );
-        $tags       = implode( ', ', wp_list_pluck( get_the_tags( $post_id ) ?: [], 'name' ) );
-        $full_body  = mb_substr( $content, 0, 4000 );
+        $title   = $post->post_title;
+        $summary = self::get_article_summary( $post_id );
 
-        $context_parts = [ "Post title: \"{$title}\"" ];
-        if ( $categories ) { $context_parts[] = "Categories: {$categories}"; }
-        if ( $tags )       { $context_parts[] = "Tags: {$tags}"; }
-        if ( $excerpt )    { $context_parts[] = "Excerpt: \"{$excerpt}\""; }
-        $context_parts[] = "Article content:\n{$full_body}";
-        $context_str = implode( "\n\n", $context_parts );
-
-        $shared_style_map = [
-            'cinematic_poster'      => 'cinematic photorealistic movie-poster layout, ONE bold 2–3 word all-caps headline as the ONLY text element on a dark background — absolutely no subtitles, body copy, bullet points, captions, or any other text',
-            'technical_infographic' => 'bold technical illustration with strong visual hierarchy, clean geometric shapes',
-            'photorealistic'        => 'cinematic photorealistic photography, dramatic lighting, macro detail',
-            'editorial'             => 'professional editorial photography',
-            'isometric'             => 'clean isometric 3D illustration',
-            'cartoon'               => 'bold cartoon illustration',
-            'flat_vector'           => 'flat vector illustration, bold shapes, clean lines',
-            'minimalist'            => 'minimalist design, bold shapes, clean negative space',
-            'neon_cyberpunk'        => 'dark cyberpunk scene, glowing neon accents in electric blue, purple and pink, rain-slicked reflective surfaces, dramatic rim lighting against pure black, synthwave aesthetic, ultra-high contrast',
-            'blueprint'             => 'white technical line art on deep navy blue background, engineering blueprint style, precise geometric construction lines, subtle grid overlay, glowing key elements, no colour fill',
-            'retro_80s'             => '1980s retro computer aesthetic, CRT phosphor glow and scanlines, pixelated neon elements, synthwave sunset gradient in purple and orange, VHS noise texture, bold geometric shapes',
-            'dark_abstract'         => 'deep dark gradient background in rich blacks and midnight blues, floating abstract geometric shapes with subtle inner glow, premium modern tech aesthetic, minimal accent highlights in electric teal or amber',
-            'comic_book'            => 'bold comic book illustration, thick black ink outlines, halftone Ben-Day dot shading, vibrant primary colours, dynamic diagonal composition, graphic novel energy, high contrast',
+        $article_style_labels = [
+            'technology'     => 'technology article covering software, hardware, or developer tools',
+            'security'       => 'cybersecurity or information security article',
+            'tutorial'       => 'tutorial or step-by-step how-to guide',
+            'news'           => 'news article or announcement',
+            'product_review' => 'product or service review',
+            'opinion'        => 'opinion piece or editorial commentary',
+            'finance'        => 'finance, business, or economics article',
+            'health'         => 'health, wellness, or medical article',
+            'general'        => 'general interest article',
         ];
+        $style_names = [
+            'strong_metaphor'       => 'dramatic photorealistic scene',
+            'cinematic_poster'      => 'cinematic poster',
+            'photorealistic'        => 'photorealistic scene',
+            'editorial'             => 'editorial photography',
+            'technical_infographic' => 'icon and symbol infographic',
+            'flat_vector'           => 'flat vector icon illustration',
+            'isometric'             => 'isometric 3D illustration',
+            'minimalist'            => 'minimalist illustration',
+            'cartoon'               => 'cartoon illustration',
+            'comic_book'            => 'comic book illustration',
+            'neon_cyberpunk'        => 'neon cyberpunk scene',
+            'retro_80s'             => 'retro 80s synthwave illustration',
+            'dark_abstract'         => 'dark abstract composition',
+            'blueprint'             => 'blueprint technical line-art',
+        ];
+        $style_label = $article_style_labels[ $article_style ] ?? $article_style;
+        $style_name  = $style_names[ $style ] ?? 'dramatic photorealistic scene';
 
-        if ( 'visual_summary' === $mode ) {
-            $summary = self::get_article_summary( $post_id );
-
-            $article_style_labels = [
-                'technology'     => 'technology article covering software, hardware, or developer tools',
-                'security'       => 'cybersecurity or information security article',
-                'tutorial'       => 'tutorial or step-by-step how-to guide',
-                'news'           => 'news article or announcement',
-                'product_review' => 'product or service review',
-                'opinion'        => 'opinion piece or editorial commentary',
-                'finance'        => 'finance, business, or economics article',
-                'health'         => 'health, wellness, or medical article',
-                'general'        => 'general interest article',
-            ];
-            $style_label  = $article_style_labels[ $article_style ] ?? $article_style;
-            $style_names  = [
-                'cinematic_poster'      => 'cinematic poster',
-                'technical_infographic' => 'technical infographic illustration',
-                'photorealistic'        => 'photorealistic illustration',
-                'editorial'             => 'editorial photography style',
-                'isometric'             => 'isometric 3D illustration',
-                'cartoon'               => 'cartoon illustration',
-                'flat_vector'           => 'flat vector illustration',
-                'minimalist'            => 'minimalist illustration',
-                'neon_cyberpunk'        => 'neon cyberpunk illustration',
-                'blueprint'             => 'blueprint / technical line-art illustration',
-                'retro_80s'             => 'retro 80s synthwave illustration',
-                'dark_abstract'         => 'dark abstract illustration',
-                'comic_book'            => 'comic book illustration',
-            ];
-            $style_name = $style_names[ $style ] ?? 'clean icon-driven illustration';
-
-            $system_msg = self::DEFAULT_VISUAL_SUMMARY_SYSTEM_PROMPT;
-            $user_msg   = "Article type: {$style_label}\nTitle: \"{$title}\"\n\nSummary:\n{$summary}\n\n"
-                . "Write a gpt-image-2 prompt for a {$style_name} blog header that visually summarises this article using icons and symbols. No text or words in the image.";
+        $icon_styles = [ 'technical_infographic', 'flat_vector', 'isometric', 'minimalist', 'blueprint' ];
+        if ( in_array( $style, $icon_styles, true ) ) {
+            $visual_approach = "Use bold icons, recognisable brand shapes, and strong visual symbols — pick 3–5 key concepts from the article and give each a distinct, instantly readable symbol. Arrange for thumbnail clarity.";
+        } elseif ( 'strong_metaphor' === $style ) {
+            $visual_approach = "Build ONE single dominant visual metaphor — a photorealistic scene, physical confrontation, or dramatic action that embodies the article's core idea. Be specific: show the actual tension, transformation, or contrast the article describes. Key concepts can appear as labels, jersey text, or object markings within the scene. Avoid generic tech clichés.";
         } else {
-            $style_map = $shared_style_map;
-
-            // Styles that make sense as blog headers — used when auto-varying on Regenerate.
-            $vary_pool = [ 'photorealistic', 'editorial', 'technical_infographic', 'minimalist', 'isometric', 'cartoon', 'flat_vector', 'neon_cyberpunk', 'blueprint', 'retro_80s', 'dark_abstract', 'comic_book' ];
-
-            // On force_vary, cycle through sensible blog-header styles only.
-            if ( $force_vary ) {
-                $candidates = array_diff( $vary_pool, [ $style ] );
-                $style      = $candidates[ array_rand( $candidates ) ];
-            }
-
-            $style_instruction = isset( $style_map[ $style ] ) ? " Required visual style: {$style_map[$style]}." : '';
-            $is_poster = ( $style === 'cinematic_poster' );
-            $icon_carveout = ' Brand ICON SHAPES (coffee cup, animal mascots, geometric marks) are visual symbols — they are exempt from this text rule and should be used.';
-            $text_rule = $no_text
-                ? ' TEXT RULE: The finished image must contain ZERO rendered text — no words, letters, numbers, labels, captions, titles.' . $icon_carveout
-                : ( $is_poster
-                    ? ' TEXT RULE: Include ONE 2–3 word all-caps bold headline as the SOLE text element. Absolutely no subtitles, body copy, bullet points, captions, or other text.' . $icon_carveout
-                    : ' TEXT RULE: Include ZERO text in the image — no headlines, titles, labels, captions, or descriptions. The article title is added separately by the publishing system.' . $icon_carveout );
-
-            $vary_instruction = $force_vary
-                ? ' IMPORTANT: The user just regenerated because they did not like the previous image. You MUST choose a completely different visual metaphor: different setting, different subject, different mood. If the previous prompt used a data centre or city, use a workshop, natural landscape, or organic environment instead. If it used an isometric style, use photorealistic. Never repeat the same type of scene.'
-                : '';
-
-            // Detect recognisable tech brand icons in this post and inject as a mandatory hint.
-            $logo_hint         = self::extract_tech_logos( $title, $full_body );
-            $icon_instruction  = $logo_hint
-                ? "\n\nICONS CONFIRMED in this article: {$logo_hint}. You MUST include these recognisable VISUAL ICON SHAPES as large, prominent foreground elements. Use the shapes as described — they contain no readable text."
-                : '';
-
-            // Pick a random compositional POV to inject into the generated prompt itself.
-            $pov_pool = [
-                'MANDATORY COMPOSITION: extreme macro close-up — fill the entire frame with surface detail, no background visible.',
-                'MANDATORY COMPOSITION: dramatic worm\'s-eye view — subjects tower above the viewer, shot from ground level looking steeply upward.',
-                'MANDATORY COMPOSITION: aerial top-down bird\'s-eye view — all subjects arranged on a flat surface, viewed from directly above.',
-                'MANDATORY COMPOSITION: first-person POV — viewer\'s hands visible in lower frame interacting with the subjects.',
-                'MANDATORY COMPOSITION: cinematic wide shot — subjects occupy left third, vast dark space on right with distant atmospheric depth.',
-                'MANDATORY COMPOSITION: over-the-shoulder mid shot — one large subject looms in the left foreground, second subject faces it from the right.',
-            ];
-            $pov_instruction = ' ' . $pov_pool[ array_rand( $pov_pool ) ];
-
-            $system_msg   = self::get_img_system_prompt();
-            $step1 = "Step 1 — Read the ENTIRE article — title, angle, and conclusion — then identify:\n"
-                . "(a) Which technology brands/products/protocols are mentioned.\n"
-                . "(b) The ROLE each plays — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n"
-                . "(c) The CORE TECHNICAL CONCEPT expressed as a concrete physical metaphor. Examples: \"write throughput saturation\" = a pipe under enormous pressure with data gushing through a bottleneck; \"query optimisation\" = a magnifying glass examining branching path forks; \"cache eviction\" = shelves rapidly emptying; \"replication lag\" = one runner far behind another; \"memory leak\" = a vessel slowly draining; \"rate limiting\" = a gate throttling a queue; \"tuning / configuration\" = hands adjusting precise calibration dials. Always translate the concept into something PHYSICAL and VISUAL.";
-            $step2 = "Step 2 — Identify the PRIMARY DOMAIN, then choose imagery accordingly — DO NOT default to circuit boards or server rooms unless the article is specifically about hardware or networking:\n"
-                . "- PEOPLE / ORGANISATION / TALENT / MANAGEMENT / HR: real humans, diverse teams, office environments, org-chart structures, career ladders — NO circuit boards.\n"
-                . "- SECURITY / HACKING / VULNERABILITIES: locks, shields, vaults, shadowy figures, glowing threat indicators.\n"
-                . "- PERFORMANCE / SPEED / OPTIMISATION: racing, motion blur, turbines, gauges at maximum, physical speed metaphors.\n"
-                . "- DATABASE / STORAGE: the brand icon (elephant, dolphin, etc.) combined with the concept metaphor from (c) above.\n"
-                . "- CLOUD / INFRA / DEVOPS: server icons, cloud shapes, pipeline diagrams, deployment arrows.\n"
-                . "- CODE / LANGUAGES / FRAMEWORKS: terminal screens, code glows, brand icons.\n"
-                . "- BUSINESS / STRATEGY / MONEY: chess pieces, boardrooms, graphs, financial objects.\n"
-                . "- AI / ML / DATA SCIENCE: neural network nodes, glowing brain shapes, data streams.\n"
-                . "Write the prompt using the identified domain, the concept metaphor from (c), and the champion/struggling/disruptor roles. For companies with recognisable logos use their actual iconic visual. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.";
-            $user_msg = "{$context_str}\n\n{$step1}\n\n{$step2}{$icon_instruction}\n\nOutput ONLY the final gpt-image-2 prompt.{$style_instruction}{$text_rule}{$pov_instruction}{$vary_instruction}";
+            $visual_approach = "Build one strong central visual metaphor specific to THIS article — a dramatic scene, action, confrontation, or moment that makes the core idea immediately legible. Include recognisable brand icons or cultural symbols where relevant. Avoid generic tech clichés (no floating data, no circuit boards, no generic keyboards).";
         }
+
+        $bg_map = [
+            'light_grey'  => 'pale grey or off-white background',
+            'warm_cream'  => 'warm cream or golden-amber background',
+            'white'       => 'clean pure white background',
+            'sky_blue'    => 'bright open sky or soft blue background',
+            'gradient'    => 'soft light-to-mid-tone gradient background',
+            'dark'        => 'dark charcoal or near-black background with dramatic lighting',
+        ];
+        $bg_line = isset( $bg_map[ $bg_color ] )
+            ? "Background: {$bg_map[ $bg_color ]}."
+            : 'Background: light — pale grey, off-white, warm cream, open sky, or stadium light. Never black or near-black.';
+
+        $system_msg = self::DEFAULT_VISUAL_SUMMARY_SYSTEM_PROMPT;
+        $user_msg   = "Article type: {$style_label}\nTitle: \"{$title}\"\n\nArticle content (summary):\n{$summary}\n\n---\n"
+            . "Create a gpt-image-2 image prompt for a {$style_name} blog header with these requirements:\n"
+            . "- {$visual_approach}\n"
+            . "- {$bg_line}\n"
+            . "- Lighting: bright and well-lit — natural light, studio light, or cinematic golden-hour.\n"
+            . "- Compose for thumbnail impact: dominant subject filling the frame, bold contrast, strong focal point.\n"
+            . "- No text or words in the image.";
 
         try {
             switch ( $prompt_vendor ) {
@@ -2473,9 +2388,9 @@ Output ONLY the image prompt — no preamble, no explanation.';
         $no_text       = isset( $_POST['no_text'] )       && '1' === $_POST['no_text'];
         $prompt_vendor = isset( $_POST['prompt_vendor'] ) ? sanitize_key( wp_unslash( $_POST['prompt_vendor'] ) )           : 'openai';
         $prompt_model  = isset( $_POST['prompt_model'] )  ? sanitize_text_field( wp_unslash( $_POST['prompt_model'] ) )     : 'gpt-4o';
-        $prompt_style  = isset( $_POST['prompt_style'] )  ? sanitize_key( wp_unslash( $_POST['prompt_style'] ) )            : 'auto';
-        $mode          = isset( $_POST['mode'] )          ? sanitize_key( wp_unslash( $_POST['mode'] ) )                     : 'classic';
-        $article_style = isset( $_POST['article_style'] ) ? sanitize_key( wp_unslash( $_POST['article_style'] ) )            : 'general';
+        $prompt_style  = isset( $_POST['prompt_style'] )  ? sanitize_key( wp_unslash( $_POST['prompt_style'] ) )  : 'auto';
+        $article_style = isset( $_POST['article_style'] ) ? sanitize_key( wp_unslash( $_POST['article_style'] ) ) : 'general';
+        $bg_color      = isset( $_POST['bg_color'] )      ? sanitize_key( wp_unslash( $_POST['bg_color'] ) )      : 'auto';
 
         if ( ! $post_id ) {
             wp_send_json_error( [ 'message' => 'Invalid post ID.' ] );
@@ -2492,8 +2407,8 @@ Output ONLY the image prompt — no preamble, no explanation.';
             'prompt_vendor' => $prompt_vendor,
             'prompt_model'  => $prompt_model,
             'prompt_style'  => $prompt_style,
-            'mode'          => $mode,
             'article_style' => $article_style,
+            'bg_color'      => $bg_color,
             'created_at'    => time(),
         ], false );
 
@@ -2544,8 +2459,8 @@ Output ONLY the image prompt — no preamble, no explanation.';
         $prompt_vendor = $job['prompt_vendor'];
         $prompt_model  = $job['prompt_model'];
         $prompt_style  = $job['prompt_style'];
-        $mode          = $job['mode']          ?? 'classic';
         $article_style = $job['article_style'] ?? 'general';
+        $bg_color      = $job['bg_color']      ?? 'auto';
 
         $post = get_post( $post_id );
         if ( ! $post ) {
@@ -2561,112 +2476,69 @@ Output ONLY the image prompt — no preamble, no explanation.';
         if ( '' === $prompt ) {
             set_time_limit( 0 );
 
-            $content    = wp_strip_all_tags( $post->post_content );
-            $excerpt    = $post->post_excerpt ?: wp_trim_words( $content, 80 );
-            $categories = implode( ', ', wp_list_pluck( get_the_category( $post_id ), 'name' ) );
-            $tags       = implode( ', ', wp_list_pluck( get_the_tags( $post_id ) ?: [], 'name' ) );
-            $full_body  = mb_substr( $content, 0, 4000 );
+            $summary = self::get_article_summary( $post_id );
 
-            $context_parts = [ "Post title: \"{$title}\"" ];
-            if ( $categories ) { $context_parts[] = "Categories: {$categories}"; }
-            if ( $tags )       { $context_parts[] = "Tags: {$tags}"; }
-            if ( $excerpt )    { $context_parts[] = "Excerpt: \"{$excerpt}\""; }
-            $context_parts[] = "Article content:\n{$full_body}";
-            $context_str = implode( "\n\n", $context_parts );
-
-            $shared_style_map = [
-                'cinematic_poster'      => 'cinematic photorealistic movie-poster layout, ONE bold 2–3 word all-caps headline as the ONLY text element on a dark background — absolutely no subtitles, body copy, bullet points, captions, or any other text',
-                'technical_infographic' => 'bold technical illustration with strong visual hierarchy, clean geometric shapes',
-                'photorealistic'        => 'cinematic photorealistic photography, dramatic lighting, macro detail',
-                'editorial'             => 'professional editorial photography',
-                'isometric'             => 'clean isometric 3D illustration',
-                'cartoon'               => 'bold cartoon illustration',
-                'flat_vector'           => 'flat vector illustration, bold shapes, clean lines',
-                'minimalist'            => 'minimalist design, bold shapes, clean negative space',
-                'neon_cyberpunk'        => 'dark cyberpunk scene, glowing neon accents in electric blue, purple and pink, rain-slicked reflective surfaces, dramatic rim lighting against pure black, synthwave aesthetic, ultra-high contrast',
-                'blueprint'             => 'white technical line art on deep navy blue background, engineering blueprint style, precise geometric construction lines, subtle grid overlay, glowing key elements, no colour fill',
-                'retro_80s'             => '1980s retro computer aesthetic, CRT phosphor glow and scanlines, pixelated neon elements, synthwave sunset gradient in purple and orange, VHS noise texture, bold geometric shapes',
-                'dark_abstract'         => 'deep dark gradient background in rich blacks and midnight blues, floating abstract geometric shapes with subtle inner glow, premium modern tech aesthetic, minimal accent highlights in electric teal or amber',
-                'comic_book'            => 'bold comic book illustration, thick black ink outlines, halftone Ben-Day dot shading, vibrant primary colours, dynamic diagonal composition, graphic novel energy, high contrast',
+            $article_style_labels = [
+                'technology'     => 'technology article covering software, hardware, or developer tools',
+                'security'       => 'cybersecurity or information security article',
+                'tutorial'       => 'tutorial or step-by-step how-to guide',
+                'news'           => 'news article or announcement',
+                'product_review' => 'product or service review',
+                'opinion'        => 'opinion piece or editorial commentary',
+                'finance'        => 'finance, business, or economics article',
+                'health'         => 'health, wellness, or medical article',
+                'general'        => 'general interest article',
             ];
+            $style_names = [
+                'strong_metaphor'       => 'dramatic photorealistic scene',
+                'cinematic_poster'      => 'cinematic poster',
+                'photorealistic'        => 'photorealistic scene',
+                'editorial'             => 'editorial photography',
+                'technical_infographic' => 'icon and symbol infographic',
+                'flat_vector'           => 'flat vector icon illustration',
+                'isometric'             => 'isometric 3D illustration',
+                'minimalist'            => 'minimalist illustration',
+                'cartoon'               => 'cartoon illustration',
+                'comic_book'            => 'comic book illustration',
+                'neon_cyberpunk'        => 'neon cyberpunk scene',
+                'retro_80s'             => 'retro 80s synthwave illustration',
+                'dark_abstract'         => 'dark abstract composition',
+                'blueprint'             => 'blueprint technical line-art',
+            ];
+            $style_label = $article_style_labels[ $article_style ] ?? $article_style;
+            $style_name  = $style_names[ $prompt_style ] ?? 'dramatic photorealistic scene';
 
-            if ( 'visual_summary' === $mode ) {
-                $summary = self::get_article_summary( $post_id );
-
-                $article_style_labels = [
-                    'technology'     => 'technology article covering software, hardware, or developer tools',
-                    'security'       => 'cybersecurity or information security article',
-                    'tutorial'       => 'tutorial or step-by-step how-to guide',
-                    'news'           => 'news article or announcement',
-                    'product_review' => 'product or service review',
-                    'opinion'        => 'opinion piece or editorial commentary',
-                    'finance'        => 'finance, business, or economics article',
-                    'health'         => 'health, wellness, or medical article',
-                    'general'        => 'general interest article',
-                ];
-                $style_label  = $article_style_labels[ $article_style ] ?? $article_style;
-                $style_names  = [
-                    'cinematic_poster'      => 'cinematic poster',
-                    'technical_infographic' => 'technical infographic illustration',
-                    'photorealistic'        => 'photorealistic illustration',
-                    'editorial'             => 'editorial photography style',
-                    'isometric'             => 'isometric 3D illustration',
-                    'cartoon'               => 'cartoon illustration',
-                    'flat_vector'           => 'flat vector illustration',
-                    'minimalist'            => 'minimalist illustration',
-                    'neon_cyberpunk'        => 'neon cyberpunk illustration',
-                    'blueprint'             => 'blueprint / technical line-art illustration',
-                    'retro_80s'             => 'retro 80s synthwave illustration',
-                    'dark_abstract'         => 'dark abstract illustration',
-                    'comic_book'            => 'comic book illustration',
-                ];
-                $style_name = $style_names[ $prompt_style ] ?? 'clean icon-driven illustration';
-
-                $system_msg = self::DEFAULT_VISUAL_SUMMARY_SYSTEM_PROMPT;
-                $user_msg   = "Article type: {$style_label}\nTitle: \"{$title}\"\n\nSummary:\n{$summary}\n\n"
-                    . "Write a gpt-image-2 prompt for a {$style_name} blog header that visually summarises this article using icons and symbols. No text or words in the image.";
+            $icon_styles = [ 'technical_infographic', 'flat_vector', 'isometric', 'minimalist', 'blueprint' ];
+            if ( in_array( $prompt_style, $icon_styles, true ) ) {
+                $visual_approach = "Use bold icons, recognisable brand shapes, and strong visual symbols — pick 3–5 key concepts from the article and give each a distinct, instantly readable symbol. Arrange for thumbnail clarity.";
+            } elseif ( 'strong_metaphor' === $prompt_style ) {
+                $visual_approach = "Build ONE single dominant visual metaphor — a photorealistic scene, physical confrontation, or dramatic action that embodies the article's core idea. Be specific: show the actual tension, transformation, or contrast the article describes. Key concepts can appear as labels, jersey text, or object markings within the scene. Avoid generic tech clichés.";
             } else {
-                $style_map   = $shared_style_map;
-                $style_instr = isset( $style_map[ $prompt_style ] ) ? " Required visual style: {$style_map[$prompt_style]}." : '';
-                $is_poster   = ( 'cinematic_poster' === $prompt_style );
-                $icon_carveout = ' Brand ICON SHAPES (coffee cup, animal mascots, geometric marks) are visual symbols — they are exempt from this text rule and should be used.';
-                $text_rule   = $no_text
-                    ? ' TEXT RULE: The finished image must contain ZERO rendered text — no words, letters, numbers, labels, captions, titles.' . $icon_carveout
-                    : ( $is_poster
-                        ? ' TEXT RULE: Include ONE 2–3 word all-caps bold headline as the SOLE text element. Absolutely no subtitles, body copy, bullet points, captions, or other text.' . $icon_carveout
-                        : ' TEXT RULE: Include ZERO text in the image — no headlines, titles, labels, captions, or descriptions. The article title is added separately by the publishing system.' . $icon_carveout );
-
-                $logo_hint        = self::extract_tech_logos( $title, $full_body );
-                $icon_instruction = $logo_hint
-                    ? "\n\nICONS CONFIRMED in this article: {$logo_hint}. You MUST include these recognisable VISUAL ICON SHAPES as large, prominent foreground elements. Use the shapes as described — they contain no readable text."
-                    : '';
-
-                $pov_pool = [
-                    'MANDATORY COMPOSITION: extreme macro close-up — fill the entire frame with surface detail, no background visible.',
-                    'MANDATORY COMPOSITION: dramatic worm\'s-eye view — subjects tower above the viewer, shot from ground level looking steeply upward.',
-                    'MANDATORY COMPOSITION: aerial top-down bird\'s-eye view — all subjects arranged on a flat surface, viewed from directly above.',
-                    'MANDATORY COMPOSITION: first-person POV — viewer\'s hands visible in lower frame interacting with the subjects.',
-                    'MANDATORY COMPOSITION: cinematic wide shot — subjects occupy left third, vast dark space on right with distant atmospheric depth.',
-                    'MANDATORY COMPOSITION: over-the-shoulder mid shot — one large subject looms in the left foreground, second subject faces it from the right.',
-                ];
-
-                $system_msg = self::get_img_system_prompt();
-                $step1 = "Step 1 — Read the ENTIRE article — title, angle, and conclusion — then identify:\n"
-                    . "(a) Which technology brands/products/protocols are mentioned.\n"
-                    . "(b) The ROLE each plays — CHAMPION (clearly praised, winning, recommended), STRUGGLING (clearly legacy, failing, being replaced), DISRUPTOR/THREAT (causes unexpected breakage, silent failure, hidden danger — even if technically modern), or NEUTRAL. WARNING: do not default to \"new = champion\". If the article warns that something breaks sites or causes failures, that subject is a DISRUPTOR/THREAT regardless of its technical modernity.\n"
-                    . "(c) The CORE TECHNICAL CONCEPT expressed as a concrete physical metaphor. Examples: \"write throughput saturation\" = a pipe under enormous pressure with data gushing through a bottleneck; \"query optimisation\" = a magnifying glass examining branching path forks; \"cache eviction\" = shelves rapidly emptying; \"replication lag\" = one runner far behind another; \"memory leak\" = a vessel slowly draining; \"rate limiting\" = a gate throttling a queue; \"tuning / configuration\" = hands adjusting precise calibration dials. Always translate the concept into something PHYSICAL and VISUAL.";
-                $step2 = "Step 2 — Identify the PRIMARY DOMAIN, then choose imagery accordingly — DO NOT default to circuit boards or server rooms unless the article is specifically about hardware or networking:\n"
-                    . "- PEOPLE / ORGANISATION / TALENT / MANAGEMENT / HR: real humans, diverse teams, office environments, org-chart structures, career ladders — NO circuit boards.\n"
-                    . "- SECURITY / HACKING / VULNERABILITIES: locks, shields, vaults, shadowy figures, glowing threat indicators.\n"
-                    . "- PERFORMANCE / SPEED / OPTIMISATION: racing, motion blur, turbines, gauges at maximum, physical speed metaphors.\n"
-                    . "- DATABASE / STORAGE: the brand icon (elephant, dolphin, etc.) combined with the concept metaphor from (c) above.\n"
-                    . "- CLOUD / INFRA / DEVOPS: server icons, cloud shapes, pipeline diagrams, deployment arrows.\n"
-                    . "- CODE / LANGUAGES / FRAMEWORKS: terminal screens, code glows, brand icons.\n"
-                    . "- BUSINESS / STRATEGY / MONEY: chess pieces, boardrooms, graphs, financial objects.\n"
-                    . "- AI / ML / DATA SCIENCE: neural network nodes, glowing brain shapes, data streams.\n"
-                    . "Write the prompt using the identified domain, the concept metaphor from (c), and the champion/struggling/disruptor roles. For companies with recognisable logos use their actual iconic visual. Champions gleam; struggling subjects glow red-hot; disruptors look sleek but leave fractured broken elements in their wake. Place subjects as large prominent foreground elements. Do not state the roles — just apply them visually.";
-                $user_msg = "{$context_str}\n\n{$step1}\n\n{$step2}{$icon_instruction}\n\nOutput ONLY the final gpt-image-2 prompt.{$style_instr}{$text_rule} " . $pov_pool[ array_rand( $pov_pool ) ];
+                $visual_approach = "Build one strong central visual metaphor specific to THIS article — a dramatic scene, action, confrontation, or moment that makes the core idea immediately legible. Include recognisable brand icons or cultural symbols where relevant. Avoid generic tech clichés (no floating data, no circuit boards, no generic keyboards).";
             }
+
+            $bg_map = [
+                'light_grey'  => 'pale grey or off-white background',
+                'warm_cream'  => 'warm cream or golden-amber background',
+                'white'       => 'clean pure white background',
+                'sky_blue'    => 'bright open sky or soft blue background',
+                'gradient'    => 'soft light-to-mid-tone gradient background',
+                'dark'        => 'dark charcoal or near-black background with dramatic lighting',
+            ];
+            if ( isset( $bg_map[ $bg_color ] ) ) {
+                $bg_line = "Background: {$bg_map[ $bg_color ]}.";
+            } else {
+                $bg_line = 'Background: light — pale grey, off-white, warm cream, open sky, or stadium light. Never black or near-black.';
+            }
+
+            $system_msg = self::DEFAULT_VISUAL_SUMMARY_SYSTEM_PROMPT;
+            $user_msg   = "Article type: {$style_label}\nTitle: \"{$title}\"\n\nArticle content (summary):\n{$summary}\n\n---\n"
+                . "Create a gpt-image-2 image prompt for a {$style_name} blog header with these requirements:\n"
+                . "- {$visual_approach}\n"
+                . "- {$bg_line}\n"
+                . "- Lighting: bright and well-lit — natural light, studio light, or cinematic golden-hour.\n"
+                . "- Compose for thumbnail impact: dominant subject filling the frame, bold contrast, strong focal point.\n"
+                . "- No text or words in the image.";
 
             try {
                 switch ( $prompt_vendor ) {
