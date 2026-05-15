@@ -2575,6 +2575,20 @@ The text rule is passed in the user message — follow it exactly.';
             $prompt .= ' Important: NO text, words, letters, numbers, labels, captions, or typography of any kind anywhere in the image.';
         }
 
+        // Hard-inject the background colour constraint into the final prompt so
+        // the image model cannot ignore instructions left to the prompt-writer AI.
+        $bg_final_map = [
+            'light_grey' => 'pale grey or off-white background',
+            'warm_cream' => 'warm cream or golden-amber background',
+            'white'      => 'clean pure white background — no dark areas',
+            'sky_blue'   => 'bright open sky or soft blue background',
+            'gradient'   => 'soft light-to-mid-tone gradient background',
+            'dark'       => 'dark charcoal or near-black background',
+        ];
+        if ( isset( $bg_final_map[ $bg_color ] ) ) {
+            $prompt .= ' Background must be: ' . $bg_final_map[ $bg_color ] . '.';
+        }
+
         try {
             $tmp_png = CSDT_AI_Dispatcher::generate_image( $prompt, '1536x1024', $quality );
         } catch ( \RuntimeException $e ) {
