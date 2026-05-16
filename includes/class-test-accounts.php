@@ -180,6 +180,32 @@ class CSDT_Test_Accounts {
 
     /* ── Playwright Admin Roles ──────────────────────────────────────────────── */
 
+    /**
+     * Hard-block password-based logins for Playwright role accounts.
+     *
+     * The WP password for these accounts is a discarded random string — the only
+     * intended auth path is the session API. This filter ensures that even if the
+     * password hash were somehow extracted and cracked, the login form cannot be used.
+     *
+     * @param WP_User|WP_Error|null $user     Result of prior authenticate filters.
+     * @param string                $username Submitted username.
+     * @return WP_User|WP_Error|null
+     */
+    public static function block_playwright_password_login( $user, string $username ) {
+        if ( ! ( $user instanceof WP_User ) ) {
+            return $user;
+        }
+        $roles_data = (array) get_option( 'csdt_playwright_roles', [] );
+        $playwright_ids = array_column( $roles_data, 'user_id' );
+        if ( in_array( $user->ID, $playwright_ids, true ) ) {
+            return new WP_Error(
+                'csdt_playwright_no_password_login',
+                __( 'This account does not support password login.', 'cloudscale-devtools' )
+            );
+        }
+        return $user;
+    }
+
     public static function get_or_create_secret(): string {
         $secret = get_option( 'csdt_test_session_secret', '' );
         if ( ! $secret ) {
@@ -202,16 +228,22 @@ class CSDT_Test_Accounts {
     }
 
     public static function register_rest_routes(): void {
+        // The path_token baked into the URL is the primary auth gate — unguessable without
+        // server access. A non-empty secret param is required as a second factor; full
+        // hash_equals() validation and rate-limiting happen inside the callback.
+        $perm = static function ( \WP_REST_Request $request ): bool {
+            return '' !== (string) $request->get_param( 'secret' );
+        };
         $path_token = self::get_or_create_path_token();
         register_rest_route( 'csdt/v1', '/test-session-' . $path_token, [
             'methods'             => 'POST',
             'callback'            => [ __CLASS__, 'rest_test_session' ],
-            'permission_callback' => '__return_true',
+            'permission_callback' => $perm,
         ] );
         register_rest_route( 'csdt/v1', '/test-logout-' . $path_token, [
             'methods'             => 'POST',
             'callback'            => [ __CLASS__, 'rest_test_logout' ],
-            'permission_callback' => '__return_true',
+            'permission_callback' => $perm,
         ] );
     }
 

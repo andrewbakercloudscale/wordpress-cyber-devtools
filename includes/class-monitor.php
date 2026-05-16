@@ -786,16 +786,15 @@ class CSDT_Monitor {
         register_rest_route( 'csdt/v1', '/fpm-report', [
             'methods'             => 'POST',
             'callback'            => [ __CLASS__, 'rest_fpm_report' ],
-            'permission_callback' => '__return_true',
+            'permission_callback' => static function ( \WP_REST_Request $request ): bool {
+                $stored = (string) get_option( 'csdt_fpm_token', '' );
+                if ( $stored === '' ) { return false; }
+                return hash_equals( $stored, sanitize_text_field( (string) $request->get_param( 'token' ) ) );
+            },
         ] );
     }
 
     public static function rest_fpm_report( \WP_REST_Request $request ): \WP_REST_Response {
-        $token  = sanitize_text_field( (string) $request->get_param( 'token' ) );
-        $stored = get_option( 'csdt_fpm_token', '' );
-        if ( empty( $stored ) || ! hash_equals( $stored, $token ) ) {
-            return new \WP_REST_Response( [ 'error' => 'Invalid token' ], 403 );
-        }
         $type = sanitize_text_field( (string) $request->get_param( 'type' ) );
         if ( ! in_array( $type, [ 'saturated', 'recovered', 'restarted' ], true ) ) {
             $type = 'saturated';

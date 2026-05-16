@@ -20,10 +20,26 @@ class CSDT_Uptime {
     }
 
     public static function register_rest_routes(): void {
+        $perm = static function ( \WP_REST_Request $request ): bool {
+            // Slug guard — URL slug must match stored slug (or 'ready' when no slug is configured).
+            $stored_slug = sanitize_key( (string) get_option( 'csdt_readiness_slug', '' ) );
+            $url_slug    = sanitize_key( (string) ( $request->get_param( 'slug' ) ?? '' ) );
+            if ( ( $stored_slug ?: 'ready' ) !== $url_slug ) { return false; }
+            // Bearer-token or ?token= auth.
+            $stored = (string) get_option( 'csdt_uptime_token', '' );
+            if ( $stored === '' ) { return false; }
+            $auth  = $request->get_header( 'Authorization' ) ?? '';
+            $token = str_starts_with( $auth, 'Bearer ' ) ? substr( $auth, 7 ) : (string) ( $request->get_param( 'token' ) ?? '' );
+            if ( ! hash_equals( $stored, $token ) ) {
+                update_option( 'csdt_readiness_last_bad_auth', time(), false );
+                return false;
+            }
+            return true;
+        };
         $args = [
             'methods'             => \WP_REST_Server::READABLE,
             'callback'            => [ __CLASS__, 'rest_readiness_probe' ],
-            'permission_callback' => '__return_true',
+            'permission_callback' => $perm,
         ];
         // Primary route — WAF-excluded namespace
         register_rest_route( 'csdt/cf-callback', '/(?P<slug>[a-zA-Z0-9_-]+)', $args );
@@ -33,25 +49,6 @@ class CSDT_Uptime {
     }
 
     public static function rest_readiness_probe( \WP_REST_Request $request ): \WP_REST_Response {
-        // Slug guard — URL slug must match stored slug (or 'ready' when none is set)
-        $stored_slug = sanitize_key( (string) get_option( 'csdt_readiness_slug', '' ) );
-        $url_slug    = sanitize_key( (string) ( $request->get_param( 'slug' ) ?? '' ) );
-        $expected    = $stored_slug ?: 'ready';
-        if ( $url_slug !== $expected ) {
-            return new \WP_REST_Response( null, 404 );
-        }
-
-        $stored_token = (string) get_option( 'csdt_uptime_token', '' );
-
-        // Accept Bearer token in Authorization header or ?token= query param
-        $auth   = $request->get_header( 'Authorization' ) ?? '';
-        $token  = str_starts_with( $auth, 'Bearer ' ) ? substr( $auth, 7 ) : (string) ( $request->get_param( 'token' ) ?? '' );
-
-        if ( $stored_token === '' || ! hash_equals( $stored_token, $token ) ) {
-            update_option( 'csdt_readiness_last_bad_auth', time(), false );
-            return new \WP_REST_Response( [ 'ok' => false, 'error' => 'Unauthorized' ], 401 );
-        }
-
         $checks = self::run_readiness_checks();
         $all_ok = ! in_array( false, array_column( $checks, 'ok' ), true );
         $now    = time();

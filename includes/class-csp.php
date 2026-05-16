@@ -690,7 +690,8 @@ class CSDT_CSP {
         register_rest_route( 'csdt/v1', '/csp-report', [
             'methods'             => 'POST',
             'callback'            => [ __CLASS__, 'rest_csp_report' ],
-            'permission_callback' => '__return_true',
+            // Browsers send CSP violation reports without credentials — open by design.
+            'permission_callback' => static fn() => true,
         ] );
     }
 

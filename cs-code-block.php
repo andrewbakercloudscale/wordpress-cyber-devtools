@@ -3,7 +3,7 @@
  * Plugin Name: CloudScale DevTools
  * Plugin URI: https://andrewbaker.ninja
  * Description: Free AI penetration testing, brute-force protection, 2FA, passkeys, AI site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and Cloudflare uptime monitor. No subscription, no cloud dependency.
- * Version: 1.9.905
+ * Version: 1.9.912
  * Author: Andrew Baker
  * Author URI: https://andrewbaker.ninja
  * License: GPL-2.0-or-later
@@ -55,7 +55,7 @@ if ( ! defined( 'SAVEQUERIES' ) && get_option( 'csdt_devtools_perf_monitor_enabl
  */
 class CloudScale_DevTools {
 
-    const VERSION      = '1.9.905';
+    const VERSION      = '1.9.912';
     const HLJS_VERSION = '11.11.1';
     const HLJS_CDN     = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/';
     const TOOLS_SLUG   = 'cloudscale-devtools';
@@ -255,6 +255,7 @@ class CloudScale_DevTools {
             try {
                 $callback();
             } catch ( \Throwable $e ) {
+                // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- cron exception handler; only path to surface crashes
                 error_log( sprintf(
                     '[CSDT] cron "%s" exception (%s): %s in %s line %d',
                     $hook,
@@ -463,6 +464,7 @@ class CloudScale_DevTools {
         self::cron_action( 'csdt_cleanup_test_accounts',         [ 'CSDT_Test_Accounts', 'cleanup_expired_test_accounts' ] );
         add_action( 'wp_ajax_csdt_playwright_role_create',       [ 'CSDT_Test_Accounts', 'ajax_create_playwright_role' ] );
         add_action( 'wp_ajax_csdt_playwright_role_delete',       [ 'CSDT_Test_Accounts', 'ajax_delete_playwright_role' ] );
+        add_filter( 'authenticate', [ 'CSDT_Test_Accounts', 'block_playwright_password_login' ], 30, 2 );
         add_action( 'wp_ajax_csdt_kill_test_sessions',           [ 'CSDT_Test_Accounts', 'ajax_kill_test_sessions' ] );
         add_action( 'wp_ajax_csdt_regen_test_secret',            [ 'CSDT_Test_Accounts', 'ajax_regen_test_secret' ] );
         add_action( 'wp_ajax_csdt_regen_path_token',             [ 'CSDT_Test_Accounts', 'ajax_regen_path_token' ] );
@@ -2168,14 +2170,9 @@ class CloudScale_DevTools {
         }
 
         $mu_file = $mu_dir . '/csdt-php-error-log.php';
-        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-        $written = file_put_contents(
-            $mu_file,
-            '<?php' . "\n" .
-            '// Redirects PHP error_log to a readable file — managed by CloudScale DevTools.' . "\n" .
-            '// phpcs:ignore WordPress.PHP.IniSet.Risky' . "\n" .
-            '@ini_set( \'error_log\', ' . var_export( $log_path, true ) . ' );' . "\n"
-        );
+        $src     = plugin_dir_path( __FILE__ ) . 'assets/mu-plugins/csdt-php-error-log.php';
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy
+        $written = copy( $src, $mu_file );
 
         if ( false === $written ) {
             wp_send_json_error( [ 'message' => __( 'Could not write mu-plugin. Run: docker exec pi_wordpress chown www-data:www-data /var/www/html/wp-content/mu-plugins', 'cloudscale-devtools' ) ] );
@@ -3662,7 +3659,9 @@ class CloudScale_DevTools {
                         <div class="cs-bf-table-wrap">
                             <?php if ( ! empty( $probe_recent ) ) : ?>
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px;">
-                                <span style="font-size:11px;color:#64748b;"><?php echo esc_html( sprintf( _n( '%d IP', '%d IPs', count( $probe_recent ), 'cloudscale-devtools' ), count( $probe_recent ) ) ); ?></span>
+                                <span style="font-size:11px;color:#64748b;"><?php
+                                /* translators: %d: number of unique source IPs */
+                                echo esc_html( sprintf( _n( '%d IP', '%d IPs', count( $probe_recent ), 'cloudscale-devtools' ), count( $probe_recent ) ) ); ?></span>
                                 <div style="display:flex;gap:4px;">
                                     <button type="button" id="cs-probe-sort-ts"
                                             style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid #3b82f6;background:#3b82f6;color:#fff;cursor:pointer;font-weight:600;">
@@ -4554,7 +4553,7 @@ class CloudScale_DevTools {
                     [ 'name' => 'How it works',      'rec' => 'Overview',    'html' => 'Create a persistent WordPress user for Playwright. Each test run calls the Session URL to get short-lived auth cookies — this happens server-side and never triggers wp-login.php or 2FA hooks. When the test run finishes, call the Logout URL to destroy the session.' ],
                     [ 'name' => 'Session URL',       'rec' => 'Required',    'html' => '<code>POST {session_url}</code><br>Body: <code>{ "secret": "...", "role": "your_name", "ttl": 1200 }</code><br>Returns auth cookies to inject into Playwright context. TTL max is 3600 seconds.' ],
                     [ 'name' => 'Logout URL',        'rec' => 'Recommended', 'html' => '<code>POST {logout_url}</code><br>Body: <code>{ "secret": "...", "role": "your_name" }</code> (or add <code>"session_token": "..."</code> to kill only that session). Call this in afterAll to clean up.' ],
-                    [ 'name' => 'Security',          'rec' => 'Info',        'html' => 'Both the URL path token (32 random chars) and the shared secret are required to obtain a session. After 5 bad secret attempts the API locks for 10 minutes and sends an ntfy alert. Never commit the secret to git.' ],
+                    [ 'name' => 'Security',          'rec' => 'Info',        'html' => 'Both the URL path token (32 random chars) and the shared secret are required to obtain a session. After 5 bad secret attempts the API locks for 10 minutes and sends an ntfy alert. Never commit the secret to git.<br><br><strong>Password login is hard-blocked.</strong> Playwright role accounts are created with a random 24-character password that is immediately discarded — it is never shown to anyone. The plugin also registers an <code>authenticate</code> filter (priority 30) that rejects any password-based login attempt for these accounts at the WordPress level, regardless of whether someone could somehow obtain the password hash. The only way to authenticate as a test account is through the Session URL above.' ],
                     [ 'name' => 'Block Basic Auth',  'rec' => 'Recommended', 'html' => '<strong>What are app passwords?</strong><br>WordPress lets any user generate an "Application Password" under their profile. External tools then send <code>Authorization: Basic username:app_password</code> with every REST API request — no login form, no 2FA.<br><br><strong>The security risk</strong><br>App passwords completely bypass 2FA. An attacker who leaks one gets full REST API access as that user, forever, with no second factor to stop them.<br><br><strong>Enable the block if:</strong><ul style="margin:.4em 0 .4em 1.2em;line-height:1.8"><li>You have 2FA enabled and want it to actually protect the account</li><li>You do not use the WordPress mobile app to post</li><li>No external service (Zapier, IFTTT, a headless CMS, a backup tool) authenticates with an app password</li></ul><strong>Leave it off if:</strong><ul style="margin:.4em 0 .4em 1.2em;line-height:1.8"><li>You publish from the WordPress iPhone/Android app</li><li>A third-party service is connected via REST API + app password</li></ul><strong>Check "App passwords in use" first.</strong> If the counter shows 0, you can safely enable the block with zero impact. If it shows &gt;0, identify which integration uses them before blocking.<br><br><em>Test accounts are unaffected — they use server-side session cookies, not Basic Auth.</em>' ],
                 ] ); ?>
             </div>
@@ -5190,7 +5189,9 @@ class CloudScale_DevTools {
         $login_slug = get_option( 'csdt_devtools_login_slug', '' );
         $force_2fa  = get_option( 'csdt_devtools_2fa_force_admins', '0' ) === '1';
         $email_2fa  = get_option( 'csdt_devtools_2fa_method', 'off' ) === 'email';
+        $playwright_user_ids = array_column( (array) get_option( 'csdt_playwright_roles', [] ), 'user_id' );
         $admins             = get_users( [ 'role' => 'administrator' ] );
+        $admins             = array_filter( $admins, static fn( $u ) => ! in_array( $u->ID, $playwright_user_ids, true ) );
         $adm_tot            = count( $admins );
         $adm_2fa            = 0;
         $admins_missing_2fa = [];
@@ -5363,7 +5364,9 @@ class CloudScale_DevTools {
             <span style="font-size:14px;flex-shrink:0;">🚨</span>
             <div style="flex:1;min-width:0;">
                 <div style="font-size:11px;font-weight:800;color:#fca5a5;letter-spacing:.02em;"><?php esc_html_e( 'API PATH UNDER ATTACK — ROTATE IMMEDIATELY', 'cloudscale-devtools' ); ?></div>
-                <div style="font-size:10px;color:#fca5a5;opacity:.8;"><?php echo esc_html( sprintf( _n( '%d attempt today', '%d attempts today', $api_attacks_today, 'cloudscale-devtools' ), $api_attacks_today ) ); ?> &middot; <?php esc_html_e( 'Click to rotate path token', 'cloudscale-devtools' ); ?></div>
+                <div style="font-size:10px;color:#fca5a5;opacity:.8;"><?php
+                /* translators: %d: number of login attempts today */
+                echo esc_html( sprintf( _n( '%d attempt today', '%d attempts today', $api_attacks_today, 'cloudscale-devtools' ), $api_attacks_today ) ); ?> &middot; <?php esc_html_e( 'Click to rotate path token', 'cloudscale-devtools' ); ?></div>
             </div>
             <span style="font-size:10px;font-weight:700;color:#fca5a5;white-space:nowrap;">↺ Rotate →</span>
         </a>

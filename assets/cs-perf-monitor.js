@@ -114,9 +114,14 @@
             var dir     = e.effectiveDirective || e.violatedDirective || '';
             var src     = e.sourceFile ? e.sourceFile.replace(/^https?:\/\/[^/]+\//, '') + ':' + e.lineNumber : '';
             var isReportOnly = e.disposition === 'report';
-            // Suppress report-only violations for same-origin paths — these come from
-            // Cloudflare's own injected report-only CSP on admin pages and are not actionable.
+            // Suppress report-only violations that are not actionable:
+            //   1. Same-origin paths (cdn-cgi/, wp-admin/, wp-json/) — Cloudflare's own injected
+            //      report-only CSP on admin/edge pages.
+            //   2. Known Google ad/consent service domains — Cloudflare's report-only policy omits
+            //      these, but our enforcement CSP already allows them via the google_adsense preset.
+            //      Nothing we can do on our side; suppressing prevents alert fatigue.
             if ( isReportOnly && /^https?:\/\/[^/]+\/(cdn-cgi\/|wp-admin\/|wp-json\/)/.test( blocked ) ) { return; }
+            if ( isReportOnly && /^https?:\/\/([^/]*\.)?(fundingchoicesmessages\.google\.com|adtrafficquality\.google|googlesyndication\.com|googletagservices\.com|googleadservices\.com|doubleclick\.net|adservice\.google\.com|gstatic\.com|csi\.gstatic\.com)/.test( blocked ) ) { return; }
             var disp = isReportOnly ? '[report-only] ' : '';
             pushEditorLog({
                 type:   'jserr',

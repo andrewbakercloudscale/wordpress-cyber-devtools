@@ -1,14 +1,14 @@
-=== CloudScale Cyber and Devtools ===
+=== CloudScale DevTools ===
 Contributors: andrewbaker
 Tags: security, code block, syntax highlighting, AI security scan, WordPress hardening
 Requires at least: 6.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.9.896
+Stable tag: 1.9.912
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Free AI penetration testing, brute-force protection, 2FA, passkeys, site audit, AI debugging, performance monitor, SMTP, SQL tool, server logs, vulnerability scanner, and uptime monitoring. No subscription.
+Free AI security audit, brute-force protection, 2FA, passkeys, performance monitor, SMTP, SQL tool, and server logs. No subscription.
 
 == Description ==
 

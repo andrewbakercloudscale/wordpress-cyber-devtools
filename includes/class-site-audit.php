@@ -1159,13 +1159,8 @@ bantime  = 86400</pre>
                 update_option( 'csdt_debug_log_path', $new_log, false );
                 $mu_dir = WP_CONTENT_DIR . '/mu-plugins';
                 if ( ! is_dir( $mu_dir ) ) { wp_mkdir_p( $mu_dir ); }
-                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-                file_put_contents(
-                    $mu_dir . '/csdt-secure-logs.php',
-                    '<?php' . "\n" .
-                    '// Belt-and-suspenders: redirect error_log to safe path — by CloudScale DevTools.' . "\n" .
-                    '@ini_set( \'error_log\', ' . var_export( $new_log, true ) . ' );' . "\n"
-                );
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy
+                copy( plugin_dir_path( __FILE__ ) . '../assets/mu-plugins/csdt-secure-logs.php', $mu_dir . '/csdt-secure-logs.php' );
 
                 if ( ! $cfg_updated ) {
                     // wp-config.php not writable — mu-plugin is the only protection.
@@ -1334,13 +1329,8 @@ bantime  = 86400</pre>
             case 'disable_xmlrpc':
                 $mu_dir = WP_CONTENT_DIR . '/mu-plugins';
                 if ( ! is_dir( $mu_dir ) ) { wp_mkdir_p( $mu_dir ); }
-                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-                file_put_contents(
-                    $mu_dir . '/csdt-disable-xmlrpc.php',
-                    '<?php' . "\n" .
-                    '// Disable XML-RPC — installed by CloudScale DevTools Quick Fixes.' . "\n" .
-                    'add_filter( \'xmlrpc_enabled\', \'__return_false\' );' . "\n"
-                );
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy
+                copy( plugin_dir_path( __FILE__ ) . '../assets/mu-plugins/csdt-disable-xmlrpc.php', $mu_dir . '/csdt-disable-xmlrpc.php' );
                 wp_send_json_success( [
                     'fixes'   => self::get_quick_fixes(),
                     'message' => 'XML-RPC disabled via must-use plugin. The REST API is unaffected.',
@@ -1371,13 +1361,8 @@ bantime  = 86400</pre>
                     }
                 }
                 if ( ! $cfg_done ) {
-                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-                    file_put_contents(
-                        $mu_dir . '/csdt-no-file-edit.php',
-                        '<?php' . "\n" .
-                        '// Lock theme/plugin file editor — installed by CloudScale DevTools Quick Fixes.' . "\n" .
-                        "define( 'DISALLOW_FILE_EDIT', true );\n"
-                    );
+                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy
+                    copy( plugin_dir_path( __FILE__ ) . '../assets/mu-plugins/csdt-no-file-edit.php', $mu_dir . '/csdt-no-file-edit.php' );
                 }
                 wp_send_json_success( [
                     'fixes'   => self::get_quick_fixes(),
@@ -1409,13 +1394,8 @@ bantime  = 86400</pre>
                     }
                 }
                 if ( ! $cfg_done ) {
-                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-                    file_put_contents(
-                        $mu_dir . '/csdt-limit-revisions.php',
-                        '<?php' . "\n" .
-                        '// Limit post revisions — installed by CloudScale DevTools Quick Fixes.' . "\n" .
-                        "define( 'WP_POST_REVISIONS', 5 );\n"
-                    );
+                    // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy
+                    copy( plugin_dir_path( __FILE__ ) . '../assets/mu-plugins/csdt-limit-revisions.php', $mu_dir . '/csdt-limit-revisions.php' );
                 }
                 wp_send_json_success( [
                     'fixes'   => self::get_quick_fixes(),
@@ -1425,18 +1405,8 @@ bantime  = 86400</pre>
             case 'disable_user_enumeration':
                 $mu_dir = WP_CONTENT_DIR . '/mu-plugins';
                 if ( ! is_dir( $mu_dir ) ) { wp_mkdir_p( $mu_dir ); }
-                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-                file_put_contents(
-                    $mu_dir . '/csdt-no-user-enum.php',
-                    '<?php' . "\n" .
-                    '// Block author enumeration — installed by CloudScale DevTools Quick Fixes.' . "\n" .
-                    'add_action( \'template_redirect\', function () {' . "\n" .
-                    '    if ( ! is_admin() && isset( $_GET[\'author\'] ) ) {' . "\n" .
-                    '        wp_safe_redirect( home_url( \'/\' ), 301 );' . "\n" .
-                    '        exit;' . "\n" .
-                    '    }' . "\n" .
-                    '} );' . "\n"
-                );
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_copy
+                copy( plugin_dir_path( __FILE__ ) . '../assets/mu-plugins/csdt-no-user-enum.php', $mu_dir . '/csdt-no-user-enum.php' );
                 wp_send_json_success( [
                     'fixes'   => self::get_quick_fixes(),
                     'message' => 'Author enumeration blocked. Requests to /?author=N now redirect to the home page.',
